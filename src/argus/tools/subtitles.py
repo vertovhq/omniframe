@@ -74,6 +74,12 @@ def hex_to_ass(color: str) -> str:
     raise ValueError(f"unsupported colour: {color!r}")
 
 
+def _norm_word(w: str) -> str:
+    import re as _re
+
+    return _re.sub(r"[^\w%₽$€]", "", w.lower().replace("ё", "е"))
+
+
 def build_pop_subtitles(
     timestamps_json_path: str | Path,
     output_ass_path: str | Path,
@@ -83,9 +89,15 @@ def build_pop_subtitles(
     font_size: int = DEFAULT_FONT_SIZE,
     margin_v: int = DEFAULT_MARGIN_V,
     highlight_color: str = "#FFE066",
+    accent: list[str] | None = None,
+    accent_color: str = "#4DA3FF",
     fps: float | None = None,
 ) -> dict:
-    """Generate the ASS subtitle file; returns a small stats dict."""
+    """Generate the ASS subtitle file; returns a small stats dict.
+
+    accent: list of words (str, "prefix*" or "*" for all) rendered in
+    accent_color — same semantics as the montazh skills' subs.accent.
+    """
     fps = fps or CONFIG.fps
     if style not in STYLES:
         raise ValueError(f"unknown style {style!r}; expected one of {sorted(STYLES)}")
@@ -94,6 +106,19 @@ def build_pop_subtitles(
         preset["primary"] = highlight_color
     font = font or preset["font"]
     words = _load_words(timestamps_json_path)
+
+    acc = list(accent or [])
+    acc_bgr = hex_to_ass(accent_color).replace("&H", "&H", 1)
+
+    def _is_accent(word: str) -> bool:
+        n = _norm_word(word)
+        for x in acc:
+            if x.endswith("*"):
+                if n.startswith(_norm_word(x.rstrip("*"))):
+                    return True
+            elif n == _norm_word(x):
+                return True
+        return False
 
     style_line = (
         f"Style: Argus,{font},{font_size},{hex_to_ass(preset['primary'])},"
@@ -107,6 +132,8 @@ def build_pop_subtitles(
         start = _quantize(item["start"], fps)
         end = max(start + 1.0 / fps, _quantize(item["end"], fps))
         text = item["word"].replace("{", "(").replace("}", ")")
+        if acc and _is_accent(item["word"]):
+            text = "{\\1c&H" + acc_bgr[4:] + "&}" + text
         lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Argus,,0,0,0,,{text}")
 
     content = "\n".join([

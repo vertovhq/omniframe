@@ -106,17 +106,21 @@ def build_pop_subtitles(
     output_ass_path: str,
     style: str = "clean",
     highlight_color: str = "#FFE066",
+    accent: list[str] | None = None,
+    accent_color: str = "#4DA3FF",
 ) -> dict:
     """Generate frame-accurate karaoke subtitles (.ass).
 
     Input: JSON list of {word, start, end} (seconds). One word per cue,
     centered at eye level (MarginV 420), bold wide font.
     Styles: "clean" (default - white text, soft shadow, modern), "outline"
-    (white with thick black outline, classic shorts), "pop" (legacy yellow
-    highlight #FFE066). highlight_color applies to the "pop" style.
+    (white with thick black outline, classic shorts), "pop" (legacy yellow).
+    accent: list of words ("word", "prefix*" or "*" for all) tinted with
+    accent_color - same semantics as the montazh skills' subs.accent.
     """
     return subtitles.build_pop_subtitles(
-        timestamps_json_path, output_ass_path, style=style, highlight_color=highlight_color
+        timestamps_json_path, output_ass_path, style=style, highlight_color=highlight_color,
+        accent=accent, accent_color=accent_color,
     )
 
 
