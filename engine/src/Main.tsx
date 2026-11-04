@@ -1,14 +1,16 @@
 import {useMemo} from 'react';
 import type {FC} from 'react';
-import {AbsoluteFill, Audio, Sequence, useVideoConfig} from 'remotion';
+import {AbsoluteFill, Audio, Sequence, interpolate, useVideoConfig} from 'remotion';
 import type {KineticProps, Scene} from './types';
 import {FONT_FAMILY, getTheme, grainBackgroundImage, resolveMedia} from './theme';
 import {assignWordTimings} from './text';
 import type {LocalWord} from './text';
+import {buildSfxTimeline} from './sfx';
 import {
   ActSceneView,
   BigSceneView,
   CardSceneView,
+  ChipSceneView,
   CounterSceneView,
   CtaSceneView,
   SceneShell,
@@ -36,6 +38,8 @@ const SceneView: FC<{
       return <ActSceneView scene={scene} words={words} colors={colors} />;
     case 'cta':
       return <CtaSceneView scene={scene} colors={colors} />;
+    case 'chip':
+      return <ChipSceneView scene={scene} colors={colors} />;
     default:
       return null;
   }
@@ -47,7 +51,18 @@ const SceneView: FC<{
  * `duration`); transitions are handled inside SceneShell so two texts never
  * stack. Optional voice audio plays full length from the public dir.
  */
-export const Main: FC<KineticProps> = ({duration, theme = 'dark', accent, voice, words, scenes}) => {
+export const Main: FC<KineticProps> = ({
+  duration,
+  theme = 'dark',
+  accent,
+  voice,
+  words,
+  scenes,
+  sfx = true,
+  sfx_volume = 1,
+  sfx_list,
+  music,
+}) => {
   const {fps} = useVideoConfig();
   const colors = useMemo(() => getTheme(theme, accent), [theme, accent]);
   const safeDuration = duration && duration > 0 ? duration : 12.5;
@@ -65,6 +80,11 @@ export const Main: FC<KineticProps> = ({duration, theme = 'dark', accent, voice,
     [orderedScenes, words, safeDuration]
   );
 
+  const sfxEvents = useMemo(
+    () => buildSfxTimeline(orderedScenes, {sfx, sfx_list}),
+    [orderedScenes, sfx, sfx_list]
+  );
+
   return (
     <AbsoluteFill
       style={{
@@ -75,6 +95,26 @@ export const Main: FC<KineticProps> = ({duration, theme = 'dark', accent, voice,
       }}
     >
       {voice ? <Audio src={resolveMedia(voice)} /> : null}
+      {music ? (
+        <Audio
+          src={resolveMedia(music.src)}
+          volume={(f) => {
+            const base = music.volume ?? 0.12;
+            const fade = music.fade_out ?? 1.5;
+            const t = f / fps;
+            const k = interpolate(t, [safeDuration - fade, safeDuration], [1, 0], {
+              extrapolateLeft: 'clamp',
+              extrapolateRight: 'clamp',
+            });
+            return base * k;
+          }}
+        />
+      ) : null}
+      {sfxEvents.map((e, i) => (
+        <Sequence key={`sfx-${i}`} from={Math.max(0, Math.round(e.at * fps))} name={`sfx-${i}`}>
+          <Audio src={resolveMedia(e.src)} volume={(e.volume ?? 1) * sfx_volume} />
+        </Sequence>
+      ))}
       {orderedScenes.map((scene, i) => {
         const start = Math.max(0, scene.at);
         const end =

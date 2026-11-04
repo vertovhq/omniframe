@@ -14,6 +14,8 @@ import type {
   ActScene,
   BigScene,
   CardScene,
+  ChipItem,
+  ChipScene,
   CounterScene,
   CtaScene,
   TitleScene,
@@ -610,5 +612,77 @@ export const CtaSceneView: FC<{
         </div>
       </div>
     </AbsoluteFill>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// 8. chip — floating pill badges ("плашки"): dot + label (+ accent value),
+//    stacked with a staggered spring pop. `items` wins over text/value.
+// ---------------------------------------------------------------------------
+
+export const ChipSceneView: FC<{
+  scene: ChipScene;
+  colors: ThemeColors;
+}> = ({scene, colors}) => {
+  const frame = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const items: ChipItem[] =
+    scene.items && scene.items.length > 0
+      ? scene.items
+      : [{text: scene.text ?? '', value: scene.value}];
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 24,
+        alignItems: 'center',
+      }}
+    >
+      {items.map((item, i) => {
+        const delay = Math.round(fps * 0.14 * i);
+        const p = spring({
+          frame: frame - delay,
+          fps,
+          config: {damping: 14, stiffness: 170, mass: 0.7},
+        });
+        return (
+          <div
+            key={i}
+            style={{
+              opacity: p,
+              transform: `translateY(${((1 - p) * 46).toFixed(2)}px) scale(${(0.82 + p * 0.18).toFixed(4)})`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 18,
+              padding: '24px 44px',
+              borderRadius: 999,
+              border: `1px solid ${withAlpha(colors.text, 0.14)}`,
+              background: withAlpha(colors.text, 0.06),
+              boxShadow: `0 18px 50px ${withAlpha('#000000', 0.35)}`,
+            }}
+          >
+            <span
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: 999,
+                background: colors.accent,
+                boxShadow: `0 0 18px ${withAlpha(colors.accent, 0.85)}`,
+              }}
+            />
+            <span style={{fontSize: 50, fontWeight: 600, letterSpacing: '-0.01em'}}>
+              {item.text}
+            </span>
+            {item.value ? (
+              <span style={{fontSize: 50, fontWeight: 900, color: colors.accent}}>
+                {item.value}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
   );
 };

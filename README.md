@@ -25,7 +25,7 @@ voice ──▶ TTS / voice clone ──▶ timeline ──▶ subtitles ──�
 |---|---|---|
 | `generate_veo_clip` | Veo 3.1 clip. `provider="api"` — official API (paid; Veo has no free API tier); `provider="flow"` — your flow.google session (free credits, one-time `flow_login`) | — |
 | `flow_login` | One-time Flow login wizard: opens a window, you log in, the session profile is saved. No cookie files. One own account — credit farming gets accounts banned | — |
-| `build_kinetic_video` | **Vertical video from pure graphics**: word-by-word typography, cards, counters, chapters, CTA. Dark/light themes, modern look, no yellow | ✅ |
+| `build_kinetic_video` | **Vertical video from pure graphics**: word-by-word typography, cards, counters, chapters, chip badges, CTA. Auto sound design (whoosh on cuts, pops/hits), music bed. Dark/light themes | ✅ |
 | `synthesize_voiceover` | Gemini TTS + radio mastering (−14 LUFS). Voice cloning via `tts.py` in skills | — |
 | `build_pop_subtitles` | Karaoke .ass subtitles. Styles: `clean` (white, default), `outline`, `pop` (legacy yellow) | ✅ |
 | `calculate_acoustic_timeline` | Cut points snapped to real speech pauses | ✅ |
