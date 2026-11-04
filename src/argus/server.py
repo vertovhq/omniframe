@@ -24,12 +24,14 @@ from .tools import assemble, memory, qa, subtitles, timeline
 mcp = MCPServer(
     "Argus",
     instructions=(
-        "Production studio for viral vertical videos (1080x1920). "
-        "Typical pipeline: generate_veo_clip (xN) -> synthesize_voiceover -> "
-        "calculate_acoustic_timeline -> build_pop_subtitles -> "
-        "assemble_master_video -> qa_verify_video. "
-        "Requires a Gemini API key in ARGUS_GEMINI_API_KEY for generation tools; "
-        "timeline, subtitles, assembly, QA and memory work fully offline with ffmpeg."
+        "Production studio for vertical videos (1080x1920). Two content paths: "
+        "AI clips via generate_veo_clip (provider 'api' with ARGUS_GEMINI_API_KEY, "
+        "or 'flow' - the user's own Google Flow browser session, run flow_login "
+        "once) OR pure graphics via build_kinetic_video (no AI, offline). "
+        "Typical pipeline: generate_veo_clip or build_kinetic_video (xN) -> "
+        "synthesize_voiceover -> calculate_acoustic_timeline -> build_pop_subtitles "
+        "-> assemble_master_video -> qa_verify_video. Timeline, subtitles, kinetic, "
+        "assembly, QA and memory work fully offline with ffmpeg."
     ),
 )
 
@@ -42,11 +44,15 @@ def generate_veo_clip(
     model: str | None = None,
     negative_prompt: str | None = None,
     max_wait_s: float = 600.0,
+    provider: str | None = None,
 ) -> dict:
-    """Generate an authentic Veo video clip (default 1080x1920) via the official Gemini API.
+    """Generate an authentic Veo video clip (default 1080x1920).
 
-    Renders take 1-3 minutes. Requires ARGUS_GEMINI_API_KEY.
-    Prompts are sent as-is - no content-policy workarounds are applied.
+    provider "api" = official Gemini API (stable, paid - Veo has no free API tier);
+    provider "flow" = your logged-in Google Flow browser session (free monthly
+    credits, run flow_login once first). Default: ARGUS_VEO_PROVIDER or "api".
+    Renders take 1-3 minutes. Prompts are sent as-is - no content-policy
+    workarounds are applied.
     """
     from .tools.veo import generate_veo_clip as impl
 
@@ -57,7 +63,23 @@ def generate_veo_clip(
         model=model,
         negative_prompt=negative_prompt,
         max_wait_s=max_wait_s,
+        provider=provider,
     )
+
+
+@mcp.tool()
+def flow_login() -> dict:
+    """One-time Google Flow login wizard for the "flow" Veo provider.
+
+    Opens a visible browser window: log into your Google account manually and
+    wait for Flow to load - the session profile is then saved to disk
+    (~/.argus/flow_profile). Afterwards generate_veo_clip(provider="flow") uses
+    your free monthly Flow credits without any cookie files. One own account
+    only - multi-account credit farming gets accounts banned.
+    """
+    from .tools.flow_browser import flow_login as impl
+
+    return impl()
 
 
 @mcp.tool()
@@ -79,14 +101,23 @@ def synthesize_voiceover(
 
 
 @mcp.tool()
-def build_pop_subtitles(timestamps_json_path: str, output_ass_path: str) -> dict:
-    """Generate frame-accurate Safe Pop karaoke subtitles (.ass).
+def build_pop_subtitles(
+    timestamps_json_path: str,
+    output_ass_path: str,
+    style: str = "clean",
+    highlight_color: str = "#FFE066",
+) -> dict:
+    """Generate frame-accurate karaoke subtitles (.ass).
 
     Input: JSON list of {word, start, end} (seconds). One word per cue,
-    active word in bright yellow (#FFE066), centered at eye level
-    (MarginV 420), bold Arial Black with a thick black outline, no box.
+    centered at eye level (MarginV 420), bold wide font.
+    Styles: "clean" (default - white text, soft shadow, modern), "outline"
+    (white with thick black outline, classic shorts), "pop" (legacy yellow
+    highlight #FFE066). highlight_color applies to the "pop" style.
     """
-    return subtitles.build_pop_subtitles(timestamps_json_path, output_ass_path)
+    return subtitles.build_pop_subtitles(
+        timestamps_json_path, output_ass_path, style=style, highlight_color=highlight_color
+    )
 
 
 @mcp.tool()
@@ -127,6 +158,22 @@ def assemble_master_video(
         music=music,
         music_gain_db=music_gain_db,
     )
+
+
+@mcp.tool()
+def build_kinetic_video(plan: dict, output_path: str, preview: bool = False) -> dict:
+    """Render a vertical kinetic-typography video from pure graphics (no AI generation).
+
+    plan: {"theme": "dark"|"light", "voice": optional audio path,
+    "words": optional [{w,s,e}] word timings, "scenes": [{at, kind, ...}]}.
+    Scene kinds: words (word-by-word text), title (kicker+headline),
+    card (media with caption), big (one huge word), counter (number counts up),
+    act (chapter), cta (end card with handle). Modern clean look - no yellow.
+    preview=True renders at half resolution.
+    """
+    from .tools.kinetic import build_kinetic_video as impl
+
+    return impl(plan, output_path, preview=preview)
 
 
 @mcp.tool()

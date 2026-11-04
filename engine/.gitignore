@@ -1,0 +1,8 @@
+node_modules/
+.remotion/
+*.log
+test_out*
+*.mp4
+f1.jpg
+f2.jpg
+f3.jpg

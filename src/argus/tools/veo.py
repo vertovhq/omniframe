@@ -1,7 +1,10 @@
-"""Veo clip generation through the official Gemini API.
+"""Veo clip generation, two providers:
 
-No cookies, no browser automation, no account juggling: one API key
-from https://aistudio.google.com/apikey is all a user needs.
+  api  — official Gemini API (stable, paid: Veo has no free API tier)
+  flow — your own logged-in Google Flow browser session (free monthly
+         credits; log in once via flow_login, no cookie files ever)
+
+Default provider comes from ARGUS_VEO_PROVIDER (default "api").
 """
 
 from __future__ import annotations
@@ -18,7 +21,8 @@ def _client():
     if not CONFIG.gemini_api_key:
         raise RuntimeError(
             "No Gemini API key configured. Copy .env.example to .env and set "
-            "ARGUS_GEMINI_API_KEY (get one free at https://aistudio.google.com/apikey)."
+            "ARGUS_GEMINI_API_KEY (get one free at https://aistudio.google.com/apikey), "
+            "or switch to provider='flow' to use your Google Flow browser session."
         )
     try:
         from google import genai
@@ -35,13 +39,24 @@ def generate_veo_clip(
     model: str | None = None,
     negative_prompt: str | None = None,
     max_wait_s: float = 600.0,
+    provider: str | None = None,
 ) -> dict:
     """Generate one vertical Veo clip and save it to `output_path`.
 
-    Veo renders take 1–3 minutes; the call polls until done.
-    Prompts are passed to the model exactly as given — this tool does
-    not rewrite or "work around" content policy, so keep prompts clean.
+    provider: "api" (official Gemini API, paid) or "flow" (your logged-in
+    Google Flow browser session, free credits — run flow_login once first).
+    Default: ARGUS_VEO_PROVIDER, then "api". Renders take 1–3 minutes.
+    Prompts are passed to the model exactly as given — no content-policy
+    workarounds are applied, keep prompts clean.
     """
+    chosen = (provider or CONFIG.veo_provider or "api").strip().lower()
+    if chosen == "flow":
+        from .flow_browser import flow_generate
+
+        return flow_generate(prompt, output_path, max_wait_s=max_wait_s)
+    if chosen != "api":
+        raise ValueError(f"unknown Veo provider: {chosen!r} (use 'api' or 'flow')")
+
     client = _client()
     model = model or CONFIG.veo_model
 

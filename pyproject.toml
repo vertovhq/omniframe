@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pretty = ["rich>=13.0.0"]
+flow = ["playwright>=1.49"]
 dev = ["pytest>=8.0.0"]
 
 [project.scripts]

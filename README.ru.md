@@ -1,101 +1,119 @@
 # ARGUS
 
-**MCP-сервер, который превращает промпты в готовые вертикальные видео.**
+**MCP-студия вертикального видео: два пути контента — ИИ-генерация и чистая графика.**
 
-ARGUS — продакшн-конвейер для вирусного контента 1080×1920: генерация клипов Veo,
-озвучка студийного качества, покадровые караоке-сабы, резка сцен по паузам,
-сборка мастера и автопроверка качества — всё в одном MCP-сервере, которым управляет ИИ-ассистент.
+ARGUS собирает ролики 1080×1920 из чего угодно: клипы Veo 3.1 через официальный API или
+через твою браузерную сессию Google Flow (бесплатные кредиты, без ручных куки), либо
+вообще без ИИ — вертикальная кинетическая типографика рендерится локальным движком
+(Remotion) из JSON-плана. Плюс озвучка с клоном голоса, покадровые сабы, резка сцен
+по паузам, сборка мастера и QA — всё как MCP-инструменты для ИИ-ассистента.
+
+В монорепу входят три монтажных скилла («Эпизод», «Мани», «Эссе»), которые повторяют
+личные стили монтажа по plan.json — см. [`skills/`](skills/README.md).
 
 ```
-промпт ──▶ клипы Veo 3.1 ──┐
-скрипт ──▶ TTS-озвучка ────┼──▶ assemble_master_video ──▶ qa_verify_video ──▶ master.mp4
-голос  ──▶ караоке-сабы ───┘      (1080×1920, -14 LUFS)
+                    ┌─▶ generate_veo_clip (api | flow) ──┐
+текст/промпты ──┤                                        ├──▶ assemble ──▶ QA ──▶ мастер
+скрипт ─────────┴─▶ build_kinetic_video (графика) ──────┘      ▲        (1080×1920, −14 LUFS)
+озвучка ──▶ TTS / клон голоса ──▶ таймлайн ──▶ сабы ───────────┘
 ```
 
-## Инструменты
+## Инструменты (9)
 
-| Инструмент | Что делает | Нужен API? |
+| Инструмент | Что делает | Офлайн |
 |---|---|---|
-| `generate_veo_clip` | Клип Veo 3.1, по умолчанию 9:16, поллит до готовности | Ключ Gemini |
-| `synthesize_voiceover` | Нативный TTS Gemini (по умолчанию Charon) + мастеринг: 60 Hz HPF → EQ 110/3.2 kHz → компрессор → loudnorm −14 LUFS | Ключ Gemini |
-| `calculate_acoustic_timeline` | Точки склеек, привязанные к реальным паузам в речи — никогда не режет посреди слова | только ffmpeg |
-| `build_pop_subtitles` | Покадровые караоке-сабы Safe Pop (`.ass`): 1 слово на кадр, жёлтый хайлайт #FFE066, уровень глаз (MarginV 420), жирная обводка, без плашки | ничего |
-| `assemble_master_video` | Склейка клипов → микс озвучки + музыкальная подложка → loudnorm → вшивание сабов | только ffmpeg |
-| `qa_verify_video` | Строгие проверки разрешения/fps/развёртки, замер LUFS, контрольные кадры | только ffmpeg |
-| `learn_and_record_memory` | Запись проверенных уроков в `KNOWLEDGE_BASE.md` | ничего |
-
-Инструменты генерации работают через **официальный Gemini API** — один ключ,
-никаких куки, никакой браузерной автоматизации, никаких махинаций с аккаунтами.
-
-## Требования
-
-- Python 3.11+
-- [ffmpeg](https://ffmpeg.org/download.html) в PATH
-- Бесплатный ключ Gemini API ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) — только для двух генерирующих инструментов
+| `generate_veo_clip` | Клип Veo 3.1. `provider="api"` — официальный API (платно, у Veo нет бесплатного тарифа API); `provider="flow"` — твоя сессия flow.google (бесплатные кредиты, `flow_login` один раз) | — |
+| `flow_login` | Одноразовый логин-визард Flow: открывает окно, ты логинишься, профиль сессии сохраняется. Куки руками не копируются. Один свой аккаунт — за фермы аккаунтов банят | — |
+| `build_kinetic_video` | **Вертикальное видео из чистой графики**: слово-за-словом типографика, карточки, счётчики, главы, CTA. Темы dark/light, современный вид, без жёлтого | ✅ |
+| `synthesize_voiceover` | Gemini TTS + радиомастеринг (−14 LUFS). Клоны голоса — `tts.py` в скиллах | — |
+| `build_pop_subtitles` | Караоке-сабы .ass. Стили: `clean` (белый, дефолт), `outline`, `pop` (легаси-жёлтый по запросу) | ✅ |
+| `calculate_acoustic_timeline` | Склейки прилипают к реальным паузам в речи | ✅ |
+| `assemble_master_video` | Склейка клипов + микс голоса и музыки + вшивание сабов | ✅ |
+| `qa_verify_video` | Строгие проверки: 1080×1920, fps, развёртка, LUFS ±2 | ✅ |
+| `learn_and_record_memory` | Уроки продакшна в KNOWLEDGE_BASE.md | ✅ |
 
 ## Установка
+
+Требования: Python 3.11+, ffmpeg в PATH. Для кинетики — Node.js 18+.
 
 ```bash
 git clone https://github.com/your-name/argus-studio
 cd argus-studio
-pip install -e .
-```
-
-Настройка:
-
-```bash
-cp .env.example .env   # впиши свой ARGUS_GEMINI_API_KEY
+pip install -e ".[dev,pretty]"       # + flow → pip install -e ".[flow,pretty]"
+playwright install chromium           # только для provider="flow"
+cd engine && npm install --no-audit --no-fund && cd ..   # только для кинетики
+cp .env.example .env                  # ключ Gemini для api-режима/TTS
 ```
 
 ## Подключение ассистента
 
-Добавь в конфиг MCP-клиента (Claude Desktop, ZCode, …):
-
 ```json
 {
   "mcpServers": {
-    "argus-studio": {
+    "argus": {
       "command": "argus-studio",
-      "env": { "ARGUS_GEMINI_API_KEY": "твой-ключ" }
+      "env": { "ARGUS_GEMINI_API_KEY": "ключ", "ARGUS_VEO_PROVIDER": "api" }
     }
   }
 }
 ```
 
-Другие варианты (python -m, своя папка вывода) — в [`examples/mcp-config.example.json`](examples/mcp-config.example.json).
+Больше вариантов — в [`examples/mcp-config.example.json`](examples/mcp-config.example.json).
 
-## Типовой конвейер
+Пример запроса ассистенту: «Собери вертикальный ролик: скрипт такой-то, без Veo —
+одна графика, тёмная тема, озвучь Charon, сабы clean, QA в конце» — ассистент
+сам разложит задачу по тулзам.
 
-Просто попроси ассистента:
+## Оба пути контента
 
-> Сгенерируй клип 9:16 про ночной город под дождём, озвучь глубоким мужским голосом,
-> добавь караоке-сабы из examples/timestamps.example.json, собери и проверь.
-
-…или дергай шаги напрямую:
+**Через Veo** — кинематографичные сгенерированные кадры:
 
 ```text
-generate_veo_clip(prompt="ночной город, дождь, неон, кинематографично", output_path="out/clip1.mp4")
-synthesize_voiceover(text="Это нельзя было показывать…", voice_name="Charon")
-calculate_acoustic_timeline(audio_path="out/voiceover.mp3", script_text="…", target_scene_count=7)
-build_pop_subtitles(timestamps_json_path="out/timestamps.json", output_ass_path="out/subs.ass")
-assemble_master_video(clips=["out/clip1.mp4"], voiceover="out/voiceover.mp3",
-                      subtitles_ass="out/subs.ass", output_path="out/master.mp4")
-qa_verify_video(video_path="out/master.mp4", frames_dir="out/qa")
+generate_veo_clip(prompt="ночной город, неон, дождь", output_path="out/c1.mp4")
+generate_veo_clip(prompt="...", output_path="out/c2.mp4", provider="flow")  # халява Flow
 ```
 
-## Настройки
+**Через графику** (без ИИ, локально, бесплатно):
 
-Всё живёт в `.env` (шаблон — [.env.example](.env.example)): модели, формат мастера
-(по умолчанию 1080×1920@30), целевая громкость, папка вывода, пути к ffmpeg.
-Ключ читается из `ARGUS_GEMINI_API_KEY` (или `GEMINI_API_KEY` / `GOOGLE_API_KEY`).
+```text
+build_kinetic_video(plan={
+  "theme": "dark",
+  "voice": "out/voiceover.mp3",
+  "scenes": [
+    {"at": 0.0, "kind": "words", "text": "стоп скроллить это сейчас"},
+    {"at": 2.5, "kind": "title", "kicker": "глава 1", "text": "что тут происходит"},
+    {"at": 5.0, "kind": "counter", "value": 87, "suffix": "%", "sub": "не доходят до конца"},
+    {"at": 6.5, "kind": "cta", "text": "забирай бесплатно", "handle": "@you"}
+  ]
+}, output_path="out/kinetic.mp4")
+```
+
+Дальше одинаково: `synthesize_voiceover` → `calculate_acoustic_timeline` →
+`build_pop_subtitles(style="clean")` → `assemble_master_video` → `qa_verify_video`.
+
+## Структура репо
+
+```
+argus-studio/
+├── src/argus/          MCP-сервер и инструменты
+├── engine/             Remotion-движок кинетической графики (npm install)
+├── skills/             три монтажных скилла + tts.py с клоном голоса
+├── tests/              офлайн-тесты (pytest)
+└── examples/           конфиги MCP, примеры
+```
 
 ## Честные примечания
 
-- Рендер Veo занимает 1–3 минуты на клип; инструмент ждёт до `max_wait_s`.
-- Промпты уходят в Veo **как написаны**. Никаких скрытых переписываний для обхода
-  правил контента — такие трюки приводят к бану аккаунта, поэтому промпты держим чистыми.
-- `qa_verify_video` строгий специально: ровно 1080×1920, стандартный fps,
-  прогрессивная развёртка, ±2 LUFS вокруг −14.
+- Veo через API платный (~$0.40/сек качество, ~$0.10–0.12/сек Fast); бесплатного API-тарифа нет.
+  Халявный путь — `provider="flow"` со своими кредитами flow.google; он зависит от их UI —
+  селекторы вынесены в одно место в `src/argus/tools/flow_browser.py`.
+- Субтитры по умолчанию — стиль `clean` (белый). Жёлтый `pop` остался для обратной совместимости.
+- Промпты уходят в Veo как есть — никаких обходов правил контента.
+- В `skills/` звуки платных подписок и личные материалы не входят — клади свои (см. skills/README.md).
+
+## English
+
+See [README.md](README.md).
 
 ## Лицензия
 

@@ -67,8 +67,10 @@ def test_pop_subtitles_builds_ass(tmp_path: Path) -> None:
 
     text = out.read_text(encoding="utf-8")
     assert stats["words"] == 3
+    assert stats["style"] == "clean"
     assert "PlayResX: 1080" in text and "PlayResY: 1920" in text
-    assert "Arial Black" in text and "&H0066E0FF" in text
+    # clean default: white text, thin outline, no yellow anywhere
+    assert "&H00FFFFFF" in text and "&H0066E0FF" not in text
     assert text.count("Dialogue:") == 3
     # frame quantization: 0.18s * 30fps = frame 5.4 -> frame 5 -> 0.17
     assert "0:00:00.17" in text
@@ -76,11 +78,25 @@ def test_pop_subtitles_builds_ass(tmp_path: Path) -> None:
     assert "(ВАЖНО)" in text
 
 
-def test_highlight_colour_parsing() -> None:
-    assert subtitles.highlight_colour_ass("#FFE066") == "&H0066E0FF"
-    assert subtitles.highlight_colour_ass("&H00FFFFFF") == "&H00FFFFFF"
+def test_subtitles_styles(tmp_path: Path) -> None:
+    ts = tmp_path / "ts.json"
+    ts.write_text(json.dumps([{"word": "тест", "start": 0.0, "end": 0.3}]), encoding="utf-8")
+    pop = tmp_path / "pop.ass"
+    subtitles.build_pop_subtitles(ts, pop, style="pop", fps=30.0)
+    pop_text = pop.read_text(encoding="utf-8")
+    assert "&H0066E0FF" in pop_text and "Arial Black" in pop_text
+    outline = tmp_path / "outline.ass"
+    subtitles.build_pop_subtitles(ts, outline, style="outline", fps=30.0)
+    assert "&H00FFFFFF" in outline.read_text(encoding="utf-8")
     with pytest.raises(ValueError):
-        subtitles.highlight_colour_ass("yellow")
+        subtitles.build_pop_subtitles(ts, tmp_path / "x.ass", style="neon")
+
+
+def test_highlight_colour_parsing() -> None:
+    assert subtitles.hex_to_ass("#FFE066") == "&H0066E0FF"
+    assert subtitles.hex_to_ass("&H00FFFFFF") == "&H00FFFFFF"
+    with pytest.raises(ValueError):
+        subtitles.hex_to_ass("yellow")
 
 
 # ----------------------------------------------------------------- timeline
@@ -168,3 +184,19 @@ def test_stream_info(master_video: Path) -> None:
     assert (info.width, info.height) == (1080, 1920)
     assert info.has_video and info.has_audio
     assert run_ffmpeg  # import sanity
+
+
+# --------------------------------------------------------------------- flow
+
+def test_flow_requires_saved_session(tmp_path: Path) -> None:
+    from argus.tools import flow_browser
+
+    with pytest.raises(RuntimeError, match="flow_login"):
+        flow_browser.flow_generate("тест", str(tmp_path / "out.mp4"), profile=str(tmp_path / "nope"))
+
+
+def test_veo_provider_validation(tmp_path: Path) -> None:
+    from argus.tools import veo
+
+    with pytest.raises(ValueError, match="provider"):
+        veo.generate_veo_clip("тест", str(tmp_path / "o.mp4"), provider="warp")

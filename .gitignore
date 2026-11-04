@@ -31,3 +31,24 @@ Thumbs.db
 desktop.ini
 .DS_Store
 *.lnk
+
+# --- skills (montazh): рабочие файлы и копирайт ---
+skills/**/node_modules/
+skills/**/_work_*/
+skills/**/screens/
+skills/**/media/
+skills/**/*.mp4
+skills/**/*.mov
+skills/**/*.mkv
+skills/montazh-esse/engine/public/
+# sfx из платных подписок (Epidemic Sound / Motion Array) — локально, не в репо
+skills/montazh-esse/engine/assets/sfx/
+# SF Pro (Apple) кладётся вручную; Inter Display (OFL) в fonts/inter/ коммитится
+skills/montazh-esse/engine/assets/fonts/*.otf
+skills/montazh-esse/engine/assets/fonts/*.ttf
+
+# --- kinetic engine ---
+engine/node_modules/
+engine/public/*
+!engine/public/fonts/
+engine/test_out.mp4
