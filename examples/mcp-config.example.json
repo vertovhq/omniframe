@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "argus-studio": {
+      "command": "python",
+      "args": ["-m", "argus"],
+      "env": {
+        "ARGUS_GEMINI_API_KEY": "your-api-key-here",
+        "OMNIFRAME_OUTPUT_DIR": "D:/argus/output"
+      }
+    }
+  }
+}

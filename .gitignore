@@ -1,0 +1,33 @@
+# --- secrets ---
+.env
+*.key
+cookies*.txt
+account*.json
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- media / project outputs ---
+output/
+*.mp4
+*.mov
+*.mkv
+*.wav
+*.mp3
+*.ass
+KNOWLEDGE_BASE.md
+
+# --- os / editor junk ---
+Thumbs.db
+desktop.ini
+.DS_Store
+*.lnk
