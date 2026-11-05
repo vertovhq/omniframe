@@ -80,26 +80,44 @@ def assemble_master_video(
     fc_parts.append(
         f"{mix_label}loudnorm=I={lufs}:TP=-1.5:LRA=11[outa]"
     )
+
+    # Голос — мастер-дорожка: если он длиннее видеоряда, дотягиваем видео
+    # заморозкой последнего кадра (tpad), иначе mp4 обрывается за картинкой.
+    from ..ffmpeg import stream_info as _si
+
+    video_dur = sum(_si(c).duration for c in clips)
+    voice_dur = _si(voiceover).duration
+    pad = max(0.0, voice_dur - video_dur) + 0.3
+    if pad > 0.3:
+        fc_parts.append("[cat]tpad=stop_mode=clone:stop_duration=" + f"{pad:.3f}[catp]")
+        video_out = "[catp]"
+    else:
+        video_out = "[cat]"
     filter_complex = ";".join(fc_parts)
 
     staged = temp_sibling(Path(output_path).resolve(), ".stage.mp4")
     try:
+        print(f"[assemble] 1/2: concat {n} clips + mix + loudnorm", flush=True)
         run_ffmpeg([
             *inputs,
             "-filter_complex", filter_complex,
-            "-map", "[cat]", "-map", "[outa]",
+            "-map", video_out, "-map", "[outa]",
+            "-shortest",
             "-c:v", "libx264", "-preset", "medium", "-crf", "18",
             "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k",
             "-movflags", "+faststart",
             str(staged),
         ])
+        print("[assemble] 1/2 ok", flush=True)
 
         # --- 4: burn subtitles as a separate, idempotent pass --------------
         final = Path(output_path).resolve()
         if subtitles_ass:
+            print("[assemble] 2/2: burn subtitles", flush=True)
             _burn_subtitles(staged, Path(subtitles_ass), final)
             staged.unlink(missing_ok=True)
+            print("[assemble] 2/2 ok", flush=True)
         else:
             final.unlink(missing_ok=True)
             staged.replace(final)

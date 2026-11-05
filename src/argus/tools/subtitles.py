@@ -50,13 +50,14 @@ def _load_words(timestamps_json_path: str | Path) -> list[dict]:
         data = data.get("words") or data.get("timestamps") or []
     words = []
     for item in data:
-        word = str(item.get("word", "")).strip()
+        # два формата: {word, start, end} и скилловый {w, s, e}
+        word = str(item.get("word") or item.get("w") or "").strip()
         if not word:
             continue
         words.append({
             "word": word,
-            "start": float(item["start"]),
-            "end": float(item["end"]),
+            "start": float(item.get("start", item.get("s"))),
+            "end": float(item.get("end", item.get("e"))),
         })
     if not words:
         raise ValueError("no usable {word,start,end} entries in timestamps file")

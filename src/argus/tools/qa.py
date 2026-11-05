@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import CONFIG
-from ..ffmpeg import measure_loudness, stream_info
+from ..ffmpeg import measure_loudness, probe, stream_info
 
 ACCEPTED_FPS = {23.976, 24.0, 25.0, 29.97, 30.0, 50.0, 59.94, 60.0}
 LUFS_TOLERANCE = 2.0
@@ -43,6 +43,16 @@ def qa_verify_video(
 
     loudness = None
     if info.has_audio:
+        # дорожки не должны расходиться: видео короче аудио = обрыв в темноту
+        meta = probe(path)
+        vdur = next((float(s.get("duration") or 0) for s in meta.get("streams", []) if s.get("codec_type") == "video"), 0)
+        adur = next((float(s.get("duration") or 0) for s in meta.get("streams", []) if s.get("codec_type") == "audio"), 0)
+        if vdur and adur:
+            checks["stream_lengths"] = {
+                "passed": abs(vdur - adur) <= 0.5,
+                "measured": f"video {vdur:.1f}s / audio {adur:.1f}s",
+                "expected": "|diff| <= 0.5s",
+            }
         loudness = measure_loudness(path)
         lufs = loudness["input_i"]
         checks["loudness"] = {
