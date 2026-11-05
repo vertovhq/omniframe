@@ -2,6 +2,14 @@
 
 **An MCP studio for vertical video: two content paths — AI generation and pure graphics.**
 
+> ⚠️ Install only from the official repository. The Flow provider uses **your own single
+> Google account session** — it never shares cookies and never farms accounts; multi-account
+> credit farming gets accounts banned.
+
+| Works with |
+|---|
+| Any MCP client: **ZCode**, Claude Desktop / Claude Code, Cursor, Codex, OpenCode, Gemini CLI — skills install to `~/.zcode/skills/` or `~/.claude/skills/` |
+
 ARGUS assembles 1080×1920 clips from anything: Veo 3.1 clips via the official Gemini API
 or via your own Google Flow browser session (free monthly credits, no manual cookies),
 or with no AI at all — vertical kinetic typography rendered locally by the bundled
@@ -40,11 +48,19 @@ Requirements: Python 3.11+, ffmpeg on PATH. Node.js 18+ for the kinetic engine.
 ```bash
 git clone https://github.com/your-name/argus-studio
 cd argus-studio
+bash install.sh          # or: powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+Manual path:
+
+```bash
 pip install -e ".[dev,pretty]"       # add flow → pip install -e ".[flow,pretty]"
 playwright install chromium           # only for provider="flow"
 cd engine && npm install --no-audit --no-fund && cd ..   # only for kinetic
 cp .env.example .env                  # Gemini key for api mode / TTS
 ```
+
+Benchmark vs the biggest agent-harness repos and the roadmap: [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
 ## Connect your assistant
 
