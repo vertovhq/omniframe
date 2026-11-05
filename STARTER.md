@@ -13,7 +13,11 @@
 **Конвейер:**
 1. Напиши сценарий: хук в первые 1.5 сек, обещание, 3-5 битов, CTA. Покажи на утверждение до озвучки.
 2. Контент: без ИИ = build_kinetic_video (кинетика, плашки, счётчики — бесплатно, со звуком); с ИИ = generate_veo_clip (provider="flow" — сначала flow_login, или api с ключом). Можно микс.
-3. Озвучка: edge (Dmitry, без ключей) через skills tts.py или synthesize_voiceover.
+3. **Голос — выбери варику (ассистент спросит или предложи сам):**
+   - edge (БЕСПЛАТНО, без ключей, дефолт): ru-RU-DmitryNeural (муж), ru-RU-SvetlanaNeural (жен) — skills tts.py --provider edge
+   - Gemini TTS (нужен ключ в .env, 30 голосов): Charon (глубокий муж, дефолт), Puck, Kore, Fenrir, Leda, Aoede и др. — synthesize_voiceover или tts.py --provider gemini
+   - Клон ТВОЕГО голоса: ElevenLabs (tts.py --clone сэмпл.wav --name я, платный тариф) или XTTS локально офлайн (--provider xtts --clone-file сэмпл.wav)
+   После выбора — calculate_acoustic_timeline.
 4. Сабы: build_pop_subtitles(style="clean", accent=1-3 ключевых слова).
 5. Сборка: assemble_master_video → qa_verify_video — все чеки зелёные, иначе чини.
 6. Отчёт: путь к файлу + почему так. Правила — в KNOWLEDGE_BASE.md.
