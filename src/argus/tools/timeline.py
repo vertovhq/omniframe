@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .. import __version__
 from ..ffmpeg import detect_pauses, stream_info
 
 
@@ -78,6 +79,7 @@ def calculate_acoustic_timeline(
         })
 
     return {
+        "engine": f"ARGUS {__version__}",
         "duration": round(duration, 3),
         "scene_count": len(scenes),
         "scenes": scenes,

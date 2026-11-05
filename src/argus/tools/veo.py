@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 from ..config import CONFIG
+from .. import __version__
 
 POLL_INTERVAL_S = 10.0
 
@@ -67,12 +68,14 @@ def generate_veo_clip(
         number_of_videos=1,
         **({"negative_prompt": negative_prompt} if negative_prompt else {}),
     )
+    print(f"[ARGUS] Veo: операция запущена (модель {model}), поллинг каждые {POLL_INTERVAL_S:.0f}с...", flush=True)
     operation = client.models.generate_videos(model=model, prompt=prompt, config=config)
 
     started = time.monotonic()
     while not operation.done:
         if time.monotonic() - started > max_wait_s:
             raise TimeoutError(f"Veo render exceeded {max_wait_s:.0f}s; try again or use a fast model")
+        print(f"[ARGUS] Veo: рендер идёт... {time.monotonic() - started:.0f}с", flush=True)
         time.sleep(POLL_INTERVAL_S)
         operation = client.operations.get(operation)
 
@@ -94,6 +97,7 @@ def generate_veo_clip(
         out.write_bytes(data if isinstance(data, bytes) else data.getvalue())
 
     return {
+        "engine": f"ARGUS {__version__}",
         "output": str(out),
         "model": model,
         "aspect_ratio": aspect_ratio,

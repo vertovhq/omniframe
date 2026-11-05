@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import CONFIG
+from .. import __version__
 from ..ffmpeg import escape_filter_path, run_ffmpeg, stream_info, temp_sibling
 
 
@@ -24,6 +25,7 @@ def _burn_subtitles(video: Path, ass_path: Path, output: Path) -> None:
         "-pix_fmt", "yuv420p",
         "-c:a", "copy",
         "-movflags", "+faststart",
+        "-metadata", f"comment=Made with ARGUS Studio v{__version__}",
         str(output),
     ])
 
@@ -97,7 +99,7 @@ def assemble_master_video(
 
     staged = temp_sibling(Path(output_path).resolve(), ".stage.mp4")
     try:
-        print(f"[assemble] 1/2: concat {n} clips + mix + loudnorm", flush=True)
+        print(f"[ARGUS] сборка 1/2: склейка {n} клипов + микс + loudnorm", flush=True)
         run_ffmpeg([
             *inputs,
             "-filter_complex", filter_complex,
@@ -107,23 +109,25 @@ def assemble_master_video(
             "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k",
             "-movflags", "+faststart",
+            "-metadata", f"comment=Made with ARGUS Studio v{__version__}",
             str(staged),
         ])
-        print("[assemble] 1/2 ok", flush=True)
+        print("[ARGUS] сборка 1/2 ok", flush=True)
 
         # --- 4: burn subtitles as a separate, idempotent pass --------------
         final = Path(output_path).resolve()
         if subtitles_ass:
-            print("[assemble] 2/2: burn subtitles", flush=True)
+            print("[ARGUS] сборка 2/2: вшиваю сабы", flush=True)
             _burn_subtitles(staged, Path(subtitles_ass), final)
             staged.unlink(missing_ok=True)
-            print("[assemble] 2/2 ok", flush=True)
+            print("[ARGUS] сборка 2/2 ok", flush=True)
         else:
             final.unlink(missing_ok=True)
             staged.replace(final)
 
         info = stream_info(final)
         return {
+            "engine": f"ARGUS {__version__}",
             "output": str(final),
             "clips": len(clips),
             "music": bool(music),

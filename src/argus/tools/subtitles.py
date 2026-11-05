@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from ..config import CONFIG
+from .. import __version__
 
 DEFAULT_FONT_SIZE = 110
 DEFAULT_MARGIN_V = 420
@@ -161,4 +162,4 @@ def build_pop_subtitles(
     out = Path(output_ass_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(content, encoding="utf-8")
-    return {"output": str(out), "words": len(words), "fps": fps, "style": style, "font": font}
+    return {"engine": f"ARGUS {__version__}", "output": str(out), "words": len(words), "fps": fps, "style": style, "font": font}

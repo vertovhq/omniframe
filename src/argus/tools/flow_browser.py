@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 
 from ..config import CONFIG
+from .. import __version__
 
 FLOW_URL = "https://flow.google/"
 
@@ -219,6 +220,7 @@ def flow_generate(
         raise RuntimeError("Не удалось скачать клип (маленький/пустой файл). Попробуй ещё раз.")
 
     return {
+        "engine": f"ARGUS {__version__}",
         "output": str(out),
         "provider": "flow",
         "elapsed_s": round(time.monotonic() - started, 1),

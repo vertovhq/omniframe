@@ -32,6 +32,8 @@ import time
 from pathlib import Path
 
 from ..config import CONFIG
+from .. import __version__
+from ..ffmpeg import temp_sibling
 
 SCENE_KINDS = ("words", "title", "card", "big", "counter", "act", "cta", "chip")
 MEDIA_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".mov", ".webm", ".mkv"}
@@ -224,6 +226,7 @@ def build_kinetic_video(plan: dict | str, output_path: str, *, preview: bool = F
     props_path.write_text(json.dumps(plan, ensure_ascii=False, indent=1), encoding="utf-8")
 
     started = time.monotonic()
+    print(f"[ARGUS] кинетика: рендер {len(plan.get("scenes", []))} сцен, {plan["duration"]:.1f}с, тема {plan["theme"]}...", flush=True)
     npx = _npx()
     cmd = [
         npx, "remotion", "render", "src/index.ts", "Kinetic", str(out),
@@ -241,7 +244,23 @@ def build_kinetic_video(plan: dict | str, output_path: str, *, preview: bool = F
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-8:]
         raise RuntimeError("Remotion render failed:\n" + "\n".join(tail))
 
+    # подпись происхождения: metadata-comment "Made with ARGUS" (stream copy)
+    tagged = temp_sibling(out, ".tag.mp4")
+    m = subprocess.run(
+        [CONFIG.ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+         "-i", str(out), "-c", "copy",
+         "-metadata", f"comment=Made with ARGUS Studio v{__version__}",
+         str(tagged)],
+        capture_output=True, text=True,
+    )
+    if m.returncode == 0:
+        out.unlink(missing_ok=True)
+        tagged.replace(out)
+    else:
+        tagged.unlink(missing_ok=True)
+
     return {
+        "engine": f"ARGUS {__version__}",
         "output": str(out),
         "duration": plan["duration"],
         "scenes": len(plan.get("scenes", [])),

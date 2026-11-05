@@ -11,6 +11,7 @@ import wave
 from pathlib import Path
 
 from ..config import CONFIG
+from .. import __version__
 from ..ffmpeg import run_ffmpeg, stream_info, temp_sibling
 
 AVAILABLE_VOICES = (
@@ -75,6 +76,7 @@ def synthesize_voiceover(
         ),
     )
 
+    print(f"[ARGUS] TTS: голос {voice} синтезирован, мастеринг...", flush=True)
     parts = response.candidates[0].content.parts
     pcm = next((p.inline_data.data for p in parts if p.inline_data), None)
     if not pcm:
@@ -101,6 +103,7 @@ def synthesize_voiceover(
         raw_wav.unlink(missing_ok=True)
 
     return {
+        "engine": f"ARGUS {__version__}",
         "output": str(out),
         "voice": voice,
         "mastered": master,

@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..config import CONFIG
+from .. import __version__
 
 
 def learn_and_record_memory(
@@ -30,4 +31,4 @@ def learn_and_record_memory(
             fh.write("# ARGUS — Production Knowledge Base\n")
         fh.write(entry)
 
-    return {"recorded": str(path), "lesson": lesson_title.strip()}
+    return {"engine": f"ARGUS {__version__}", "recorded": str(path), "lesson": lesson_title.strip()}

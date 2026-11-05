@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import CONFIG
+from .. import __version__
 from ..ffmpeg import measure_loudness, probe, stream_info
 
 ACCEPTED_FPS = {23.976, 24.0, 25.0, 29.97, 30.0, 50.0, 59.94, 60.0}
@@ -76,6 +77,7 @@ def qa_verify_video(
             frames.append(str(frame_path))
 
     return {
+        "engine": f"ARGUS {__version__}",
         "passed": all(c["passed"] for c in checks.values()),
         "checks": checks,
         "duration": round(info.duration, 3),

@@ -209,8 +209,8 @@ def learn_and_record_memory(
 def main() -> None:
     """Run the MCP server over stdio."""
     banner = (
-        f"ARGUS v{__version__} | {CONFIG.width}x{CONFIG.height}@{CONFIG.fps:.0f} "
-        f"| output: {Path(CONFIG.output_dir)}"
+        f"[ARGUS] Studio v{__version__} АКТИВЕН | 9 тулз | "
+        f"{CONFIG.width}x{CONFIG.height}@{CONFIG.fps:.0f} | вывод: {Path(CONFIG.output_dir)}"
     )
     if not CONFIG.gemini_api_key:
         banner += " | API key: MISSING (generation tools disabled, offline tools OK)"
