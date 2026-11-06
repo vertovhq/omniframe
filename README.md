@@ -93,6 +93,17 @@ generate_veo_clip(prompt="...", output_path="out/c2.mp4", provider="flow")  # fr
 build_kinetic_video(plan={
   "theme": "dark",
   "voice": "out/voiceover.mp3",
+  "hud": {                                   # overlay drawn over all scenes
+    "at": 0.5, "until": 5.5,                 # plate lifetime, seconds
+    "rows": [
+      {"label": "DUE IN", "value": "365 DAYS"},
+      {"label": "WORKERS", "value": "0/100"}
+    ],
+    "pos": "top",                            # top | bottom
+    "accent_changes": [                      # value swap + accent highlight
+      {"at": 3.0, "row": 1, "value": "20/100"}
+    ]
+  },
   "scenes": [
     {"at": 0.0, "kind": "words", "text": "stop scrolling this right now"},
     {"at": 2.5, "kind": "title", "kicker": "chapter 1", "text": "what is going on here"},
@@ -101,6 +112,11 @@ build_kinetic_video(plan={
   ]
 }, output_path="out/kinetic.mp4")
 ```
+
+`hud` is a plan-level game-UI overlay (not a scene): a semi-transparent dark plate
+with monospace values that lives over all scenes inside its interval without
+touching them. On `accent_changes` the row's value swaps and gets the accent
+highlight (progress "0/100" → "20/100").
 
 Then the same either way: `synthesize_voiceover` → `calculate_acoustic_timeline` →
 `build_pop_subtitles(style="clean")` → `assemble_master_video` → `qa_verify_video`.
