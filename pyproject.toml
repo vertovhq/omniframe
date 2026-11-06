@@ -35,6 +35,7 @@ dev = ["pytest>=8.0.0"]
 
 [project.scripts]
 argus-studio = "argus.server:main"
+argus-doctor = "argus.doctor:main"
 
 [project.urls]
 Homepage = "https://github.com/your-name/argus-studio"

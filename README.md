@@ -27,7 +27,7 @@ script ─────────┴─▶ build_kinetic_video (graphics) ─�
 voice ──▶ TTS / voice clone ──▶ timeline ──▶ subtitles ────────┘
 ```
 
-## Tools (9)
+## Tools (10)
 
 | Tool | What it does | Offline |
 |---|---|---|
@@ -40,6 +40,7 @@ voice ──▶ TTS / voice clone ──▶ timeline ──▶ subtitles ──�
 | `assemble_master_video` | Concat clips + voice/music mix + subtitle burn-in | ✅ |
 | `qa_verify_video` | Strict checks: 1080×1920, fps, scan, LUFS ±2 | ✅ |
 | `learn_and_record_memory` | Production lessons into KNOWLEDGE_BASE.md | ✅ |
+| `doctor` | One-command environment self-check (`argus-doctor` CLI or MCP): python / ffmpeg+libass / Node / engine / edge-tts / playwright / Gemini key / output dir — ✓/✗/⚠ table with an exact install command under every ✗ | ✅ |
 
 ## Install
 

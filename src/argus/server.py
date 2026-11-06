@@ -210,10 +210,26 @@ def learn_and_record_memory(
     return memory.learn_and_record_memory(lesson_title, user_directive, technical_rule)
 
 
+@mcp.tool()
+def doctor(check_flow: bool = False) -> dict:
+    """One-command environment self-check (same report as the argus-doctor CLI).
+
+    Verifies: python >=3.11; ffmpeg/ffprobe on PATH (or ARGUS_FFMPEG/ARGUS_FFPROBE)
+    with a live libass subtitle probe; Node >=18 + npx; engine/node_modules
+    (hint: cd engine && npm install); edge-tts installed with a live 1-word
+    synthesis probe (15s timeout, retried); playwright+chromium (marked optional
+    unless check_flow=True); Gemini key presence (status only, never an error);
+    OMNIFRAME_OUTPUT_DIR exists/created. Returns JSON: {checks, critical_failures, ok}.
+    """
+    from .doctor import run_checks
+
+    return run_checks(flow=True if check_flow else None)
+
+
 def main() -> None:
     """Run the MCP server over stdio."""
     banner = (
-        f"[ARGUS] Studio v{__version__} АКТИВЕН | 9 тулз | "
+        f"[ARGUS] Studio v{__version__} АКТИВЕН | 10 тулз | "
         f"{CONFIG.width}x{CONFIG.height}@{CONFIG.fps:.0f} | вывод: {Path(CONFIG.output_dir)}"
     )
     if not CONFIG.gemini_api_key:
