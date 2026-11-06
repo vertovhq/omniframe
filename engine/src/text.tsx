@@ -92,6 +92,12 @@ export function assignWordTimings(
 
   let cursor = 0;
   scenes.forEach((scene, i) => {
+    // последовательный курсор ест только речевые сцены: вставные (counter/chip/
+    // card/act/cta) со своим текстом иначе крадут тайминги речи — сабы едут вперёд
+    if (scene.kind !== 'words') {
+      result.set(i, []);
+      return;
+    }
     const sceneWords = splitIntoWords(textOfScene(scene));
     if (sceneWords.length === 0) {
       result.set(i, []);
