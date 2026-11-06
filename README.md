@@ -55,7 +55,7 @@ bash install.sh          # or: powershell -ExecutionPolicy Bypass -File install.
 Manual path:
 
 ```bash
-pip install -e ".[dev,pretty]"       # add flow → pip install -e ".[flow,pretty]"
+pip install -e ".[dev,pretty,voice]"  # voice = edge-tts (free skills TTS); add flow → pip install -e ".[flow,pretty]"
 playwright install chromium           # only for provider="flow"
 cd engine && npm install --no-audit --no-fund && cd ..   # only for kinetic
 cp .env.example .env                  # Gemini key for api mode / TTS

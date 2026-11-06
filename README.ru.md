@@ -40,7 +40,7 @@ ARGUS собирает ролики 1080×1920 из чего угодно: кл�
 ```bash
 git clone https://github.com/your-name/argus-studio
 cd argus-studio
-pip install -e ".[dev,pretty]"       # + flow → pip install -e ".[flow,pretty]"
+pip install -e ".[dev,pretty,voice]"  # voice = edge-tts (бесплатная озвучка скиллов); + flow → pip install -e ".[flow,pretty]"
 playwright install chromium           # только для provider="flow"
 cd engine && npm install --no-audit --no-fund && cd ..   # только для кинетики
 cp .env.example .env                  # ключ Gemini для api-режима/TTS

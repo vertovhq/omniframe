@@ -3,8 +3,8 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-Write-Host "[1/4] Python-пакет + dev-зависимости..."
-pip install -e ".[dev,pretty]"
+Write-Host "[1/4] Python-пакет + dev-зависимости + озвучка (edge-tts)..."
+pip install -e ".[dev,pretty,voice]"
 
 Write-Host "[2/4] Playwright Chromium (нужен только для Veo provider='flow')..."
 try {

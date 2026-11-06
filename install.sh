@@ -4,8 +4,8 @@
 set -e
 cd "$(dirname "$0")"
 
-echo "[1/4] Python-пакет + dev-зависимости..."
-pip install -e ".[dev,pretty]"
+echo "[1/4] Python-пакет + dev-зависимости + озвучка (edge-tts)..."
+pip install -e ".[dev,pretty,voice]"
 
 echo "[2/4] Playwright Chromium (нужен только для Veo provider='flow')..."
 pip install -e ".[flow]" >/dev/null 2>&1 && python -m playwright install chromium || \
