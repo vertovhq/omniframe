@@ -38,7 +38,7 @@ ARGUS собирает ролики 1080×1920 из чего угодно: кл�
 Требования: Python 3.11+, ffmpeg в PATH. Для кинетики — Node.js 18+.
 
 ```bash
-git clone https://github.com/your-name/argus-studio
+git clone <url репозитория argus-studio>   # или скачай архив и распакуй
 cd argus-studio
 pip install -e ".[dev,pretty,voice]"  # voice = edge-tts (бесплатная озвучка скиллов); + flow → pip install -e ".[flow,pretty]"
 playwright install chromium           # только для provider="flow"

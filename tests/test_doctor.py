@@ -44,9 +44,10 @@ def _pin_which(monkeypatch, tmp_path: Path, missing: tuple[str, ...] = ()) -> No
     monkeypatch.setattr(doctor, "_which", fake_which)
 
 
-def _make_cfg(tmp_path: Path, *, key: str = "test-key") -> ArgusConfig:
+def _make_cfg(tmp_path: Path, *, key: str = "test-key", eleven: str = "el-key") -> ArgusConfig:
     return ArgusConfig(
         gemini_api_key=key,
+        elevenlabs_api_key=eleven,
         output_dir=tmp_path / "out",
         ffmpeg=_fake_exe(tmp_path, "ffmpeg.exe"),
         ffprobe=_fake_exe(tmp_path, "ffprobe.exe"),
@@ -96,7 +97,7 @@ def test_all_critical_ok(tmp_path, monkeypatch):
     assert report["ok"] is True
     assert report["critical_failures"] == []
     ids = {c["id"] for c in report["checks"]}
-    assert ids == set(doctor.CRITICAL_IDS) | {"playwright", "gemini_key"}
+    assert ids == set(doctor.CRITICAL_IDS) | {"playwright", "gemini_key", "elevenlabs_key"}
     for c in report["checks"]:
         assert c["status"] in ("ok", "warn")
         if c["status"] == "fail":
@@ -204,6 +205,29 @@ def test_gemini_key_absent_is_status_not_error(tmp_path, monkeypatch):
     assert key["status"] == "warn"
     assert "gemini_key" not in report["critical_failures"]
     assert report["ok"] is True  # warnings never flip the verdict
+
+
+def test_elevenlabs_key_optional(tmp_path, monkeypatch):
+    _mock_run_ok(monkeypatch)
+    _pin_which(monkeypatch, tmp_path)
+    _fake_engine(tmp_path, monkeypatch)
+
+    with_key = doctor.run_checks(flow=False, live=False, config=_make_cfg(tmp_path))
+    key = next(c for c in with_key["checks"] if c["id"] == "elevenlabs_key")
+    assert key["status"] == "ok"
+
+    cfg = ArgusConfig(
+        gemini_api_key="k",
+        elevenlabs_api_key="",
+        output_dir=tmp_path / "out",
+        ffmpeg=_fake_exe(tmp_path, "ffmpeg.exe"),
+        ffprobe=_fake_exe(tmp_path, "ffprobe.exe"),
+    )
+    without = doctor.run_checks(flow=False, live=False, config=cfg)
+    key = next(c for c in without["checks"] if c["id"] == "elevenlabs_key")
+    assert key["status"] == "warn"  # необязательный: отсутствие — статус, не ошибка
+    assert "elevenlabs_key" not in without["critical_failures"]
+    assert without["ok"] is True
 
 
 def test_playwright_optional_vs_flow(tmp_path, monkeypatch):

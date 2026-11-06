@@ -218,8 +218,9 @@ def doctor(check_flow: bool = False) -> dict:
     with a live libass subtitle probe; Node >=18 + npx; engine/node_modules
     (hint: cd engine && npm install); edge-tts installed with a live 1-word
     synthesis probe (15s timeout, retried); playwright+chromium (marked optional
-    unless check_flow=True); Gemini key presence (status only, never an error);
-    OMNIFRAME_OUTPUT_DIR exists/created. Returns JSON: {checks, critical_failures, ok}.
+    unless check_flow=True); Gemini key and optional ElevenLabs key presence
+    (status only, never an error); OMNIFRAME_OUTPUT_DIR exists/created.
+    Returns JSON: {checks, critical_failures, ok}.
     """
     from .doctor import run_checks
 

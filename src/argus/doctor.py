@@ -3,8 +3,8 @@
 Verifies everything the pipeline needs before a new user hits
 "ничего не работает": python/ffmpeg/ffprobe (incl. a live libass subtitle
 probe), Node.js + npx, engine/node_modules, edge-tts (installed + service
-alive), playwright+chromium (optional unless flow mode), the Gemini key
-(status only, never an error) and OMNIFRAME_OUTPUT_DIR.
+alive), playwright+chromium (optional unless flow mode), the Gemini key and
+the optional ElevenLabs key (status only, never an error) and OMNIFRAME_OUTPUT_DIR.
 
 Console:  argus-doctor [--json] [--flow] [--no-live]
 MCP:      doctor(check_flow=False) -> the same report as JSON.
@@ -264,6 +264,16 @@ def check_gemini_key(cfg: ArgusConfig) -> dict:
     )
 
 
+def check_elevenlabs_key(cfg: ArgusConfig) -> dict:
+    # опциональный: нужен только для клонов голоса в скиллах (tts.py --provider elevenlabs)
+    if cfg.elevenlabs_api_key:
+        return _check("elevenlabs_key", "ключ ElevenLabs", "ok", "есть (клоны голоса доступны)")
+    return _check(
+        "elevenlabs_key", "ключ ElevenLabs", "warn", "нет — это не обязательно: edge/gemini/xtts работают без него",
+        "клоны голоса: впиши ELEVENLABS_API_KEY в .env (или экспортируй) — только если нужны",
+    )
+
+
 def check_output_dir(cfg: ArgusConfig) -> dict:
     try:
         if cfg.output_dir.exists():
@@ -293,6 +303,7 @@ def run_checks(flow: bool | None = None, live: bool = True, config: ArgusConfig 
         check_edge_tts(live),
         check_playwright(flow),
         check_gemini_key(cfg),
+        check_elevenlabs_key(cfg),
         check_output_dir(cfg),
     ]
     # playwright становится критичным только в режиме flow (иначе — опциональный ⚠)

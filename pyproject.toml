@@ -4,7 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "argus-studio"
-version = "1.0.0"
+# single source of truth: src/argus/__init__.py -> __version__
+dynamic = ["version"]
 description = "ARGUS — MCP server for producing viral vertical videos: Veo 3.1 clips, mastered AI voiceover, karaoke subtitles, acoustic timeline and QA."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -38,8 +39,8 @@ dev = ["pytest>=8.0.0"]
 argus-studio = "argus.server:main"
 argus-doctor = "argus.doctor:main"
 
-[project.urls]
-Homepage = "https://github.com/your-name/argus-studio"
+[tool.hatch.version]
+path = "src/argus/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/argus"]

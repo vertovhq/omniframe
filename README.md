@@ -47,7 +47,7 @@ voice ──▶ TTS / voice clone ──▶ timeline ──▶ subtitles ──�
 Requirements: Python 3.11+, ffmpeg on PATH. Node.js 18+ for the kinetic engine.
 
 ```bash
-git clone https://github.com/your-name/argus-studio
+git clone <your argus-studio repo url>     # or download and unpack an archive
 cd argus-studio
 bash install.sh          # or: powershell -ExecutionPolicy Bypass -File install.ps1
 ```

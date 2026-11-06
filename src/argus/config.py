@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 _ENV_KEYS = ("ARGUS_GEMINI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")
+_ELEVEN_KEYS = ("ARGUS_ELEVENLABS_API_KEY", "ELEVENLABS_API_KEY")
 
 
 def _load_dotenv() -> None:
@@ -37,6 +38,8 @@ class ArgusConfig:
     """Immutable runtime settings resolved once at server start."""
 
     gemini_api_key: str = ""
+    # optional; only needed for voice clones via skills tts.py --provider elevenlabs
+    elevenlabs_api_key: str = ""
     veo_provider: str = "api"  # "api" (official, paid) | "flow" (browser session, free credits)
     veo_model: str = "veo-3.1-fast-generate-preview"
     tts_model: str = "gemini-2.5-flash-preview-tts"
@@ -66,8 +69,10 @@ def load_config() -> ArgusConfig:
     """Build the config from environment / `.env` with sane defaults."""
     _load_dotenv()
     api_key = _first_env(*_ENV_KEYS)
+    eleven_key = _first_env(*_ELEVEN_KEYS)
     return ArgusConfig(
         gemini_api_key=api_key,
+        elevenlabs_api_key=eleven_key,
         veo_provider=os.environ.get("ARGUS_VEO_PROVIDER", "").strip().lower() or ArgusConfig.veo_provider,
         veo_model=os.environ.get("ARGUS_VEO_MODEL", "").strip() or ArgusConfig.veo_model,
         tts_model=os.environ.get("ARGUS_TTS_MODEL", "").strip() or ArgusConfig.tts_model,
