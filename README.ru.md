@@ -79,6 +79,17 @@ generate_veo_clip(prompt="...", output_path="out/c2.mp4", provider="flow")  # х
 build_kinetic_video(plan={
   "theme": "dark",
   "voice": "out/voiceover.mp3",
+  "hud": {                                   # оверлей поверх всех сцен
+    "at": 0.5, "until": 5.5,                 # интервал жизни плашки, сек
+    "rows": [
+      {"label": "ДО СРОКА", "value": "365 ДНЕЙ"},
+      {"label": "РАБОЧИЕ", "value": "0/100"}
+    ],
+    "pos": "top",                            # top | bottom
+    "accent_changes": [                      # замена значения + акцентная подсветка
+      {"at": 3.0, "row": 1, "value": "20/100"}
+    ]
+  },
   "scenes": [
     {"at": 0.0, "kind": "words", "text": "стоп скроллить это сейчас"},
     {"at": 2.5, "kind": "title", "kicker": "глава 1", "text": "что тут происходит"},
@@ -87,6 +98,11 @@ build_kinetic_video(plan={
   ]
 }, output_path="out/kinetic.mp4")
 ```
+
+`hud` — игровой оверлей уровня плана (не сцена): полупрозрачная тёмная плашка
+с моноширинными значениями живёт в своём интервале поверх всех сцен, не мешая
+им. По `accent_changes` значение строки заменяется и подсвечивается акцентом
+(прогресс «0/100» → «20/100»).
 
 Дальше одинаково: `synthesize_voiceover` → `calculate_acoustic_timeline` →
 `build_pop_subtitles(style="clean")` → `assemble_master_video` → `qa_verify_video`.

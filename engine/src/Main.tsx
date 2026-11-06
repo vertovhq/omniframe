@@ -2,6 +2,7 @@ import {useMemo} from 'react';
 import type {FC} from 'react';
 import {AbsoluteFill, Audio, Sequence, interpolate, useVideoConfig} from 'remotion';
 import type {KineticProps, Scene} from './types';
+import {HudLayer} from './hud';
 import {FONT_FAMILY, getTheme, grainBackgroundImage, resolveMedia} from './theme';
 import {assignWordTimings} from './text';
 import type {LocalWord} from './text';
@@ -49,7 +50,9 @@ const SceneView: FC<{
  * Kinetic: JSON-driven vertical video. Each scene becomes a non-overlapping
  * Sequence from its `at` to the next scene's `at` (last scene runs to
  * `duration`); transitions are handled inside SceneShell so two texts never
- * stack. Optional voice audio plays full length from the public dir.
+ * stack. Optional voice audio plays full length from the public dir. The
+ * optional `hud` overlay rides above all scene Sequences (its own Sequence,
+ * pointerEvents none) and below the grain.
  */
 export const Main: FC<KineticProps> = ({
   duration,
@@ -58,6 +61,7 @@ export const Main: FC<KineticProps> = ({
   voice,
   words,
   scenes,
+  hud,
   sfx = true,
   sfx_volume = 1,
   sfx_list,
@@ -84,6 +88,18 @@ export const Main: FC<KineticProps> = ({
     () => buildSfxTimeline(orderedScenes, {sfx, sfx_list}),
     [orderedScenes, sfx, sfx_list]
   );
+
+  const hudWindow = useMemo(() => {
+    if (!hud || typeof hud.at !== 'number' || typeof hud.until !== 'number') {
+      return null;
+    }
+    if (hud.until <= hud.at) {
+      return null;
+    }
+    const from = Math.max(0, Math.round(hud.at * fps));
+    const dur = Math.max(1, Math.round(hud.until * fps) - from);
+    return {from, dur};
+  }, [hud, fps]);
 
   return (
     <AbsoluteFill
@@ -140,6 +156,17 @@ export const Main: FC<KineticProps> = ({
           </Sequence>
         );
       })}
+      {hudWindow ? (
+        <Sequence
+          from={hudWindow.from}
+          durationInFrames={hudWindow.dur}
+          name="hud"
+        >
+          <AbsoluteFill style={{pointerEvents: 'none'}}>
+            <HudLayer hud={hud!} durationInFrames={hudWindow.dur} colors={colors} />
+          </AbsoluteFill>
+        </Sequence>
+      ) : null}
       <AbsoluteFill
         style={{
           pointerEvents: 'none',

@@ -169,7 +169,11 @@ def build_kinetic_video(plan: dict, output_path: str, preview: bool = False) -> 
     """Render a vertical kinetic-typography video from pure graphics (no AI generation).
 
     plan: {"theme": "dark"|"light", "voice": optional audio path,
-    "words": optional [{w,s,e}] word timings, "scenes": [{at, kind, ...}]}.
+    "words": optional [{w,s,e}] word timings, "scenes": [{at, kind, ...}],
+    "hud": optional overlay over all scenes {at, until, rows: [{label, value}],
+    pos: "top"|"bottom", accent_changes: [{at, row, value}]} - a semi-transparent
+    dark plate with monospace values; after an accent_change the row's value
+    swaps and is accent-highlighted}.
     Scene kinds: words (word-by-word text), title (kicker+headline),
     card (media with caption), big (one huge word), counter (number counts up),
     act (chapter), cta (end card with handle). Modern clean look - no yellow.

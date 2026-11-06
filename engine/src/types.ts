@@ -88,6 +88,37 @@ export type SfxEvent = {
   volume?: number;
 };
 
+export type HudRow = {
+  label: string;
+  value: string;
+};
+
+/** Timed value swap inside the HUD: from `at` on, `row` shows `value` in accent. */
+export type HudAccentChange = {
+  /** Seconds, absolute on the timeline. */
+  at: number;
+  /** Index into `rows`. */
+  row: number;
+  value: string;
+};
+
+/**
+ * HUD overlay ("game UI" strip): a semi-transparent dark plate with
+ * monospace values, drawn OVER every scene between `at` and `until`
+ * without touching them. Not a Scene — it lives at the root of the props.
+ */
+export type HudOverlay = {
+  /** Appearance time, seconds, absolute on the timeline. */
+  at: number;
+  /** Disappearance time, seconds (the plate fades out approaching it). */
+  until: number;
+  rows: HudRow[];
+  /** Anchor edge of the plate. Default "top". */
+  pos?: 'top' | 'bottom';
+  /** Timed value swaps; the new value is accent-highlighted. */
+  accent_changes?: HudAccentChange[];
+};
+
 export type MusicTrack = {
   /** Relative to the public dir. */
   src: string;
@@ -112,6 +143,11 @@ export type KineticProps = {
   /** Optional global word timings for sync. */
   words?: WordTiming[];
   scenes: Scene[];
+  /**
+   * Optional HUD overlay drawn over all scenes between `at` and `until`
+   * (semi-transparent dark plate, monospace values, accent swaps).
+   */
+  hud?: HudOverlay;
   /** Auto sound design (whoosh on cuts, pop/hit on scenes). Default true. */
   sfx?: boolean;
   /** Global multiplier for every sound event. Default 1. */

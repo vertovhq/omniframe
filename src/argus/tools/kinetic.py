@@ -10,6 +10,13 @@ Plan example:
       "theme": "dark",
       "voice": "voice.mp3",            # optional
       "words": [{"w": "...", "s": 0.0, "e": 0.3}, ...],  # optional
+      "hud": {                         # optional overlay over all scenes
+        "at": 0.5, "until": 9.0,
+        "rows": [{"label": "ДО СРОКА", "value": "365 ДНЕЙ"},
+                 {"label": "РАБОЧИЕ", "value": "0/100"}],
+        "pos": "top",                  # top | bottom
+        "accent_changes": [{"at": 4.5, "row": 1, "value": "20/100"}]
+      },
       "scenes": [
         {"at": 0.0, "kind": "words", "text": "весь текст сцены"},
         {"at": 3.0, "kind": "title", "kicker": "глава 1", "text": "заголовок"},
@@ -175,6 +182,22 @@ def _prepare_public(plan: dict, base: Path, pub: Path) -> None:
             e["src"] = dst
 
 
+def _validate_hud(plan: dict) -> None:
+    """Light shape check: a bad hud must fail here, not inside Remotion."""
+    hud = plan.get("hud")
+    if hud is None:
+        return
+    if not isinstance(hud, dict):
+        raise ValueError("hud must be an object {at, until, rows, pos?, accent_changes?}")
+    if not isinstance(hud.get("at"), (int, float)) or not isinstance(hud.get("until"), (int, float)):
+        raise ValueError("hud needs numeric 'at' and 'until'")
+    rows = hud.get("rows")
+    if not isinstance(rows, list) or not rows or not all(isinstance(r, dict) for r in rows):
+        raise ValueError("hud.rows must be a non-empty list of {label, value}")
+    if hud.get("pos") not in (None, "top", "bottom"):
+        raise ValueError("hud.pos must be 'top' or 'bottom'")
+
+
 def _derive_duration(plan: dict) -> float:
     if plan.get("duration"):
         return float(plan["duration"])
@@ -183,6 +206,10 @@ def _derive_duration(plan: dict) -> float:
         end = max(end, float(w.get("e", 0)))
     for s in plan.get("scenes") or []:
         end = max(end, float(s.get("at", 0)) + 2.0)
+    hud = plan.get("hud")
+    if isinstance(hud, dict) and isinstance(hud.get("until"), (int, float)):
+        # HUD живёт дольше последней сцены — не обрезать его концом ролика
+        end = max(end, float(hud["until"]))
     if end <= 0:
         raise ValueError("plan needs duration, scenes or words")
     return round(end + float(plan.get("tail", 0.8)), 3)
@@ -207,6 +234,7 @@ def build_kinetic_video(plan: dict | str, output_path: str, *, preview: bool = F
             raise ValueError(
                 f"unknown scene kind {scene.get('kind')!r}; expected one of {SCENE_KINDS}"
             )
+    _validate_hud(plan)
     plan.setdefault("fps", CONFIG.fps)
     plan.setdefault("theme", "dark")
     plan["duration"] = _derive_duration(plan)
@@ -226,7 +254,8 @@ def build_kinetic_video(plan: dict | str, output_path: str, *, preview: bool = F
     props_path.write_text(json.dumps(plan, ensure_ascii=False, indent=1), encoding="utf-8")
 
     started = time.monotonic()
-    print(f"[ARGUS] кинетика: рендер {len(plan.get("scenes", []))} сцен, {plan["duration"]:.1f}с, тема {plan["theme"]}...", flush=True)
+    hud_mark = " + hud" if isinstance(plan.get("hud"), dict) else ""
+    print(f"[ARGUS] кинетика: рендер {len(plan.get("scenes", []))} сцен{hud_mark}, {plan["duration"]:.1f}с, тема {plan["theme"]}...", flush=True)
     npx = _npx()
     cmd = [
         npx, "remotion", "render", "src/index.ts", "Kinetic", str(out),
