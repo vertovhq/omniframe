@@ -14,15 +14,42 @@ from pathlib import Path
 _ENV_KEYS = ("ARGUS_GEMINI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")
 _ELEVEN_KEYS = ("ARGUS_ELEVENLABS_API_KEY", "ELEVENLABS_API_KEY")
 
+# src/argus/config.py -> parents[2] is the repository root (where .env lives).
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def find_env_file(cwd: Path | None = None, repo_root: Path | None = None) -> Path | None:
+    """First existing env file, in order: `ARGUS_ENV_FILE`, `./.env`, `<repo>/.env`.
+
+    An `ARGUS_ENV_FILE` that points at a missing file is skipped, so the lookup
+    continues with the next candidate.
+    """
+    candidates: list[Path] = []
+    explicit = os.environ.get("ARGUS_ENV_FILE", "").strip()
+    if explicit:
+        candidates.append(Path(explicit).expanduser())
+    candidates.append((cwd or Path.cwd()) / ".env")
+    candidates.append((repo_root or REPO_ROOT) / ".env")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
+
 
 def _load_dotenv() -> None:
-    """Load `.env` from the current directory (best effort)."""
+    """Load the file from `find_env_file()` (best effort).
+
+    Values already set in the process environment win over the file, because
+    python-dotenv does not override existing variables by default.
+    """
+    path = find_env_file()
+    if path is None:
+        return
     try:
         from dotenv import load_dotenv
-
-        load_dotenv()
     except ImportError:
-        pass
+        return
+    load_dotenv(path)
 
 
 def _first_env(*names: str) -> str:
@@ -42,7 +69,7 @@ class ArgusConfig:
     elevenlabs_api_key: str = ""
     veo_provider: str = "api"  # "api" (official, paid) | "flow" (browser session, free credits)
     veo_model: str = "veo-3.1-fast-generate-preview"
-    tts_model: str = "gemini-2.5-flash-preview-tts"
+    tts_model: str = "gemini-3.8-flash-tts"  # 2.5-preview TTS retired Nov 17, 2026
     default_voice: str = "Charon"
     width: int = 1080
     height: int = 1920
@@ -52,10 +79,18 @@ class ArgusConfig:
     knowledge_base: Path = field(default_factory=lambda: Path("./KNOWLEDGE_BASE.md").resolve())
     ffmpeg: str = "ffmpeg"
     ffprobe: str = "ffprobe"
+    whisper_model: str = "small"  # faster-whisper model size, used by watch_video transcripts
+    eleven_model: str = "eleven_v3"  # ElevenLabs TTS model id
+    render_concurrency: int = 0  # Remotion render workers; 0 = let the renderer pick
+    scripts_dir: Path = field(default_factory=lambda: _default_scripts_dir())
 
     @property
     def resolution(self) -> tuple[int, int]:
         return self.width, self.height
+
+
+def _default_scripts_dir() -> Path:
+    return Path.home() / ".argus" / "scripts"
 
 
 def _resolve_executable(name: str, env_value: str) -> str:
@@ -65,11 +100,22 @@ def _resolve_executable(name: str, env_value: str) -> str:
     return found or name  # let subprocess produce a clear error later
 
 
+def _int_env(name: str, default: int, minimum: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    value = int(raw)
+    if value < minimum:
+        raise ValueError(f"{name} must be >= {minimum}, got {value}")
+    return value
+
+
 def load_config() -> ArgusConfig:
     """Build the config from environment / `.env` with sane defaults."""
     _load_dotenv()
     api_key = _first_env(*_ENV_KEYS)
     eleven_key = _first_env(*_ELEVEN_KEYS)
+    scripts_raw = os.environ.get("ARGUS_SCRIPTS_DIR", "").strip()
     return ArgusConfig(
         gemini_api_key=api_key,
         elevenlabs_api_key=eleven_key,
@@ -85,6 +131,14 @@ def load_config() -> ArgusConfig:
         knowledge_base=Path(os.environ.get("ARGUS_KNOWLEDGE_BASE", "./KNOWLEDGE_BASE.md")).resolve(),
         ffmpeg=_resolve_executable("ffmpeg", os.environ.get("ARGUS_FFMPEG", "").strip()),
         ffprobe=_resolve_executable("ffprobe", os.environ.get("ARGUS_FFPROBE", "").strip()),
+        whisper_model=os.environ.get("ARGUS_WHISPER_MODEL", "").strip() or ArgusConfig.whisper_model,
+        eleven_model=os.environ.get("ARGUS_ELEVEN_MODEL", "").strip() or ArgusConfig.eleven_model,
+        render_concurrency=_int_env("ARGUS_RENDER_CONCURRENCY", ArgusConfig.render_concurrency, 0),
+        scripts_dir=(
+            Path(scripts_raw).expanduser().resolve()
+            if scripts_raw
+            else _default_scripts_dir()
+        ),
     )
 
 

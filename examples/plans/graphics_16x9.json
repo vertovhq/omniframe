@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "format": "16:9",
+  "fps": 30,
+  "style": "light",
+  "scenes": [
+    { "kind": "act", "at": 0.0, "index": "01", "title": "Three steps" },
+    {
+      "kind": "chip",
+      "at": 2.2,
+      "items": [
+        { "text": "Watch", "value": "reference" },
+        { "text": "Plan", "value": "json" },
+        { "text": "Render", "value": "mp4" }
+      ]
+    },
+    { "kind": "counter", "at": 5.0, "value": 2, "suffix": "x", "sub": "formats from one plan" },
+    { "kind": "title", "at": 7.2, "kicker": "also", "text": "9:16 and 16:9" },
+    { "kind": "cta", "at": 9.4, "text": "try it in Kiro" }
+  ],
+  "captions": {
+    "words": [
+      { "w": "Three", "s": 0.3, "e": 0.6 },
+      { "w": "steps", "s": 0.6, "e": 1.0 },
+      { "w": "from", "s": 2.3, "e": 2.5 },
+      { "w": "reference", "s": 2.5, "e": 3.1 },
+      { "w": "to", "s": 3.1, "e": 3.2 },
+      { "w": "video", "s": 3.2, "e": 3.8 }
+    ],
+    "mode": "word",
+    "position": "lower"
+  }
+}

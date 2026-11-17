@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "format": "16:9",
+  "fps": 30,
+  "style": "dark",
+  "clips": [
+    {
+      "src": "examples/media/talk_sample.mp4",
+      "at": 0.0,
+      "in": 1.2,
+      "out": 7.8,
+      "fit": "cover",
+      "clean_audio": true,
+      "zoom": [
+        { "t": 0.0, "scale": 1.0 },
+        { "t": 3.0, "scale": 1.15, "x": 0.5, "y": 0.4 }
+      ]
+    },
+    {
+      "src": "examples/media/talk_sample.mp4",
+      "at": 6.6,
+      "in": 10.4,
+      "out": 16.0,
+      "fit": "cover",
+      "clean_audio": true
+    }
+  ],
+  "scenes": [
+    { "kind": "chip", "at": 0.8, "until": 3.8, "overlay": true, "text": "Dr. Example", "value": "cardiologist" },
+    { "kind": "counter", "at": 7.0, "until": 10.0, "overlay": true, "value": 3, "suffix": " tips" }
+  ],
+  "captions": {
+    "words": { "source": "examples/media/talk_sample.words.json", "remap": "clips", "media": "examples/media/talk_sample.mp4" },
+    "mode": "phrase",
+    "position": "lower",
+    "accent_words": ["heart*"]
+  },
+  "audio": {
+    "music": { "src": "audio/music.mp3", "volume": 0.1, "duck": 0.4, "fade_in": 0.5, "fade_out": 1.5 }
+  }
+}

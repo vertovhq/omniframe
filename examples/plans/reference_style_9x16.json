@@ -1,0 +1,79 @@
+{
+  "version": 2,
+  "format": "9:16",
+  "fps": 30,
+  "style": {
+    "colors": {
+      "bg": "#14110F",
+      "text": "#FFF4E0",
+      "muted": "#A89B88",
+      "accent": "#FF8A1F",
+      "word_base": "rgba(255, 244, 224, 0.7)",
+      "word_active": "#FFFFFF",
+      "card_border": "rgba(255, 138, 31, 0.25)"
+    },
+    "fonts": {
+      "display": { "family": "Anton", "src": "fonts/Anton-Regular.ttf" },
+      "body": { "family": "Inter", "weight": 600 },
+      "mono": { "family": "JetBrains Mono", "src": "fonts/JetBrainsMono-Bold.ttf", "weight": 700 }
+    },
+    "text_scale": 1.1,
+    "safe_area": { "top": 0.1, "bottom": 0.22, "left": 0.07, "right": 0.14 },
+    "background": { "type": "gradient", "stops": ["#14110F", "#2A1608"], "angle": 160 },
+    "grain": 0.06,
+    "vignette": true
+  },
+  "scenes": [
+    { "kind": "words", "at": 0.0, "text": "the hook lands in one second" },
+    { "kind": "big", "at": 2.4, "text": "NO WARM-UP" },
+    {
+      "kind": "chip",
+      "at": 4.2,
+      "items": [
+        { "text": "Retention", "value": "92%" },
+        { "text": "Watch time", "value": "18s" }
+      ]
+    },
+    {
+      "kind": "custom",
+      "at": 6.4,
+      "until": 9.0,
+      "overlay": true,
+      "component": "ScoreBoard",
+      "props": { "label": "views", "from": 0, "to": 120000 }
+    },
+    { "kind": "cta", "at": 9.0, "text": "part two tomorrow", "handle": "@argus.studio" }
+  ],
+  "hud": {
+    "at": 0.4,
+    "until": 6.0,
+    "pos": "top",
+    "rows": [
+      { "label": "STAGE", "value": "01" },
+      { "label": "SCORE", "value": "0" }
+    ],
+    "accent_changes": [
+      { "at": 2.4, "row": 0, "value": "02" },
+      { "at": 4.2, "row": 1, "value": "4500" }
+    ]
+  },
+  "captions": {
+    "words": "audio/voice.words.json",
+    "mode": "phrase",
+    "position": "lower",
+    "style": {
+      "font": "display",
+      "size": 0.062,
+      "color": "#FFF4E0",
+      "active_color": "#FFFFFF",
+      "upcoming_color": "#6B5E50",
+      "shadow": 0.004
+    },
+    "accent_words": ["hook", "second", "*%"]
+  },
+  "audio": {
+    "voice": { "src": "audio/voice.mp3" },
+    "music": { "src": "audio/music.mp3", "volume": 0.14, "duck": 0.35, "fade_in": 0.4, "fade_out": 1.5 },
+    "sfx": [{ "at": 2.4, "src": "audio/hit.wav", "volume": 0.8 }]
+  }
+}

@@ -2,6 +2,7 @@ node_modules/
 .remotion/
 *.log
 test_out*
+test-baseline/
 *.mp4
 f1.jpg
 f2.jpg

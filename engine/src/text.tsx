@@ -1,9 +1,16 @@
 import {useEffect, useState} from 'react';
 import type {CSSProperties, FC} from 'react';
-import {Easing, interpolate, spring, useCurrentFrame, useVideoConfig} from 'remotion';
+import {
+  continueRender,
+  delayRender,
+  Easing,
+  interpolate,
+  spring,
+  useCurrentFrame,
+  useVideoConfig,
+} from 'remotion';
 import type {Scene, WordTiming} from './types';
-import {FONT_FAMILY} from './theme';
-import type {ThemeColors} from './theme';
+import {fontsLoading, fontsSettled, useLayout, useStyle} from './style';
 
 /** A word with absolute timings in seconds. */
 export interface TimedWord {
@@ -47,12 +54,26 @@ export const textOfScene = (scene: Scene): string => {
   }
 };
 
+/**
+ * Where each scene is on screen. `scenes` must be sorted by `at`. A scene lasts until its
+ * `until`, or else until the next full (non-overlay) scene starts, or else to the end of
+ * the video. Overlay scenes never end another scene.
+ */
 export const sceneWindows = (scenes: Scene[], duration: number): SceneWindow[] =>
   scenes.map((scene, i) => {
     const start = Math.max(0, scene.at);
-    const next = i < scenes.length - 1 ? scenes[i + 1].at : duration;
-    const end = Math.max(start + 0.1, next);
-    return {start, end};
+    let end = duration;
+    if (typeof scene.until === 'number' && Number.isFinite(scene.until)) {
+      end = scene.until;
+    } else {
+      for (let j = i + 1; j < scenes.length; j++) {
+        if (!scenes[j].overlay && scenes[j].at > scene.at) {
+          end = scenes[j].at;
+          break;
+        }
+      }
+    }
+    return {start, end: Math.max(start + 0.1, Math.min(end, Math.max(duration, start + 0.1)))};
   });
 
 /** Fallback: spread the scene's words evenly across the scene window. */
@@ -135,7 +156,7 @@ export function assignWordTimings(
 }
 
 // ---------------------------------------------------------------------------
-// Text measurement (canvas-based, matches the loaded "Inter" family exactly)
+// Text measurement (canvas-based, matches the loaded font family exactly)
 // ---------------------------------------------------------------------------
 
 let measureCtx: CanvasRenderingContext2D | null | undefined;
@@ -151,33 +172,55 @@ const getMeasureContext = (): CanvasRenderingContext2D | null => {
   return measureCtx;
 };
 
+/**
+ * Width of `text` in px. `family` is a CSS font-family list (`ResolvedFont.css`), so the
+ * measurement uses the same fallback the element will render with. With `tabular` every
+ * digit counts as the widest digit, which is what `font-variant-numeric: tabular-nums` does.
+ */
 export const measureTextWidth = (
   text: string,
+  family: string,
   weight: number,
   sizePx: number,
-  letterSpacingEm: number
+  letterSpacingEm: number,
+  tabular = false
 ): number => {
   const ctx = getMeasureContext();
   if (!ctx) {
     return 0;
   }
-  ctx.font = `${weight} ${sizePx}px ${FONT_FAMILY}`;
-  const width = ctx.measureText(text).width;
+  ctx.font = `${weight} ${sizePx}px ${family}`;
+  let width: number;
+  if (tabular) {
+    let widest = 0;
+    for (const d of '0123456789') {
+      widest = Math.max(widest, ctx.measureText(d).width);
+    }
+    const digits = (text.match(/\d/g) ?? []).length;
+    width = ctx.measureText(text.replace(/\d/g, '')).width + digits * widest;
+  } else {
+    width = ctx.measureText(text).width;
+  }
   return width + letterSpacingEm * sizePx * Math.max(0, [...text].length - 1);
 };
 
+const fontsLoadedNow = (): boolean =>
+  !fontsLoading() && (typeof document === 'undefined' || !document.fonts || document.fonts.status === 'loaded');
+
 /**
- * True once document.fonts has settled. Canvas measurements made before the
- * webfonts are ready use fallback metrics, so fit-to-width results are only
- * trusted after this flips (fonts are delayRender-guarded by @remotion/fonts,
- * so captured frames always see the corrected values).
+ * True once every requested font has loaded. Canvas measurements made before that use
+ * fallback metrics, so fit-to-width results are only trusted after this flips. While it is
+ * false the frame is held back with delayRender, so a captured frame always has the
+ * corrected layout.
  */
 export const useFontsReady = (): boolean => {
-  const [ready, setReady] = useState<boolean>(
-    () => typeof document === 'undefined' || !document.fonts || document.fonts.status === 'loaded'
-  );
+  const [ready, setReady] = useState<boolean>(fontsLoadedNow);
+  const [handle] = useState<number | null>(() => (fontsLoadedNow() ? null : delayRender('Waiting for fonts')));
   useEffect(() => {
     if (ready) {
+      if (handle !== null) {
+        continueRender(handle);
+      }
       return;
     }
     let cancelled = false;
@@ -186,11 +229,11 @@ export const useFontsReady = (): boolean => {
         setReady(true);
       }
     };
-    (document.fonts ? document.fonts.ready : Promise.resolve()).then(done, done);
+    Promise.all([fontsSettled(), document.fonts ? document.fonts.ready : Promise.resolve()]).then(done, done);
     return () => {
       cancelled = true;
     };
-  }, [ready]);
+  }, [ready, handle]);
   return ready;
 };
 
@@ -201,6 +244,59 @@ export const clampRange = (a: number, b: number): [number, number] =>
 // ---------------------------------------------------------------------------
 // Layout helpers
 // ---------------------------------------------------------------------------
+
+/** How many lines `text` takes when wrapped at word boundaries into `maxWidth`. */
+export function countLines(
+  text: string,
+  family: string,
+  weight: number,
+  size: number,
+  letterSpacingEm: number,
+  maxWidth: number
+): number {
+  const ws = splitIntoWords(text);
+  if (ws.length === 0) {
+    return 0;
+  }
+  let lines = 1;
+  let cur = '';
+  for (const w of ws) {
+    const next = cur ? `${cur} ${w}` : w;
+    if (cur && measureTextWidth(next, family, weight, size, letterSpacingEm) > maxWidth) {
+      lines++;
+      cur = w;
+    } else {
+      cur = next;
+    }
+  }
+  return lines;
+}
+
+/**
+ * Shrinks `size` (about 6% per step) until `text`, wrapped into `maxWidth`, is at most
+ * `maxHeight` tall. Stops at `minSize`, so a very long text can still overflow.
+ */
+export function fitSizeToHeight(
+  text: string,
+  family: string,
+  weight: number,
+  size: number,
+  letterSpacingEm: number,
+  maxWidth: number,
+  lineHeight: number,
+  maxHeight: number,
+  minSize: number
+): number {
+  let s = size;
+  for (let i = 0; i < 24 && s > minSize; i++) {
+    const n = countLines(text, family, weight, s, letterSpacingEm, maxWidth);
+    if (n * s * lineHeight <= maxHeight) {
+      break;
+    }
+    s *= 0.94;
+  }
+  return Math.max(Math.min(size, minSize), s);
+}
 
 /** Splits items into lines, distributing them as evenly as possible. */
 export function chunkLines<T>(items: T[], maxPerLine: number): T[][] {
@@ -224,6 +320,7 @@ export function chunkLines<T>(items: T[], maxPerLine: number): T[][] {
 /** Font size that keeps every line within availableWidth (shrink-only). */
 export const fitLines = (
   lines: string[],
+  family: string,
   weight: number,
   baseSize: number,
   availableWidth: number,
@@ -232,7 +329,7 @@ export const fitLines = (
 ): number => {
   let widest = 0;
   for (const line of lines) {
-    widest = Math.max(widest, measureTextWidth(line, weight, baseSize, letterSpacingEm));
+    widest = Math.max(widest, measureTextWidth(line, family, weight, baseSize, letterSpacingEm));
   }
   if (widest <= 0 || widest <= availableWidth) {
     return baseSize;
@@ -253,11 +350,12 @@ export const Word: FC<{
   word: LocalWord;
   size: number;
   active: boolean;
-  colors: ThemeColors;
   underline?: boolean;
-}> = ({word, size, active, colors, underline = true}) => {
+}> = ({word, size, active, underline = true}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
+  const {colors} = useStyle();
+  const {u} = useLayout();
 
   const pop = spring({
     frame: frame - word.appear,
@@ -288,7 +386,7 @@ export const Word: FC<{
       left: '0.06em',
       right: '0.06em',
       bottom: '-0.12em',
-      height: Math.max(5, Math.round(size * 0.055)),
+      height: Math.max(u(5), Math.round(size * 0.055)),
       borderRadius: 999,
       background: colors.accent,
       transformOrigin: 'left center',

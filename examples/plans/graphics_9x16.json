@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "format": "9:16",
+  "fps": 30,
+  "style": "dark",
+  "scenes": [
+    { "kind": "words", "at": 0.0, "text": "one json plan is all it takes" },
+    { "kind": "title", "at": 2.6, "kicker": "chapter 01", "text": "describe the video" },
+    { "kind": "counter", "at": 5.0, "value": 45, "suffix": "s", "sub": "from idea to upload" },
+    { "kind": "big", "at": 7.4, "text": "ARGUS" },
+    { "kind": "cta", "at": 9.2, "text": "follow for more", "handle": "@argus.studio" }
+  ],
+  "captions": {
+    "words": "audio/voice.words.json",
+    "mode": "phrase",
+    "position": "lower",
+    "accent_words": ["json", "plan*"]
+  },
+  "audio": {
+    "voice": { "src": "audio/voice.mp3" },
+    "music": { "src": "audio/music.mp3", "volume": 0.12, "duck": 0.5, "fade_out": 1.5 },
+    "sfx": [
+      { "at": 2.6, "src": "audio/whoosh.mp3", "volume": 0.6 },
+      { "at": 7.4, "src": "audio/hit.wav" }
+    ]
+  }
+}

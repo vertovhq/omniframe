@@ -4,13 +4,26 @@ One word per cue, centered at eye level. Styles:
   clean   — white text, soft translucent shadow, modern (default)
   outline — white with a thick black outline, classic shorts
   pop     — legacy bright-yellow highlight (#FFE066)
+  phrase  — reference look of the МСП series: 2-4 words per line, spoken
+            words white (accents yellow), upcoming words grey, Montserrat
+            ExtraBold, lower on the ground strip.
+
+Word timings are always cleaned first (`clean_word_timings`): TTS aligners
+emit overlapping/zero-length words that used to render as a stacked mess.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
+from ..captions import (  # noqa: F401  (re-exported until task 18)
+    PHRASE_GAP_S,
+    PHRASE_MAX_CHARS,
+    PHRASE_MAX_WORDS,
+    clean_word_timings,
+    group_phrases,
+    load_words as _load_words,
+)
 from ..config import CONFIG
 from .. import __version__
 
@@ -30,7 +43,14 @@ STYLES: dict[str, dict] = {
         "primary": "#FFE066", "outline": "#000000", "outline_w": 9,
         "shadow_w": 3, "back": "&H00000000", "font": "Arial Black",
     },
+    "phrase": {
+        "primary": "#FFFFFF", "outline": "#000000", "outline_w": 0,
+        "shadow_w": 4, "back": "&H78000000", "font": "Montserrat ExtraBold",
+        "size": 62, "margin_v": 560, "upcoming": "#5C5C60", "accent": "#EEC440",
+    },
 }
+
+FONTS_DIR = Path(__file__).resolve().parent.parent / "fonts"
 
 
 def _ass_time(seconds: float) -> str:
@@ -43,26 +63,6 @@ def _ass_time(seconds: float) -> str:
 
 def _quantize(t: float, fps: float) -> float:
     return round(t * fps) / fps
-
-
-def _load_words(timestamps_json_path: str | Path) -> list[dict]:
-    data = json.loads(Path(timestamps_json_path).read_text(encoding="utf-8"))
-    if isinstance(data, dict):
-        data = data.get("words") or data.get("timestamps") or []
-    words = []
-    for item in data:
-        # два формата: {word, start, end} и скилловый {w, s, e}
-        word = str(item.get("word") or item.get("w") or "").strip()
-        if not word:
-            continue
-        words.append({
-            "word": word,
-            "start": float(item.get("start", item.get("s"))),
-            "end": float(item.get("end", item.get("e"))),
-        })
-    if not words:
-        raise ValueError("no usable {word,start,end} entries in timestamps file")
-    return words
 
 
 def hex_to_ass(color: str) -> str:
@@ -107,7 +107,12 @@ def build_pop_subtitles(
     if style == "pop":
         preset["primary"] = highlight_color
     font = font or preset["font"]
-    words = _load_words(timestamps_json_path)
+    words, n_fixed = clean_word_timings(_load_words(timestamps_json_path))
+    if style == "phrase":
+        if font_size == DEFAULT_FONT_SIZE:
+            font_size = preset["size"]
+        if margin_v == DEFAULT_MARGIN_V:
+            margin_v = preset["margin_v"]
 
     acc = list(accent or [])
     acc_bgr = hex_to_ass(accent_color).replace("&H", "&H", 1)
@@ -129,14 +134,38 @@ def build_pop_subtitles(
         f"2,80,80,{margin_v},1"
     )
 
+    def _esc(w: str) -> str:
+        return w.replace("{", "(").replace("}", ")")
+
     lines: list[str] = []
-    for item in words:
-        start = _quantize(item["start"], fps)
-        end = max(start + 1.0 / fps, _quantize(item["end"], fps))
-        text = item["word"].replace("{", "(").replace("}", ")")
-        if acc and _is_accent(item["word"]):
-            text = "{\\1c&H" + acc_bgr[4:] + "&}" + text
-        lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Argus,,0,0,0,,{text}")
+    if style == "phrase":
+        def _c(hex_color: str) -> str:
+            return "&H" + hex_to_ass(hex_color)[4:] + "&"
+
+        white, grey = _c(preset["primary"]), _c(preset["upcoming"])
+        acc_col = _c(preset["accent"] if accent_color == "#4DA3FF" else accent_color)
+        phrases = group_phrases(words)
+        for pi, ph in enumerate(phrases):
+            # line stays up until the next line starts (no flicker in short pauses), max +0.8s
+            nxt = phrases[pi + 1][0]["start"] if pi + 1 < len(phrases) else ph[-1]["end"] + 0.4
+            line_end = min(nxt, ph[-1]["end"] + 0.8)
+            for k, w in enumerate(ph):
+                start = _quantize(w["start"], fps)
+                end = _quantize(ph[k + 1]["start"] if k + 1 < len(ph) else line_end, fps)
+                end = max(end, start + 1.0 / fps)
+                parts = []
+                for m, x in enumerate(ph):
+                    col = grey if m > k else (acc_col if acc and _is_accent(x["word"]) else white)
+                    parts.append("{\\1c" + col + "}" + _esc(x["word"]))
+                lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Argus,,0,0,0,,{' '.join(parts)}")
+    else:
+        for item in words:
+            start = _quantize(item["start"], fps)
+            end = max(start + 1.0 / fps, _quantize(item["end"], fps))
+            text = _esc(item["word"])
+            if acc and _is_accent(item["word"]):
+                text = "{\\1c&H" + acc_bgr[4:] + "&}" + text
+            lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Argus,,0,0,0,,{text}")
 
     content = "\n".join([
         "[Script Info]",
@@ -162,4 +191,6 @@ def build_pop_subtitles(
     out = Path(output_ass_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(content, encoding="utf-8")
-    return {"engine": f"ARGUS {__version__}", "output": str(out), "words": len(words), "fps": fps, "style": style, "font": font}
+    return {"engine": f"ARGUS {__version__}", "output": str(out), "words": len(words), "fps": fps,
+            "style": style, "font": font, "timings_fixed": n_fixed,
+            "fonts_dir": str(FONTS_DIR) if style == "phrase" else None}

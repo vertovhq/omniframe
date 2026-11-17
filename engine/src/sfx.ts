@@ -1,41 +1,23 @@
-import type {Scene, SfxEvent} from './types';
-
-// Default synthesized sound set (created by the Python caller into public/sfx/).
-// Users can drop premium sounds into ARGUS_SFX_DIR to override these names.
-export const DEFAULT_SFX = {
-  whoosh: 'sfx/whoosh.mp3',
-  pop: 'sfx/pop.mp3',
-  hit: 'sfx/hit.wav',
-} as const;
+import type {SfxEvent} from './types';
 
 /**
- * Auto sound design: a whoosh on every cut, a pop when something pops in
- * (card/counter/chip), a hit on impact scenes (big/act), a longer whoosh into
- * the CTA. Custom sfx_list events are appended on top.
+ * Sound effects come only from the plan (`audio.sfx`, and the v1 `sfx_list` that
+ * `tools/kinetic.py` still sends). The engine adds none of its own: no whoosh on cuts,
+ * no pop or hit on scenes. The model decides where a sound goes and which file it is.
+ *
+ * Merges the given lists, drops events without a usable time or source, fills in the
+ * default volume and sorts by time.
  */
-export function buildSfxTimeline(
-  scenes: Scene[],
-  opts: {sfx?: boolean; sfx_list?: SfxEvent[]}
-): SfxEvent[] {
+export function collectSfx(...lists: Array<readonly SfxEvent[] | undefined>): SfxEvent[] {
   const events: SfxEvent[] = [];
-  if (opts.sfx !== false) {
-    scenes.forEach((scene, i) => {
-      if (i > 0) {
-        events.push({at: Math.max(0, scene.at - 0.12), src: DEFAULT_SFX.whoosh, volume: 0.55});
+  for (const list of lists) {
+    for (const e of list ?? []) {
+      if (!e || typeof e.src !== 'string' || e.src === '' || !Number.isFinite(e.at)) {
+        continue;
       }
-      if (scene.kind === 'card' || scene.kind === 'counter' || scene.kind === 'chip') {
-        events.push({at: scene.at + 0.05, src: DEFAULT_SFX.pop, volume: 0.85});
-      }
-      if (scene.kind === 'big' || scene.kind === 'act') {
-        events.push({at: scene.at + 0.02, src: DEFAULT_SFX.hit, volume: 0.95});
-      }
-      if (scene.kind === 'cta') {
-        events.push({at: scene.at, src: DEFAULT_SFX.whoosh, volume: 0.8});
-      }
-    });
-  }
-  for (const e of opts.sfx_list ?? []) {
-    events.push({at: e.at, src: e.src, volume: e.volume ?? 1});
+      const volume = typeof e.volume === 'number' && Number.isFinite(e.volume) && e.volume >= 0 ? e.volume : 1;
+      events.push({at: Math.max(0, e.at), src: e.src, volume});
+    }
   }
   return events.sort((a, b) => a.at - b.at);
 }

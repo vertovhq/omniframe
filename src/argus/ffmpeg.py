@@ -9,8 +9,12 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .config import CONFIG
+
+if TYPE_CHECKING:  # numpy is imported lazily inside decode_audio
+    import numpy as np
 
 
 class FFmpegError(RuntimeError):
@@ -34,6 +38,27 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess[bytes]:
 def run_ffmpeg(args: list[str]) -> None:
     """Run `ffmpeg <args>` (input/output args without the binary name)."""
     _run([CONFIG.ffmpeg, "-hide_banner", "-y", *args])
+
+
+def run_ffmpeg_stderr(args: list[str]) -> str:
+    """Run `ffmpeg <args>` and return its stderr text (filters like showinfo report there)."""
+    proc = _run([CONFIG.ffmpeg, "-hide_banner", "-nostats", "-y", *args])
+    return proc.stderr.decode("utf-8", "replace")
+
+
+def decode_audio(path: str | Path, rate: int) -> "np.ndarray":
+    """First audio stream as mono float32 samples at `rate` Hz (a writable numpy array).
+
+    The file must have an audio stream (check `stream_info(path).has_audio` first).
+    """
+    import numpy as np
+
+    proc = _run([
+        CONFIG.ffmpeg, "-hide_banner", "-nostats", "-v", "error",
+        "-i", str(path), "-map", "0:a:0", "-vn",
+        "-ar", str(rate), "-ac", "1", "-f", "f32le", "-acodec", "pcm_f32le", "pipe:1",
+    ])
+    return np.frombuffer(bytearray(proc.stdout), dtype="<f4")
 
 
 def probe(path: str | Path) -> dict:

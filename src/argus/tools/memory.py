@@ -1,4 +1,8 @@
-"""Durable production memory: append verified lessons to KNOWLEDGE_BASE.md."""
+"""User preferences that survive across sessions (the knowledge base file).
+
+`learn_and_record_memory` appends one entry; `studio_guide` returns the tail of
+the same file at the start of the next session (see `tools/studio.py`).
+"""
 
 from __future__ import annotations
 
@@ -8,6 +12,8 @@ from pathlib import Path
 from ..config import CONFIG
 from .. import __version__
 
+HEADER = "# ARGUS — user preferences\n"
+
 
 def learn_and_record_memory(
     lesson_title: str,
@@ -15,7 +21,10 @@ def learn_and_record_memory(
     technical_rule: str,
     knowledge_base_path: str | Path | None = None,
 ) -> dict:
-    """Record a verified lesson so it survives across sessions."""
+    """Append one lasting user preference or correction to the knowledge base file.
+
+    A new file starts with the header `# ARGUS — user preferences`.
+    """
     path = Path(knowledge_base_path) if knowledge_base_path else CONFIG.knowledge_base
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -28,7 +37,7 @@ def learn_and_record_memory(
     )
     with path.open("a", encoding="utf-8") as fh:
         if path.stat().st_size == 0:
-            fh.write("# ARGUS — Production Knowledge Base\n")
+            fh.write(HEADER)
         fh.write(entry)
 
     return {"engine": f"ARGUS {__version__}", "recorded": str(path), "lesson": lesson_title.strip()}

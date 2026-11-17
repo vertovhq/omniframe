@@ -27,12 +27,15 @@ dependencies = [
     "mcp>=1.2.0",
     "google-genai>=1.0.0",
     "python-dotenv>=1.0.0",
+    "numpy>=1.26",
+    "Pillow>=10.0",
 ]
 
 [project.optional-dependencies]
 pretty = ["rich>=13.0.0"]
 voice = ["edge-tts>=7.0"]
 flow = ["playwright>=1.49"]
+asr = ["faster-whisper>=1.0"]
 dev = ["pytest>=8.0.0"]
 
 [project.scripts]

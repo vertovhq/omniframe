@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Typecheck engine on save",
+      "trigger": "PostFileSave",
+      "description": "Typechecks the Remotion engine whenever a .ts/.tsx file under engine/src is saved.",
+      "matcher": "engine[\\\\/]src[\\\\/].*\\.tsx?$",
+      "action": {
+        "type": "command",
+        "command": "node engine/node_modules/typescript/bin/tsc --noEmit -p engine",
+        "timeout": 120
+      }
+    }
+  ]
+}

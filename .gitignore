@@ -25,6 +25,7 @@ output/
 *.mp3
 *.ass
 KNOWLEDGE_BASE.md
+KNOWLEDGE_BASE.old.md
 
 # --- os / editor junk ---
 Thumbs.db

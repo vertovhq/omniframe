@@ -1,12 +1,15 @@
 import {useMemo} from 'react';
 import type {FC} from 'react';
-import {AbsoluteFill, Audio, Sequence, interpolate, useVideoConfig} from 'remotion';
-import type {KineticProps, Scene} from './types';
+import {AbsoluteFill, Sequence, useVideoConfig} from 'remotion';
+import type {EngineProps, PlanFormat, Scene} from './types';
+import {AudioTracks} from './audio';
+import {Background, Grain} from './background';
+import {CaptionsLayer} from './captions';
 import {HudLayer} from './hud';
-import {FONT_FAMILY, getTheme, grainBackgroundImage, resolveMedia} from './theme';
-import {assignWordTimings} from './text';
+import {fontFor, loadStyleFonts, resolveMedia, resolveStyle, StyleContext} from './style';
+import {assignWordTimings, sceneWindows} from './text';
 import type {LocalWord} from './text';
-import {buildSfxTimeline} from './sfx';
+import {collectSfx} from './sfx';
 import {
   ActSceneView,
   BigSceneView,
@@ -22,53 +25,79 @@ import {
 const SceneView: FC<{
   scene: Scene;
   words: LocalWord[];
-  colors: ReturnType<typeof getTheme>;
-}> = ({scene, words, colors}) => {
+}> = ({scene, words}) => {
   switch (scene.kind) {
     case 'words':
-      return <WordsSceneView scene={scene} words={words} colors={colors} />;
+      return <WordsSceneView scene={scene} words={words} />;
     case 'title':
-      return <TitleSceneView scene={scene} colors={colors} />;
+      return <TitleSceneView scene={scene} />;
     case 'card':
-      return <CardSceneView scene={scene} colors={colors} />;
+      return <CardSceneView scene={scene} />;
     case 'big':
-      return <BigSceneView scene={scene} colors={colors} />;
+      return <BigSceneView scene={scene} />;
     case 'counter':
-      return <CounterSceneView scene={scene} colors={colors} />;
+      return <CounterSceneView scene={scene} />;
     case 'act':
-      return <ActSceneView scene={scene} words={words} colors={colors} />;
+      return <ActSceneView scene={scene} words={words} />;
     case 'cta':
-      return <CtaSceneView scene={scene} colors={colors} />;
+      return <CtaSceneView scene={scene} />;
     case 'chip':
-      return <ChipSceneView scene={scene} colors={colors} />;
+      return <ChipSceneView scene={scene} />;
     default:
+      // 'custom' scenes come from the component registry (task 16)
       return null;
   }
 };
 
+type SceneEntry = {
+  scene: Scene;
+  index: number;
+  from: number;
+  dur: number;
+  words: LocalWord[];
+};
+
 /**
- * Kinetic: JSON-driven vertical video. Each scene becomes a non-overlapping
- * Sequence from its `at` to the next scene's `at` (last scene runs to
- * `duration`); transitions are handled inside SceneShell so two texts never
- * stack. Optional voice audio plays full length from the public dir. The
- * optional `hud` overlay rides above all scene Sequences (its own Sequence,
- * pointerEvents none) and below the grain.
+ * Kinetic: JSON-driven video in 9:16 or 16:9 (`format`), styled by tokens (`style`).
+ *
+ * Layers, bottom to top: background (colors, gradient or media, vignette) → full scenes
+ * (each opaque, from `at` until its `until` or the next full scene) → overlay scenes and the
+ * HUD (transparent, drawn above) → captions → grain. Scene content is centered inside the
+ * style's safe area; sizes scale with the short side of the frame and `text_scale`.
+ *
+ * Audio (`audio.tsx`): voice, music (volume, ducking under speech, fades) and the plan's
+ * `audio.sfx`. The engine adds no sound effects of its own. The v1 props `voice`, `music`
+ * and `sfx_list` still work until `tools/kinetic.py` is removed (task 18); the v1 `sfx`
+ * flag (automatic sound design) is ignored.
+ *
+ * Still to come: clips (task 14), custom scenes (task 16).
  */
-export const Main: FC<KineticProps> = ({
+export const Main: FC<EngineProps> = ({
   duration,
-  theme = 'dark',
+  theme,
   accent,
+  style: styleInput,
+  format: formatInput,
+  version,
   voice,
   words,
   scenes,
   hud,
-  sfx = true,
   sfx_volume = 1,
   sfx_list,
   music,
+  captions,
+  audio,
 }) => {
-  const {fps} = useVideoConfig();
-  const colors = useMemo(() => getTheme(theme, accent), [theme, accent]);
+  const {fps, width, height} = useVideoConfig();
+  const format: PlanFormat = formatInput ?? (width > height ? '16:9' : '9:16');
+
+  const style = useMemo(() => {
+    const resolved = resolveStyle(styleInput ?? theme ?? 'dark', {format, accent});
+    loadStyleFonts(resolved);
+    return resolved;
+  }, [styleInput, theme, accent, format]);
+
   const safeDuration = duration && duration > 0 ? duration : 12.5;
 
   const orderedScenes = useMemo(() => {
@@ -84,10 +113,25 @@ export const Main: FC<KineticProps> = ({
     [orderedScenes, words, safeDuration]
   );
 
-  const sfxEvents = useMemo(
-    () => buildSfxTimeline(orderedScenes, {sfx, sfx_list}),
-    [orderedScenes, sfx, sfx_list]
-  );
+  // Sound: plan `audio` first, v1 props as a fallback. Only listed SFX events play.
+  const sfxEvents = useMemo(() => collectSfx(audio?.sfx, sfx_list), [audio?.sfx, sfx_list]);
+  const voiceRef = audio?.voice ?? (voice ? {src: voice} : undefined);
+  const musicRef = audio?.music ?? music;
+  // Ducking follows the caption words (already loaded by the Python side), else v1 `words`.
+  const speechWords = Array.isArray(captions?.words) ? captions.words : words;
+
+  const entries = useMemo<SceneEntry[]>(() => {
+    const windows = sceneWindows(orderedScenes, safeDuration);
+    return orderedScenes.map((scene, index) => {
+      const from = Math.round(windows[index].start * fps);
+      const dur = Math.max(1, Math.round(windows[index].end * fps) - from);
+      const local: LocalWord[] = (timings.get(index) ?? []).map((t) => {
+        const appear = Math.round(t.s * fps) - from;
+        return {w: t.w, appear, end: Math.max(appear + 1, Math.round(t.e * fps) - from)};
+      });
+      return {scene, index, from, dur, words: local};
+    });
+  }, [orderedScenes, safeDuration, fps, timings]);
 
   const hudWindow = useMemo(() => {
     if (!hud || typeof hud.at !== 'number' || typeof hud.until !== 'number') {
@@ -101,81 +145,50 @@ export const Main: FC<KineticProps> = ({
     return {from, dur};
   }, [hud, fps]);
 
-  return (
-    <AbsoluteFill
-      style={{
-        backgroundColor: colors.bg,
-        backgroundImage: colors.vignette,
-        color: colors.text,
-        fontFamily: `${FONT_FAMILY}, 'Segoe UI', system-ui, sans-serif`,
-      }}
+  const renderScene = (e: SceneEntry, opaque: boolean) => (
+    <Sequence
+      key={`${e.index}-${e.scene.kind}`}
+      from={e.from}
+      durationInFrames={e.dur}
+      name={`${String(e.index + 1).padStart(2, '0')}-${e.scene.kind}${opaque ? '' : '-overlay'}`}
     >
-      {voice ? <Audio src={resolveMedia(voice)} /> : null}
-      {music ? (
-        <Audio
-          src={resolveMedia(music.src)}
-          volume={(f) => {
-            const base = music.volume ?? 0.12;
-            const fade = music.fade_out ?? 1.5;
-            const t = f / fps;
-            const k = interpolate(t, [safeDuration - fade, safeDuration], [1, 0], {
-              extrapolateLeft: 'clamp',
-              extrapolateRight: 'clamp',
-            });
-            return base * k;
-          }}
-        />
-      ) : null}
-      {sfxEvents.map((e, i) => (
-        <Sequence key={`sfx-${i}`} from={Math.max(0, Math.round(e.at * fps))} name={`sfx-${i}`}>
-          <Audio src={resolveMedia(e.src)} volume={(e.volume ?? 1) * sfx_volume} />
-        </Sequence>
-      ))}
-      {orderedScenes.map((scene, i) => {
-        const start = Math.max(0, scene.at);
-        const end =
-          i < orderedScenes.length - 1
-            ? Math.max(start + 0.1, orderedScenes[i + 1].at)
-            : Math.max(start + 0.1, safeDuration);
-        const from = Math.round(start * fps);
-        const dur = Math.max(1, Math.round(end * fps) - from);
-        const localWords: LocalWord[] = (timings.get(i) ?? []).map((t) => {
-          const appear = Math.round(t.s * fps) - from;
-          return {w: t.w, appear, end: Math.max(appear + 1, Math.round(t.e * fps) - from)};
-        });
-        return (
-          <Sequence
-            key={`${i}-${scene.kind}`}
-            from={from}
-            durationInFrames={dur}
-            name={`${String(i + 1).padStart(2, '0')}-${scene.kind}`}
-          >
-            <SceneShell durationInFrames={dur}>
-              <SceneView scene={scene} words={localWords} colors={colors} />
-            </SceneShell>
-          </Sequence>
-        );
-      })}
-      {hudWindow ? (
-        <Sequence
-          from={hudWindow.from}
-          durationInFrames={hudWindow.dur}
-          name="hud"
-        >
-          <AbsoluteFill style={{pointerEvents: 'none'}}>
-            <HudLayer hud={hud!} durationInFrames={hudWindow.dur} colors={colors} />
-          </AbsoluteFill>
-        </Sequence>
-      ) : null}
+      {opaque ? <Background /> : null}
+      <SceneShell durationInFrames={e.dur}>
+        <SceneView scene={e.scene} words={e.words} />
+      </SceneShell>
+    </Sequence>
+  );
+
+  return (
+    <StyleContext.Provider value={style}>
       <AbsoluteFill
         style={{
-          pointerEvents: 'none',
-          backgroundImage: grainBackgroundImage,
-          backgroundRepeat: 'repeat',
-          backgroundSize: '240px 240px',
-          opacity: colors.grainOpacity,
+          backgroundColor: style.colors.bg,
+          color: style.colors.text,
+          fontFamily: fontFor(style, 'body').css,
         }}
-      />
-    </AbsoluteFill>
+      >
+        <Background />
+        <AudioTracks
+          voice={voiceRef}
+          music={musicRef}
+          sfx={sfxEvents}
+          speech={speechWords}
+          sfxVolume={sfx_volume}
+          duration={safeDuration}
+        />
+        {entries.filter((e) => !e.scene.overlay).map((e) => renderScene(e, true))}
+        {entries.filter((e) => e.scene.overlay).map((e) => renderScene(e, false))}
+        {hudWindow ? (
+          <Sequence from={hudWindow.from} durationInFrames={hudWindow.dur} name="hud">
+            <AbsoluteFill style={{pointerEvents: 'none'}}>
+              <HudLayer hud={hud!} durationInFrames={hudWindow.dur} />
+            </AbsoluteFill>
+          </Sequence>
+        ) : null}
+        {captions ? <CaptionsLayer captions={captions} /> : null}
+        <Grain />
+      </AbsoluteFill>
+    </StyleContext.Provider>
   );
 };

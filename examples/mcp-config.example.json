@@ -1,11 +1,26 @@
 {
-  "mcpServers": {
-    "argus-studio": {
-      "command": "python",
-      "args": ["-m", "argus"],
-      "env": {
-        "ARGUS_GEMINI_API_KEY": "your-api-key-here",
-        "OMNIFRAME_OUTPUT_DIR": "D:/argus/output"
+  "_how_to_use": "Copy the object under 'windows' or 'macos_linux' into the workspace file .kiro/settings/mcp.json. The relative venv path resolves from the workspace root. For ~/.kiro/settings/mcp.json (all workspaces), replace the command with the absolute path to your venv python. Keep API keys in .env, not in this file. Kiro reloads the file when you save it.",
+  "windows": {
+    "mcpServers": {
+      "argus": {
+        "command": ".venv/Scripts/python.exe",
+        "args": ["-m", "argus"],
+        "env": {
+          "OMNIFRAME_OUTPUT_DIR": "D:/argus/output"
+        },
+        "disabled": false
+      }
+    }
+  },
+  "macos_linux": {
+    "mcpServers": {
+      "argus": {
+        "command": ".venv/bin/python",
+        "args": ["-m", "argus"],
+        "env": {
+          "OMNIFRAME_OUTPUT_DIR": "/Users/you/argus/output"
+        },
+        "disabled": false
       }
     }
   }

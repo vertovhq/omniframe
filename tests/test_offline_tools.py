@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -149,12 +150,28 @@ def test_assemble_joins_clips(tmp_path: Path, speech_like_audio: Path) -> None:
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(clip),
         ])
     out = tmp_path / "master.mp4"
+    # async contract: call returns immediately with a status file; the detached
+    # worker finishes and flips state to "done"
     report = assemble.assemble_master_video(
         [str(clip_a), str(clip_b)], str(speech_like_audio), str(out)
     )
-    assert Path(report["output"]).exists()
-    assert report["resolution"] == "1080x1920"
-    assert report["duration"] > 1.9  # two 1s clips joined
+    assert report["state"] == "running"
+    status_path = Path(report["status_file"])
+    assert status_path.exists()
+
+    deadline = time.time() + 60
+    state, status = "running", {}
+    while time.time() < deadline:
+        status = json.loads(status_path.read_text(encoding="utf-8"))
+        state = status.get("state")
+        if state in ("done", "error"):
+            break
+        time.sleep(0.5)
+    assert state == "done", status
+    assert out.exists()
+    info = stream_info(out)
+    assert f"{info.width}x{info.height}" == "1080x1920"
+    assert info.duration > 1.9  # two 1s clips joined
 
 
 # ------------------------------------------------------------------- memory
