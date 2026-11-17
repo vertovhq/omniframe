@@ -200,7 +200,9 @@ const CaptionLineView: FC<{
   const {fps} = useVideoConfig();
   const style = useStyle();
   const {fs, safe} = useLayout();
-  useFontsReady();
+  // Measuring before the fonts are loaded uses fallback metrics, so the size is recomputed
+  // when they are (the flag is a dependency below).
+  const fontsReady = useFontsReady();
 
   const font = fontFor(style, look.fontRole);
   const wordMode = look.mode === 'word';
@@ -227,7 +229,7 @@ const CaptionLineView: FC<{
       );
     }
     return s;
-  }, [fs, look.size, safe.width, plateX, line, font.css, font.weight, wordMode]);
+  }, [fs, look.size, safe.width, plateX, line, font.css, font.weight, wordMode, fontsReady]);
 
   const pop = spring({
     frame,
