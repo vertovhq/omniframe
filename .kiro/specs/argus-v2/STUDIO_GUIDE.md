@@ -28,8 +28,16 @@ preferences below this guide override your defaults.
 
 ## 3. Story
 
-- Take the craft of a reference, not its content. Do not retell someone else's video.
-- When the user continues their own series, keep its world, characters and running jokes.
+- The user sets how close to stay. **Analog** (the default for "make one like this"):
+  same niche, audience, format and type of story as the reference's channel, with a new
+  concrete subject, as if it were the channel's next strong episode. **Continuation**:
+  the same world, characters and running jokes, the next episode. **Own idea**: the
+  user's topic in the reference's style. Never retell the same video beat for beat.
+- Find what makes the reference work for its viewers (the promise, the stakes, the joke,
+  the payoff) and make that stronger in yours. Pitch ideas a fan of that channel would
+  click, not safe generic topics.
+- When the reference has speech, read its transcript before pitching; frames alone miss
+  the jokes and the voice.
 - Prefer specifics: names, numbers, places, concrete stakes. Specific beats feel alive;
   general ones feel generated.
 - Every line earns its place with new information or a new feeling. Cut lines that repeat.

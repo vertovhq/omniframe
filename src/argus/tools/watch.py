@@ -149,8 +149,9 @@ def select_frames(shots: list[list[float]], duration: float, max_frames: int) ->
     """Pick `(time, shot_number)` frames within `max_frames` (design §6 step 4).
 
     Candidates: the start of every shot (+0.15 s) and the middle of shots longer than
-    6 s, plus a frame at about 0.5 s (the hook). Over budget, the first shot, the hook
-    and the last shot stay and the rest are spread evenly over the timeline.
+    6 s, plus a frame at about 0.5 s (the hook). Under budget, evenly spaced frames fill
+    the rest, so a one-take video still gets `max_frames` frames. Over budget, the first
+    shot, the hook and the last shot stay and the rest are spread evenly over the timeline.
     `shot_number` is the 1-based position in `shots`.
     """
     latest = max(0.0, duration - 0.05)
@@ -174,6 +175,24 @@ def select_frames(shots: list[list[float]], duration: float, max_frames: int) ->
         cands.append(hook)
 
     cands = sorted(set(cands))
+    if len(cands) < max_frames:
+        # Few detected shots (one continuous take, soft transitions the detector misses):
+        # spend the rest of the budget on evenly spaced frames so no long stretch goes unseen.
+        # Shot frames all stay; grid points that are not next to one fill the free slots,
+        # picked evenly over the whole timeline.
+        spacing = duration / max_frames
+        grid: list[tuple[float, int]] = []
+        for k in range(max_frames):
+            t = round(min(duration * (k + 0.5) / max_frames, latest), 3)
+            if all(abs(t - c[0]) >= spacing / 2 for c in cands):
+                grid.append((t, max(1, bisect.bisect_right(starts, t))))
+        room = max_frames - len(cands)
+        for k in range(min(room, len(grid))):
+            target = duration * (k + 0.5) / room
+            pick = min(grid, key=lambda c: abs(c[0] - target))
+            grid.remove(pick)
+            cands.append(pick)
+        return sorted(set(cands))
     if len(cands) <= max_frames:
         return cands
 

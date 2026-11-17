@@ -20,7 +20,7 @@ except ImportError:  # pragma: no cover
 from . import __version__, jobs
 from .config import CONFIG
 from .media_out import Image
-from .tools import assemble, beats, memory, qa, sfx, studio, subtitles, timeline, watch
+from .tools import assemble, beats, export, memory, qa, render, sfx, studio, subtitles, timeline, watch
 
 mcp = MCPServer(
     "Argus",
@@ -171,6 +171,7 @@ def voice_options(
     gender: str | None = None,
     query: str | None = None,
     limit: int = 10,
+    details: bool = False,
 ) -> dict:
     """Find voices for a narrator or character, and see which voice providers work now.
 
@@ -181,23 +182,33 @@ def voice_options(
     (one line per option, in their language), keep the answer for the whole project
     and do not switch mid-project; with a single working provider just use it. Within
     the chosen provider you pick the voice, not the user: filter by `language` ("ru",
-    "en", "Russian"), `gender` ("male" / "female") and a free-text `query` ("deep
-    narrator", "calm", "energetic"), then choose what fits the genre and tell the user
-    your choice. With an ElevenLabs key, `delivery` lists the audio tags and the
-    pacing rules for the configured model: plan the emotion of every line yourself
-    (what it feels like, where it breathes, where it stresses) and write it into the
-    text. Returns `own_voices` (the ElevenLabs account's voices, matching language first,
-    each with id, name, gender, age, accent, use case, `preview_url`),
-    `library_voices` (ElevenLabs Voice Library search; through the API they need a
-    paid plan), `edge_voices` (free defaults per language), `gemini_voices`
-    (names), `providers` (what works right now and why not), `default_provider`,
+    "en", "Russian"), `gender` ("male" / "female") and a free-text `query` (words such
+    as "deep narrator calm"; a voice matches when ANY word occurs, in any case, in its
+    name, description, accent, age, gender, use case or language), then choose what
+    fits the genre and tell the user your choice.
+    Every voice is short: `id`, `name`, `gender`, `age`, `accent`, `language` and a
+    `description` of at most 80 characters. Returns `own_voices` (the ElevenLabs
+    account's voices, matching language first), `library_voices` (ElevenLabs Voice
+    Library voices that work through the API on every plan),
+    `library_voices_paid_plan_only` (library voices marked `free_users_allowed=false`:
+    through the API they need a paid plan, so do not pick them without asking),
+    `edge_voices` (free defaults per language), `gemini_voices` (names),
+    `providers` (what works right now and why not) and `default_provider`. `limit`
+    caps every list (max 50), and the whole answer stays under 6000 characters: when
+    it would be longer, the longest lists lose their last voices and `notes` says so,
+    so narrow the search with `language`, `gender` and `query` instead of raising `limit`.
+    Pass a returned `id` as `voice` to `synthesize_voiceover`.
+    With `details=True` (use it once per project, before you write the narration)
+    the answer also holds `delivery`, the audio tags and the pacing rules for the
+    configured ElevenLabs model (plan the emotion of every line yourself: what it
+    feels like, where it breathes, where it stresses, and write it into the text),
     and `elevenlabs_models` (ids, character limits and how each wants pauses and
-    emotion written: audio tags for v3/v4, SSML breaks for v2). `limit` caps every
-    list (max 50). Pass a returned `id` as `voice` to `synthesize_voiceover`.
+    emotion written: audio tags for v3/v4, SSML breaks for v2). Without `details`
+    neither is returned.
     """
     from .tools.voiceover import voice_options as impl
 
-    return impl(language=language, gender=gender, query=query, limit=limit)
+    return impl(language=language, gender=gender, query=query, limit=limit, details=details)
 
 
 @mcp.tool()
@@ -254,6 +265,51 @@ def get_frames(
     `full_path` of the full-resolution file.
     """
     return watch.get_frames(path, times, crop=crop, max_side=max_side)
+
+
+@mcp.tool()
+def render_video(
+    plan: dict | str,
+    project: str,
+    mode: str = "stills",
+    times: list[float] | None = None,
+    compare: dict | None = None,
+    format: str | None = None,
+    name: str = "video",
+) -> list[str | Image] | dict:
+    """Render a plan with the ARGUS engine. Work in this order: stills first, then preview, then final.
+
+    `plan` is the plan object (or the path of a plan .json file); `project` is the
+    work's short name (the same for the whole video). Relative file paths in the plan
+    (fonts, images, audio, words files) are looked up in the project folder first.
+    The plan has `format` ("9:16" or "16:9"), optional `fps` and `duration`, `style`
+    ("dark", "light" or tokens with colors, fonts, text_scale, safe_area, background,
+    grain), `scenes`, `hud`, `captions`, `audio` (voice, music with `duck`, sfx events).
+    `format` here overrides the plan's. The engine adds no sound effects of its own.
+
+    mode "stills" (default): renders only the frames at `times` (seconds, up to 8; default
+    6 spread over the video) and returns them as images with a `path` each. Use this
+    again and again while you settle the look; it takes seconds. With `compare`
+    = {"video": reference path, "times": [reference seconds]} (same length as
+    `times`) every image is side by side: reference on the left, your render on the
+    right, both labelled with their time.
+    mode "preview": the whole video at half resolution, fast to check motion and timing.
+    mode "final": full resolution, then loudness normalised (-14 LUFS), faststart and a
+    metadata tag; also saves the plan as `<project>/plan.json`. Run `qa_verify_video`
+    on the result.
+    Previews and finals take longer than a tool call may wait: you get
+    `{"job_id", "state": "running"}`; call `job_status` until it is done. Files go to
+    `<project>/renders/<name>-<mode>-<format>.mp4` (stills: `.jpg`); `name` defaults to
+    "video".
+
+    An invalid plan, a missing file or bad `times` returns `{"valid": false, "errors":
+    ["scenes[3].kind: ...", ...]}` with every problem as `path: message`, and nothing is
+    rendered. `warnings` in the result list what the plan asked for that the engine does
+    not draw yet.
+    """
+    return render.render_video(
+        plan, project, mode=mode, times=times, compare=compare, format=format, name=name,
+    )
 
 
 @mcp.tool()
@@ -341,14 +397,63 @@ def build_kinetic_video(plan: dict, output_path: str, preview: bool = False) -> 
 
 
 @mcp.tool()
-def qa_verify_video(video_path: str, frames_dir: str | None = None) -> dict:
-    """QA-verify a finished master.
+def qa_verify_video(
+    video_path: str,
+    format: str | None = None,
+    frames: int = 4,
+    target: str | None = None,
+) -> list[str | Image] | dict:
+    """Check a finished video for technical defects. Run it on every final render before you publish.
 
-    Checks strict resolution (1080x1920), accepted fps, progressive scan,
-    audio presence and integrated loudness within +/-2 LUFS of the target.
-    Optionally extracts verification frames. Works offline (ffmpeg only).
+    It measures and never judges the creative work. `format` ("9:16" or "16:9") sets the
+    frame size to expect; without it the frame's own shape decides. Hard failures (`passed`
+    is false): frame size, frame rate, progressive scan, audio present, integrated loudness
+    -14 LUFS +/-1.5, true peak at most -1.0 dBTP, video and audio lengths within 0.5 s of each
+    other, and black of 1.0 s or more in the middle of the video. Warnings (`passed` stays
+    true): shorter black and black at the edges, a frozen picture of 3 s or more, silence of
+    2 s or more in the middle, and, when `target` ("tiktok", "shorts" or "youtube") is given,
+    a duration above that platform's limit.
+    Every entry in `hard_failures` and `warnings` has `check`, `message` and, where it
+    applies, `start` and `end` in seconds. `images` holds `frames` evenly spread frames
+    (default 4) and one frame for each black gap and frozen picture, at most 8 in all: look
+    at them. Fix every hard failure; judge the warnings yourself. Long videos run in the
+    background: you get `{"job_id", "state": "running"}`; call `job_status` until it is done.
     """
-    return qa.qa_verify_video(video_path, frames_dir)
+    return qa.qa_verify_video(video_path, format=format, frames=frames, target=target)
+
+
+@mcp.tool()
+def export_package(
+    project: str,
+    videos: dict[str, str],
+    texts: dict,
+    cover_times: dict[str, float] | None = None,
+    name: str | None = None,
+) -> list[str | Image] | dict:
+    """Package a finished video for publishing: the final folder with videos, covers and post.md.
+
+    Call it after `qa_verify_video` passes on the final renders. `videos` maps "9:16" and/or
+    "16:9" to the mp4 path (the files `render_video` makes in mode "final"). Write `texts`
+    yourself, for each platform's viewers:
+    - "tiktok": {"caption": str, "hashtags": [str]}
+    - "shorts": {"title": str, "description": str, "hashtags": [str]} (uses the 9:16 video)
+    - "youtube": {"title": str, "description": str, "tags": [str]} (uses the 16:9 video)
+    Give only the platforms you publish to. A hashtag gets a "#" when it lacks one.
+    `cover_times` ({"9:16": seconds, "16:9": seconds}) picks the cover frame; by default it is
+    the first of the QA's evenly spread frames that is not black. `name` sets the file names
+    (default: the project name).
+
+    Files go to `<project>/final/`: `<name>_9x16.mp4` and/or `<name>_16x9.mp4` (copied, not
+    re-encoded), `<name>_cover_9x16.jpg` (1080x1920) and `<name>_cover_16x9.jpg` (1280x720,
+    under 2 MB), and `post.md`. The covers come back as images.
+    The export refuses when QA finds a hard failure: nothing is written and `hard_failures`
+    says why. A text over a platform's length limit is listed in `violations` and marked in
+    post.md; the files are still written, so shorten the text and export again. On success
+    the project's `.work/` folder is removed.
+    A long video runs in the background: you get `{"job_id", "state": "running"}`; call
+    `job_status` until it is done.
+    """
+    return export.export_package(project, videos, texts, cover_times=cover_times, name=name)
 
 
 @mcp.tool()

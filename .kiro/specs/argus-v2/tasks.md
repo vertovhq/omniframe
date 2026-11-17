@@ -136,7 +136,7 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
       - `upper`/`center`/`lower` place the caption block inside the safe rect (bottom edge at the safe bottom for `lower`: 80 % of the height in 9:16, 92 % in 16:9).
       - The v1 `sfx` flag is ignored and the engine plays only `audio.sfx` and the v1 `sfx_list`. `tools/kinetic.py` still copies its default whoosh/pop/hit files into the public dir (unused) until task 18, so the old `build_kinetic_video` renders no longer have automatic sound effects.
 
-- [ ] 10. `render_video` with stills / preview / final (P0)
+- [x] 10. `render_video` with stills / preview / final (P0)
   - Read: design §9.
   - `engine/package.json`: add `@remotion/bundler` and `@remotion/renderer` pinned to the `remotion` version; `npm install`.
   - New `engine/scripts/render.mjs` (bundle once; stills | media; progress to the job status file).
@@ -145,26 +145,74 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
   - Tests (engine e2e, skip without node_modules): stills for both formats return images; 3-second final passes `qa_verify_video`; invalid plan returns errors without starting a render.
   - Verify: from Kiro, render stills of `examples/plans/reference_style_9x16.json` with `compare` against any mp4.
   - _Requirements: 8.4, 9.1–9.5_
+  - Notes (2026-11-17):
+    - Verified: pytest 211 passed, 1 skipped (22 new in `tests/test_render.py`: 17 offline, 5 engine e2e: stills 9:16 and 16:9, stills with compare, 3-second final that passes `qa_verify_video`, half-size preview). `tsc --noEmit` printed nothing (exit code not captured). Verify step: `server.render_video` (the function behind the MCP tool) on `examples/plans/reference_style_9x16.json` with `compare` against a generated 12 s mp4, 5 times, 13 s end to end; looked at 2 of the 5 side-by-side images (HUD, chips, captions with accent word, label bars all correct). **Not done from the Kiro chat:** the running `argus` MCP server was started before this task and does not list `render_video`; reconnect it (MCP Server view) and call the tool once. The example plan needs `fonts/Anton-Regular.ttf`, `fonts/JetBrainsMono-Bold.ttf` and `audio/voice.words.json` in the project folder; I used Impact and Consolas as stand-ins. Audio of a real render with voice + music + ducking was not measured (task 9 asked for it): only a voice-only final went through `qa_verify_video`.
+    - Contract:
+      - `render_video(plan, project, mode="stills"|"preview"|"final", times, compare, format, name)`; `plan` is a dict or a path (looked up in the project folder, then cwd). Relative file paths in the plan resolve in the project folder, the plan file's folder, cwd, then `engine/public` (so `fonts/InterDisplay-Bold.otf` and `sfx/whoosh.mp3` work without copying; `whoosh`/`pop`/`hit` are synthesized when missing).
+      - Invalid request: `{"valid": false, "errors": ["path: message", ...]}`, no job started. Checked: plan schema, every named file (audio and SFX only when not `stills`), caption words (file, inline, or `remap: 'clips'` with the `media` or first clip), `times` (≤ 8, inside the video; default: one per second up to 6), `compare` (same length as `times`, reference times inside the reference video).
+      - Stills wait up to 90 s inline; preview/final return a `job_id` after 20 s. Progress comes from node as `@@ARGUS {...}` stdout lines and is forwarded to `report()`; node does not write the status file itself.
+      - Outputs in `<project>/renders/`: `<name>-stills-<9x16>-NN-t<sec>s.jpg`, `<name>-compare-…`, `<name>-preview-9x16.mp4`, `<name>-final-9x16.mp4`; a final render also writes `<project>/plan.json` (resolved plan with the original paths). `.work/render-<id>` is deleted on success and kept on failure (`render.log`, `spec.json`).
+      - Final: two-pass `loudnorm` to `CONFIG.loudness_target` (-14) with TP -1.5, LRA 11, video copied, AAC 192k at 48 kHz, `+faststart`, `comment=Made with ARGUS Studio vX`. A file without audio is only tagged. The result reports `loudness_before` / `loudness_after`.
+    - Differences from design §9: the engine is bundled once per job, not cached across jobs (about 6 s with the webpack cache); the bundler copies the public dir on Windows, so the hardlinks save only the step before it. Step 4 (proxies) and step 5 (custom components) belong to tasks 14 and 16: until then `clips` and `custom` scenes are accepted but not drawn, and the result's `warnings` say so. `music.duck` has no effect without `captions` (ducking follows the caption words); this is also in `warnings`.
+    - `tools/kinetic.py` now imports `engine_dir`, `_find_browser`, `_ensure_default_sfx`, `DEFAULT_SFX` from `tools/render.py`. `engine/package.json` pins `@remotion/bundler` and `@remotion/renderer` to 4.0.540.
 
-- [ ] 11. Technical QA v2 (P0)
+- [x] 11. Technical QA v2 (P0)
   - Read: design §11.
   - `src/argus/tools/qa.py`: format-aware checks, black/freeze/silence detection, true peak, platform duration warnings, images.
   - Tests: synthetic defects (wrong size, 1.5 s black gap mid-video → hard, 0.7 s → warning, 3 s silence → warning, hot peak → hard); valid master passes. Update `tests/test_offline_tools.py` QA tests.
   - Verify: pytest green.
   - _Requirements: 12.1–12.4_
+  - Notes (2026-11-17):
+    - Verified: full suite 220 passed, 1 skipped (was 211 + 1 skipped). The QA section of `tests/test_offline_tools.py` has 11 tests: a valid master passes with 4 spread frames; a 720x1280 clip (shape 9:16, wrong size) and a 1920x1080 clip with `format="9:16"` fail on resolution; 1.5 s of black mid-video is a hard failure, 0.7 s a warning; 3 s of silence mid-video a warning; a true peak above -1 dBTP a hard failure; a 4 s frozen picture a warning; `target` above the limit a warning; `qa_verify_video` through the job returns the summary and 2 images.
+    - Speed: a 90 s 1080x1920 clip takes 13 s (loudness 4.2 s, silence 3.0 s, black and freeze 4.9 s, frames 0.8 s). Longer files run in the `qa` job.
+    - Not verified from Kiro: the `argus` server connected to Kiro still has the old `qa_verify_video`. Reload it in the MCP Server view and call `qa_verify_video` on a `mode="final"` render.
+    - Decisions the design left open:
+      - Without `format`, the frame's shape decides: 9:16 or 16:9 at any size, anything else fails. §11 says "format (or plan)"; there is no plan argument, so `format` is the input.
+      - Black at the start or end is a warning at any length from 0.5 s. In the middle, 0.5 to 1.0 s is a warning and 1.0 s or more a hard failure.
+      - ffmpeg 8 logs only the start of a freeze that lasts to the end of the file, so that freeze ends with the file.
+      - Silence has timecodes but no frame: §11 asks for frames at black and freeze issues. Requirement 12.3 says "each reported issue". Say if silence should get a frame too.
+      - Platform limits (warnings): tiktok 600 s, shorts 180 s, youtube 900 s (15 min unverified, 12 h verified). The shorts and youtube figures come from YouTube's help pages (URLs in `qa.py`). TikTok's support page could not be read, so its 600 s comes from third-party guides and is marked in the code.
+      - At most 8 images per result: spread frames first, then black and freeze issues, hard ones first. Frames go to `<project>/.work/qa/` (or `<output>/.work/qa/` for files outside a project).
+    - `tests/test_render.py` calls `qa.verify_video` (the dict form). `qa.qa_verify_video` is the job-backed tool logic.
+    - Audit report: `.kiro/specs/argus-v2/task11.md`.
 
-- [ ] 12. `export_package` (P0)
+- [x] 12. `export_package` (P0)
   - Read: design §12. Verify current platform text limits; put sources in comments.
   - New `src/argus/tools/export.py` + tool registration.
   - Tests: both formats exported, covers sizes, `post.md` content, limit violation reported, refuses on QA hard failure, `.work/` removed.
   - Verify: pytest green.
   - _Requirements: 13.1–13.3_
+  - Notes (2026-11-17):
+    - Verified: full suite 231 passed, 1 skipped (was 220 passed, 1 skipped). The 11 new tests in `tests/test_export.py` cover both formats (`moov` before `mdat`), cover sizes (1080x1920; 1280x720 under 2 MB), `post.md` sections and text, `.work/` removed, covers returned as images through the job, a 1.5 s black gap refused with nothing written to `final/`, limit violations reported and marked, an invalid request starting no job, and tool registration.
+    - Real run: two synthetic 6 s clips (9:16 and 16:9) exported into a scratch project. `final/` held 2 mp4, 2 covers and `post.md`, and `.work/` was gone. I looked at the 9:16 cover: a non-black frame.
+    - Limits (sources in `tools/export.py`, checked 2026-11-17): TikTok caption 2200 UTF-16 units with hashtags (Content Posting API doc); YouTube title 100 characters, description 5000 bytes, tags 500 characters including commas and quotation marks (YouTube Data API `videos` doc); 16:9 cover 1280x720 under 2 MB (YouTube help, which states the 2 MB limit for phone uploads).
+    - Decisions: a limit violation is reported (`violations`, and marked in post.md) and does not stop the export, because 13.2 says "report". §12's "first frame of the strongest QA frame" needs a score, which the product steering rules out. The default cover is therefore the first evenly spread QA frame whose mean brightness is at least 16 of 255. Model views of covers go to `<project>/cache/export/`, because `prepare_image` writes its copy next to the source and would leave `.view.jpg` files in `final/`.
+    - Not verified from Kiro: the `argus` server connected to Kiro still runs the old code. Reload it in the MCP Server view, then call `export_package` once on a real `render_video` final.
+    - Open: export removes all of `<project>/.work/`, including work of a render or another export still running in that project. Hashtags are not checked for spaces, which YouTube's help page says are not allowed.
 
 - [ ] 13. Milestone M1 check (P0, target Nov 25)
   - Automated: scenario e2e tests (1) reference and (3) idea from design §17.
   - Manual in Kiro (author): one real TikTok from a reference, start to finish, using only ARGUS tools. Write every problem into a "Known issues" list at the end of this file; fix blockers before moving on.
   - Ask Opus to review the produced video and the open issues (one review session).
   - _Requirements: 17.1, 17.3_
+  - Notes (2026-11-17):
+    - Automated part done. `tests/test_scenarios.py` has scenario (1) `test_reference_to_tiktok`: synthetic reference → `watch_video` → stills with `compare` → final → `qa_verify_video` → `export_package`. It also has scenario (3) `test_idea_with_graphics_and_an_edge_voice`: `examples/plans/graphics_9x16.json` with a voice from the real edge voiceover job, where `edge_tts` is replaced by a stand-in that streams WordBoundary events → final → export. Both skip without `engine/node_modules` and both pass (about 100 s).
+    - Blocker found and fixed in `tools/qa.py`. Scenario (3) stopped at export with a hard failure: black for 1.67 s mid-video (9.37–11.03 s). The frames show the CTA ("follow for more", handle, arrow) on the dark background, so the gap was false. Cause: blackdetect `pix_th` 0.10 (about 25 of 255). The `dark` background `#0A0A12`, lifted to about 13–25 by glow and grain, sits at or below that level for 97 to 99 % of pixels. blackdetect calls a frame black when 98 % or more of its pixels are at or below it, so a frame counted as black whenever its caption covered about 2 % of the picture or less. On that render, at 0.03 (about 8 of 255) fewer than 0.05 % of the pixels in each of seven sampled frames fall at or below the level. Fix: `BLACK_PIXEL_THRESHOLD = 0.03`. Pure black is still a hard failure.
+    - Regression test `test_qa_dark_background_with_a_small_caption_is_not_a_black_gap` failed on the old threshold with the same 1.5 s finding and passes now. The other QA tests pass.
+    - Deviation from design §11, which still says `pix_th=0.10`. This is the question `task11.md` §5 left open (item 2). Keeping 0.10 would need an exception for dark styles, which is the author's call.
+    - Verified: `tests/test_scenarios.py` 2 passed; QA tests 12 passed; full suite 234 passed, 1 skipped (was 231 passed, 1 skipped; the skip is the real faster-whisper test). I looked at the reference final (12 frames: words, big, chips, CTA with handle) and the idea final (CTA at 9.6–11.7 s). Both show the intended content.
+    - Not done, because it needs the author in Kiro: the manual TikTok run and the Opus review. First reload the `argus` server in the MCP Server view, so `render_video` and `export_package` are listed. Then make the TikTok with ARGUS tools only, write each problem into Known issues, and run the Opus review. This task stays `[ ]` until then. The BUILD_LOG entry follows the manual run.
+
+- [ ] 13.1 Fixes from the first real run (P0) — do this, then task 16, then 14 and 15
+  - Order change: the author's channel needs custom components (task 16) before footage editing (14, 15). Task 16 does not depend on 14.
+  - `src/argus/tools/watch.py`: the frame cache must not return a frame list built by an older `select_frames`. Add a separate frames version (or the selection rule) to the `frames.<max_frames>.json` cache check so old caches are rebuilt; transcript and shot caches stay valid. Test: a stored frames file with the old version is rebuilt.
+  - `voice_options` in `src/argus/tools/voiceover.py`:
+    - the text query matches name, description, accent and labels, case-insensitive, any word;
+    - compact default response under ~6000 characters: id, name, gender, age, accent, language, description cut to 80 characters;
+    - library voices that the free plan cannot use through the API go into a separate, labelled list;
+    - the model list and the delivery vocabulary only with `details=True`.
+  - Update tests; add a BUILD_LOG entry.
+  - Verify: pytest green; from Kiro, `voice_options(language="ru", gender="male", query="narrator")` returns Russian male voices in a short answer.
 
 - [ ] 14. Clips track and media prep (P1)
   - Read: design §8 `Clip`, §9 steps 3–4, "Engine changes" `clips.tsx`.
@@ -240,4 +288,30 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
 
 ## Known issues
 
-(Filled during tasks 13 and 20.)
+Open items after the automated part of task 13. Each one cites its source: a task note, or this run. The author adds every problem from the manual TikTok run to this list, and task 20 repeats the list.
+
+1. **Stale `argus` server in Kiro.** The server connected to this session does not list `render_video` or `export_package` (tasks 10 to 12 notes). Reload it in the MCP Server view and check that both appear before the manual run.
+2. **`reference_style_9x16.json` does not render as shipped.** It needs `fonts/Anton-Regular.ttf`, `fonts/JetBrainsMono-Bold.ttf` and its voice and music files in the project folder. `render_video` reports them as errors (task 10 notes; `tests/test_render.py`). Add the fonts or change the sample before task 21.
+3. **Live voice services were never called.** ElevenLabs and edge-tts have not run for real, and the live `voice_options` response shapes are unchecked (task 6 notes).
+4. **Music ducking is unmeasured.** The reference and idea finals pass QA's loudness and true-peak checks (the idea final measured -14.0 LUFS), but nothing measures how far the music drops under speech (tasks 9 and 10 notes).
+5. **Shot detection misses soft transitions.** On flat animation, `watch_video` found 3 shots where the content changes more often. Use `get_frames` for such stretches (task 5 notes).
+6. **No real transcript yet.** faster-whisper is not installed in `.venv`, so the transcript test is skipped and `watch_video` has never returned a transcript (baseline run; task 5 notes).
+7. **Export clears the whole `.work/` folder.** An export started while a render or another export of the same project runs deletes that job's work files (task 12 notes).
+8. **Hashtags are not checked for spaces.** YouTube does not accept spaces in tags, and `export_package` passes them through (task 12 notes).
+9. **Silence gets no image.** QA returns frames for black and freeze issues but not for silence, although requirement 12.3 asks for each reported issue (task 11 notes).
+10. **Still and compare images leave `.view.jpg` copies in `renders/`.** `prepare_image` writes each copy next to its source. Export moved its copies to `cache/export/` in task 12, but render did not. This breaks the no-clutter rule in the product steering (this run).
+
+Added after the manual TikTok run (analog of `reference.mp4`, project `analog-tiktok`). Items 11 to 15 come from tool descriptions and from `render_video` validation errors; no illustrated scene has been rendered yet, so none of them is confirmed by a render.
+
+11. **No scene draws the world.** The valid scene kinds are `words, title, card, big, counter, act, cta, chip, custom` (from a deliberately invalid plan sent to `render_video`). Nothing draws flat vector houses, people, a cat, lamp posts with light cones, a crane, a night background or a sideways camera pan. The only route is a `custom` scene with a React component that the model writes as code. Not tried yet. `generate_veo_clip` gives realistic video, so the style would not match (this run).
+12. **Three bordered counters are not possible with `hud`.** `hud` accepts `at, until, rows, pos, accent_changes`: one semi-transparent plate with label/value rows. The reference has three separate plates (red, red then green, yellow) whose frame colour changes. `accent_changes` swaps a value only. Needs a `custom` component (this run).
+13. **No popup for a cost.** The reference shows `-400 000 / ПРОВОД + БРИГАДА` next to the budget plate. `chip` accepts `text, value, items` and may cover part of it; the timing against the counter and the red styling are not checked (this run).
+14. **No poll card.** The "ВЫ ВЫБРАЛИ" card with two progress bars, and the notebook checklist with check marks, have no built-in scene. `custom` only (this run).
+15. **No glow.** `captions.style` accepts `font, size, color, active_color, upcoming_color, outline, shadow, plate`. There is no glow for the red "ТИШИНА." caption, and nothing lights windows or lamps. `build_kinetic_video` is documented as "no yellow", while the reference uses yellow as its main accent, so the video has to go through `render_video` (this run).
+16. **`watch_video` returns 3 frames instead of the requested 24.** The reference is one continuous shot with no hard cuts, so shot detection finds 1 shot and `max_frames=24` is ignored. After the server update the transcript and `words.json` now work, but the frame count did not change: 3 frames on one contact sheet, `pages_total` 1. Sixteen frames had to be taken by hand with `get_frames`. Related to item 5, which reported 3 shots on another flat animation (this run, two calls).
+17. **`voice_options` is noisy and filters badly.**
+    - `gender=male, language=ru` with a free-text `query` ("energetic storyteller narrator") returned one English voice only. The same filters without `query` returned Russian male voices.
+    - The answer is the same large block every time (provider list, 10 model entries, `delivery` rules). At `limit=20` it reached 32,303 characters and passed the 30,000-character output limit.
+    - Library voices are not marked as needing a paid plan through the API; the note appears only inside `providers`.
+    - `provider_choice.ask_user` stays `true` even when the user already named ElevenLabs in the request.
+    - The live `voice_options` shapes from item 3 are now confirmed. `synthesize_voiceover` has not been called for real yet (this run).

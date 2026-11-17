@@ -110,7 +110,7 @@ def test_video_without_audio_has_no_sound_events(many_segments: Path) -> None:
 # ------------------------------------------------------------------ frames and sheets
 
 def test_summary_shape_frames_and_sheets(five_segments: Path) -> None:
-    result = _run(five_segments)
+    result = _run(five_segments, max_frames=6)  # one sheet: shot starts + hook, no fill
     assert (result["width"], result["height"]) == (180, 320)
     assert result["duration"] == pytest.approx(6.0, abs=0.1)
     frames = result["frames"]
@@ -161,6 +161,16 @@ def test_select_frames_long_shot_gets_a_middle_frame() -> None:
     assert any(abs(t - 0.5) <= 0.2 for t, _ in chosen)
 
 
+def test_select_frames_one_take_fills_the_budget() -> None:
+    # a 74 s single-take animation used to come back as 3 frames (first run, task 13)
+    chosen = watch.select_frames([[0.0, 74.0]], 74.0, 24)
+    times = [t for t, _ in chosen]
+    assert 20 <= len(chosen) <= 24
+    assert all(shot == 1 for _, shot in chosen)
+    assert max(b - a for a, b in zip(times, times[1:])) <= 6.5
+    assert times[-1] >= 68.0
+
+
 def test_select_frames_within_budget_keeps_every_shot() -> None:
     shots = [[0.0, 0.3], [0.3, 0.6], [0.6, 5.0]]
     chosen = watch.select_frames(shots, 5.0, 24)
@@ -193,8 +203,8 @@ def test_pagination_returns_two_sheets_per_page(many_segments: Path) -> None:
 # ------------------------------------------------------------------ cache and job route
 
 def test_cache_hit_on_second_call_through_the_job(five_segments: Path) -> None:
-    first = watch.watch_video(str(five_segments), "cache", transcript=False, wait_s=WAIT)
-    second = watch.watch_video(str(five_segments), "cache", transcript=False, wait_s=WAIT)
+    first = watch.watch_video(str(five_segments), "cache", max_frames=6, transcript=False, wait_s=WAIT)
+    second = watch.watch_video(str(five_segments), "cache", max_frames=6, transcript=False, wait_s=WAIT)
     one, two = _text(first), _text(second)
     assert one["cache_hit"] is False and two["cache_hit"] is True
     assert one["shots"] == two["shots"] and one["sound_events"] == two["sound_events"]

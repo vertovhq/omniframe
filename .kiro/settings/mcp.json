@@ -2,9 +2,11 @@
   "mcpServers": {
     "argus": {
       "command": ".venv/Scripts/python.exe",
-      "args": ["-m", "argus"],
+      "args": [
+        "-m",
+        "argus"
+      ],
       "disabled": false
     }
   }
 }
-

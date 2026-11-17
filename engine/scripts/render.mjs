@@ -1,0 +1,139 @@
+#!/usr/bin/env node
+// Render worker of `render_video` (design §9 step 6).
+//
+//   node engine/scripts/render.mjs <spec.json>
+//
+// Bundles the engine once, then renders either stills (one file per time) or one video file.
+// The Python side (src/argus/tools/render.py) writes the spec and reads our stdout:
+// every protocol line starts with "@@ARGUS " followed by a JSON object, anything else is
+// log noise from webpack/Chromium that Python keeps only for error messages.
+//
+//   {"event": "progress", "value": 0..1, "note": "..."}   progress of the whole script
+//   {"event": "result", ...}                                 the last line on success
+//   {"event": "error", "message": "..."}                     the last line on failure
+//
+// Spec fields:
+//   mode          "stills" | "media"
+//   props         engine props (plan v2 with media paths relative to the public dir)
+//   publicDir     directory served as the engine's public dir (fonts, media, audio)
+//   bundleDir     where the bundle is written
+//   browser       path of Chrome/Edge, or null to let Remotion pick its own
+//   concurrency   render workers, or null for the Remotion default
+//   stills:       times [s], outputs [file per time], quality (JPEG 1..100)
+//   media:        output (mp4 path), scale, crf
+
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+import {bundle} from '@remotion/bundler';
+import {openBrowser, renderMedia, renderStill, selectComposition} from '@remotion/renderer';
+
+const ENGINE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const COMPOSITION_ID = 'Kinetic';
+const FRAME_TIMEOUT_MS = 120_000;
+
+// Share of the whole progress bar per stage.
+const BUNDLE_SHARE = 0.25;
+
+const emit = (obj) => process.stdout.write(`@@ARGUS ${JSON.stringify(obj)}\n`);
+const progress = (value, note) => emit({event: 'progress', value: Math.max(0, Math.min(1, value)), note});
+
+async function main() {
+  const specPath = process.argv[2];
+  if (!specPath) {
+    throw new Error('usage: node render.mjs <spec.json>');
+  }
+  const spec = JSON.parse(fs.readFileSync(specPath, 'utf8').replace(/^\uFEFF/, ''));
+  const browserExecutable = spec.browser || null;
+  const common = {logLevel: 'error', browserExecutable, timeoutInMilliseconds: FRAME_TIMEOUT_MS};
+
+  progress(0, 'bundling the engine');
+  const serveUrl = await bundle({
+    entryPoint: path.join(ENGINE_DIR, 'src', 'index.ts'),
+    outDir: spec.bundleDir,
+    publicDir: spec.publicDir,
+    onProgress: (p) => progress((p / 100) * BUNDLE_SHARE, 'bundling the engine'),
+  });
+  progress(BUNDLE_SHARE, 'opening the browser');
+
+  const puppeteerInstance = await openBrowser('chrome', {
+    browserExecutable,
+    logLevel: 'error',
+    chromiumOptions: {},
+  });
+  try {
+    const composition = await selectComposition({
+      ...common,
+      serveUrl,
+      id: COMPOSITION_ID,
+      inputProps: spec.props,
+      puppeteerInstance,
+    });
+    const meta = {
+      width: composition.width,
+      height: composition.height,
+      fps: composition.fps,
+      durationInFrames: composition.durationInFrames,
+    };
+
+    if (spec.mode === 'stills') {
+      const files = [];
+      for (let i = 0; i < spec.times.length; i++) {
+        const frame = Math.max(
+          0,
+          Math.min(composition.durationInFrames - 1, Math.round(spec.times[i] * composition.fps))
+        );
+        progress(BUNDLE_SHARE + ((1 - BUNDLE_SHARE) * i) / spec.times.length, `still ${i + 1} of ${spec.times.length}`);
+        await renderStill({
+          ...common,
+          serveUrl,
+          composition,
+          inputProps: spec.props,
+          frame,
+          output: spec.outputs[i],
+          imageFormat: 'jpeg',
+          jpegQuality: spec.quality ?? 92,
+          overwrite: true,
+          puppeteerInstance,
+        });
+        files.push({time: spec.times[i], frame, file: spec.outputs[i]});
+      }
+      emit({event: 'result', ...meta, files});
+    } else if (spec.mode === 'media') {
+      progress(BUNDLE_SHARE, 'rendering frames');
+      await renderMedia({
+        ...common,
+        serveUrl,
+        composition,
+        inputProps: spec.props,
+        codec: 'h264',
+        outputLocation: spec.output,
+        crf: spec.crf,
+        scale: spec.scale ?? 1,
+        concurrency: spec.concurrency ?? null,
+        overwrite: true,
+        puppeteerInstance,
+        onProgress: ({progress: p, renderedFrames, encodedFrames}) => {
+          progress(
+            BUNDLE_SHARE + (1 - BUNDLE_SHARE) * p,
+            `rendered ${renderedFrames} / encoded ${encodedFrames} of ${composition.durationInFrames} frames`
+          );
+        },
+      });
+      emit({event: 'result', ...meta, file: spec.output});
+    } else {
+      throw new Error(`unknown mode ${JSON.stringify(spec.mode)}`);
+    }
+  } finally {
+    await puppeteerInstance.close({silent: true}).catch(() => undefined);
+  }
+}
+
+main().then(
+  () => process.exit(0),
+  (err) => {
+    emit({event: 'error', message: String((err && err.stack) || err)});
+    process.exit(1);
+  }
+);

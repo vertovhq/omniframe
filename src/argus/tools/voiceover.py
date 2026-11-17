@@ -125,6 +125,15 @@ _LANGUAGE_NAMES = {
 }
 
 MAX_VOICE_LIST = 50
+VOICE_DESCRIPTION_CHARS = 80      # a voice's description in `voice_options`
+VOICE_RESPONSE_MAX_CHARS = 6000   # `voice_options` without `details`, measured as JSON with indent=2 (what the client gets)
+MAX_QUERY_WORDS = 4               # Voice Library search runs once per query word
+# https://elevenlabs.io/docs/api-reference/voices/voice-library/get-shared : `free_users_allowed` (boolean) says
+# whether free users may use a library voice. Those with false go to their own list, marked as paid-plan only.
+LIBRARY_PAID_NOTE = (
+    "Voice Library voices with free_users_allowed=false: through the API they work only on a paid ElevenLabs plan "
+    "(a free plan gets HTTP 402/403). Pick from own_voices and library_voices unless the user has a paid plan."
+)
 _TAG_RE = re.compile(r"\[[^\[\]]*\]|<[^<>]*>")  # [audio tags] and <ssml/> markup
 _SENTENCE_END_RE = re.compile(r"(?<=[.!?…])\s+")
 _noop: Callable[..., None] = lambda *args, **kwargs: None  # noqa: E731
@@ -841,50 +850,101 @@ def _gender(gender: str | None) -> str | None:
     return {"m": "male", "man": "male", "f": "female", "woman": "female"}.get(value, value)
 
 
-def _shorten(text: object, limit: int = 160) -> str | None:
+def _shorten(text: object, limit: int = VOICE_DESCRIPTION_CHARS) -> str | None:
+    """One line of at most `limit` characters (the last one is `…` when the text was cut)."""
     if not text:
         return None
     text = " ".join(str(text).split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def _own_voice(entry: dict, code: str | None) -> dict:
+def _query_words(query: str | None) -> list[str]:
+    """The words of a search text: lower case, no punctuation, no repeats, at most MAX_QUERY_WORDS."""
+    words: list[str] = []
+    for word in re.findall(r"\w+", (query or "").lower()):
+        if word not in words:
+            words.append(word)
+    return words[:MAX_QUERY_WORDS]
+
+
+def _word_hits(words: list[str], *fields: object) -> int:
+    """How many of `words` occur in the fields (case-insensitive, as part of a word too)."""
+    haystack = " ".join(str(f) for f in fields if f).lower()
+    return sum(1 for word in words if word in haystack)
+
+
+def _compact(voice: dict) -> dict:
+    """The voice without empty fields: the answer stays short."""
+    return {k: v for k, v in voice.items() if v not in (None, "", [])}
+
+
+def _own_voice(entry: dict) -> tuple[dict, str, set[str]]:
+    """(compact voice, text the query searches, language codes) of an account voice."""
     labels = entry.get("labels") or {}
     languages = {str(v.get("language", "")).lower() for v in entry.get("verified_languages") or []}
     if labels.get("language"):
         languages.add(str(labels["language"]).lower())
     languages.discard("")
-    return {
+    voice = _compact({
         "id": entry.get("voice_id"),
         "name": entry.get("name"),
-        "source": "own" if entry.get("category") != "premade" else "premade",
         "gender": labels.get("gender"),
         "age": labels.get("age"),
         "accent": labels.get("accent"),
-        "use_case": labels.get("use_case") or labels.get("descriptive"),
-        "languages": sorted(languages),
-        "language_match": bool(code and code in languages),
+        "language": ", ".join(sorted(languages)),
         "description": _shorten(entry.get("description")),
-        "preview_url": entry.get("preview_url"),
-    }
+    })
+    searchable = " ".join(str(x) for x in (
+        entry.get("name"), entry.get("description"), entry.get("category"), *labels.values(), *languages) if x)
+    return voice, searchable, languages
 
 
-def _library_voice(entry: dict) -> dict:
-    return {
+def _library_voice(entry: dict) -> tuple[dict, str]:
+    """(compact voice, text the query searches) of a Voice Library entry."""
+    voice = _compact({
         "id": entry.get("voice_id"),
         "name": entry.get("name"),
-        "source": "library",
-        "gender": entry.get("gender"),
+        "gender": str(entry["gender"]).lower() if entry.get("gender") else None,
         "age": entry.get("age"),
         "accent": entry.get("accent"),
-        "use_case": entry.get("use_case"),
-        "languages": [entry["language"]] if entry.get("language") else [],
+        "language": entry.get("language"),
         "description": _shorten(entry.get("description")),
-        "preview_url": entry.get("preview_url"),
-    }
+    })
+    searchable = " ".join(str(entry.get(k)) for k in (
+        "name", "description", "accent", "gender", "age", "use_case", "descriptive", "language", "category")
+        if entry.get(k))
+    return voice, searchable
 
 
-def _edge_voices(code: str | None, gender: str | None, query: str | None, limit: int) -> list[dict]:
+def _library_search(
+    words: list[str], code: str | None, sex: str | None, limit: int, errors: dict[str, str],
+) -> tuple[list[dict], list[dict]]:
+    """Voice Library voices for the query, as `(usable, paid_plan_only)`.
+
+    The API search takes one text, so each query word is its own request; the answers are merged
+    and the voices matching the most words come first. A failed request is recorded in `errors`.
+    """
+    found: dict[str, tuple[dict, bool, int]] = {}
+    for position, word in enumerate(words or [None]):
+        try:
+            data = _eleven_json("GET", "/v1/shared-voices", {
+                "page_size": limit, "language": code, "gender": sex, "search": word, "sort": "trending",
+            }, timeout=VOICE_LIST_TIMEOUT_S)
+        except Exception as exc:
+            errors.setdefault("library_voices", str(exc)[:300])
+            continue
+        for entry in data.get("voices", []):
+            voice, searchable = _library_voice(entry)
+            if not voice.get("id") or voice["id"] in found:
+                continue
+            # only an explicit false means "not for free users"; a missing field is not held against a voice
+            paid_only = entry.get("free_users_allowed") is False
+            found[voice["id"]] = (voice, paid_only, _word_hits(words, searchable))
+    ranked = sorted(found.values(), key=lambda item: -item[2])  # stable: the API's order breaks ties
+    return ([v for v, paid, _ in ranked if not paid][:limit], [v for v, paid, _ in ranked if paid][:limit])
+
+
+def _edge_voices(code: str | None, gender: str | None, words: list[str], limit: int) -> list[dict]:
     voices: list[dict] = []
     for language, (male, female) in EDGE_VOICES.items():
         if code and language != code:
@@ -892,11 +952,36 @@ def _edge_voices(code: str | None, gender: str | None, query: str | None, limit:
         for (voice_id, label), sex in ((male, "male"), (female, "female")):
             if gender and gender != sex:
                 continue
-            if query and query.lower() not in f"{voice_id} {label} {language}".lower():
+            locale = "-".join(voice_id.split("-")[:2])
+            if words and not _word_hits(words, voice_id, label, locale, sex):
                 continue
-            voices.append({"id": voice_id, "name": label, "source": "edge", "gender": sex,
-                           "languages": ["-".join(voice_id.split("-")[:2])]})
+            voices.append({"id": voice_id, "name": label, "gender": sex, "language": locale})
     return voices[:limit]
+
+
+def _json_size(value: object) -> int:
+    """Characters of `value` as the client receives it (JSON, indent 2, no \\u escapes)."""
+    return len(json.dumps(value, ensure_ascii=False, indent=2, default=str))
+
+
+def _trim_voice_lists(result: dict, max_chars: int) -> int:
+    """Drop voices from the longest list until `result` fits `max_chars`. Returns how many were dropped."""
+    def lists() -> list[list]:
+        found = [result.get(k) for k in ("own_voices", "library_voices", "edge_voices", "gemini_voices")]
+        paid = result.get("library_voices_paid_plan_only")
+        return [x for x in [*found, paid["voices"] if paid else None] if x]
+
+    dropped = 0
+    while _json_size(result) > max_chars:
+        candidates = lists()
+        if not candidates:
+            break
+        max(reversed(candidates), key=len).pop()  # on a tie the least important list loses a voice first
+        dropped += 1
+    paid = result.get("library_voices_paid_plan_only")
+    if paid is not None and not paid["voices"]:
+        del result["library_voices_paid_plan_only"]
+    return dropped
 
 
 def _provider_status() -> dict:
@@ -908,7 +993,7 @@ def _provider_status() -> dict:
         "elevenlabs": {
             "available": eleven,
             "model": CONFIG.eleven_model,
-            "note": ("word timings from the API; voices: own + Voice Library (library voices need a paid plan via API)"
+            "note": ("word timings from the API; voices: own + Voice Library (free_users_allowed=false voices need a paid plan via API)"
                      if eleven else PROVIDERS["elevenlabs"].unavailable_hint()),
         },
         "gemini": {
@@ -930,72 +1015,82 @@ def _provider_status() -> dict:
     }
 
 
+def _eleven_models(errors: dict[str, str]) -> list[dict]:
+    """ElevenLabs text-to-speech models with their character limits and how each wants delivery written."""
+    models: list[dict] = []
+    try:
+        for entry in _eleven_json("GET", "/v1/models", timeout=VOICE_LIST_TIMEOUT_S):
+            if entry.get("can_do_text_to_speech") and not entry.get("requires_alpha_access"):
+                mid = str(entry.get("model_id"))
+                models.append({
+                    "id": mid, "name": entry.get("name"),
+                    "max_chars": entry.get("maximum_text_length_per_request") or ELEVEN_CHAR_LIMITS.get(mid),
+                    "delivery": delivery_style(mid),
+                })
+    except Exception as exc:
+        errors["models"] = str(exc)[:300]
+    return models
+
+
 def voice_options(
     language: str | None = None,
     gender: str | None = None,
     query: str | None = None,
     limit: int = 10,
+    details: bool = False,
 ) -> dict:
     """Voices the user can use right now, filtered, plus which providers work.
 
-    `own_voices`: the account's voices (premade and cloned), matching voices first when a
-    language is given. `library_voices`: Voice Library search (ElevenLabs). `edge_voices`:
-    free defaults. `gemini_voices`: names. Every list is capped at `limit`.
+    Each voice is `{id, name, gender, age, accent, language, description}` (empty fields left out,
+    description at most 80 characters). `query` is split into words (at most 4); a voice matches
+    when any word occurs, in any case, in its name, description, accent, age, gender, use case,
+    language or labels. `own_voices`: the account's voices, matching language first, then the most
+    matched words. `library_voices`: Voice Library voices usable on every plan.
+    `library_voices_paid_plan_only`: library voices with `free_users_allowed=false`, with a note.
+    `edge_voices`, `gemini_voices`: free defaults and Gemini names. Every list is capped at `limit`,
+    and the whole answer at VOICE_RESPONSE_MAX_CHARS (the longest lists lose voices first).
+    `details=True` adds `elevenlabs_models` and `delivery` (audio tags and pacing rules), which
+    leaves room for fewer voices.
     """
     limit = max(1, min(int(limit), MAX_VOICE_LIST))
     code = _language_code(language)
     sex = _gender(gender)
-    term = (query or "").strip() or None
+    words = _query_words(query)
     errors: dict[str, str] = {}
     notes: list[str] = []
 
     own: list[dict] = []
     library: list[dict] = []
+    library_paid: list[dict] = []
     models: list[dict] = []
     if PROVIDERS["elevenlabs"].available():
         try:
             data = _eleven_json("GET", "/v2/voices", {"page_size": 100, "include_total_count": "false"},
                                 timeout=VOICE_LIST_TIMEOUT_S)
+            ranked: list[tuple[bool, int, dict]] = []
             for entry in data.get("voices", []):
-                voice = _own_voice(entry, code)
-                if sex and str(voice["gender"] or "").lower() != sex:
+                voice, searchable, languages = _own_voice(entry)
+                if sex and str(voice.get("gender") or "").lower() != sex:
                     continue
-                haystack = " ".join(str(x) for x in (
-                    voice["name"], voice["description"], voice["use_case"], voice["accent"], voice["age"],
-                    " ".join(voice["languages"]))).lower()
-                if term and term.lower() not in haystack:
+                hits = _word_hits(words, searchable)
+                if words and not hits:
                     continue
-                own.append(voice)
-            own.sort(key=lambda v: not v["language_match"])  # stable: matching language first
-            own = own[:limit]
-            if code and own and not any(v["language_match"] for v in own):
+                ranked.append((not (code and code in languages), -hits, voice))
+            ranked.sort(key=lambda item: item[:2])  # matching language first, then the most matched words
+            own = [voice for _, _, voice in ranked][:limit]
+            if code and ranked and all(item[0] for item in ranked[:limit]):
                 notes.append(f"no own voice is labelled {code!r}; v3/v4 voices usually speak other languages fine, try one")
         except Exception as exc:
             errors["own_voices"] = str(exc)[:300]
-        try:
-            data = _eleven_json("GET", "/v1/shared-voices", {
-                "page_size": limit, "language": code, "gender": sex, "search": term, "sort": "trending",
-            }, timeout=VOICE_LIST_TIMEOUT_S)
-            library = [_library_voice(e) for e in data.get("voices", [])][:limit]
-        except Exception as exc:
-            errors["library_voices"] = str(exc)[:300]
-        try:
-            for entry in _eleven_json("GET", "/v1/models", timeout=VOICE_LIST_TIMEOUT_S):
-                if entry.get("can_do_text_to_speech") and not entry.get("requires_alpha_access"):
-                    mid = str(entry.get("model_id"))
-                    models.append({
-                        "id": mid, "name": entry.get("name"),
-                        "max_chars": entry.get("maximum_text_length_per_request") or ELEVEN_CHAR_LIMITS.get(mid),
-                        "delivery": delivery_style(mid),
-                    })
-        except Exception as exc:
-            errors["models"] = str(exc)[:300]
+        library, library_paid = _library_search(words, code, sex, limit, errors)
+        if details:
+            models = _eleven_models(errors)
     else:
         notes.append(PROVIDERS["elevenlabs"].unavailable_hint() + "; edge voices need no key")
 
     if code and code not in EDGE_VOICES:
         notes.append(f"no edge default for {code!r}: any ShortName from `edge-tts --list-voices` works as `voice`")
-    gemini = [v for v in AVAILABLE_VOICES if not term or term.lower() in v.lower()][:limit]
+    gemini = [v for v in AVAILABLE_VOICES if not words or _word_hits(words, v)][:limit]
     result: dict = {
         "engine": f"ARGUS {__version__}",
         "default_provider": default_provider(),
@@ -1003,14 +1098,27 @@ def voice_options(
         "providers": _provider_status(),
         "own_voices": own,
         "library_voices": library,
-        "edge_voices": _edge_voices(code, sex, term, limit),
+        "edge_voices": _edge_voices(code, sex, words, limit),
         "gemini_voices": gemini,
-        "notes": notes,
     }
+    if library_paid:
+        result["library_voices_paid_plan_only"] = {"note": LIBRARY_PAID_NOTE, "voices": library_paid}
     if PROVIDERS["elevenlabs"].available():
-        result["delivery"] = delivery_guide()
-    if models:
-        result["elevenlabs_models"] = models
+        if details:
+            result["delivery"] = delivery_guide()
+            if models:
+                result["elevenlabs_models"] = models
+        else:
+            notes.append("call again with details=True for the ElevenLabs models and the delivery rules (audio tags, pacing)")
     if errors:
         result["errors"] = errors
+    result["notes"] = notes
+    # the cut note is in the answer while it is measured, so the final size is the checked size
+    cut_note = (f"some voices were left out to keep the answer under {VOICE_RESPONSE_MAX_CHARS} characters; "
+                "narrow it with language, gender or query")
+    notes.append(cut_note)
+    if not _trim_voice_lists(result, VOICE_RESPONSE_MAX_CHARS):
+        notes.remove(cut_note)
+    if not notes:
+        del result["notes"]
     return result

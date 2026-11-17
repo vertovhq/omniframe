@@ -41,85 +41,15 @@ from pathlib import Path
 from ..config import CONFIG
 from .. import __version__
 from ..ffmpeg import temp_sibling
+# Moved to tools/render.py (task 10); kept importable here until this module is removed.
+from .render import DEFAULT_SFX, _ensure_default_sfx, _find_browser, engine_dir
 
 SCENE_KINDS = ("words", "title", "card", "big", "counter", "act", "cta", "chip")
 MEDIA_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".mov", ".webm", ".mkv"}
-DEFAULT_SFX = ("whoosh.mp3", "pop.mp3", "hit.wav")
-
-
-def _ensure_default_sfx() -> Path:
-    """Synthesize the default whoosh/pop/hit set once into engine/public/sfx.
-
-    Users can drop premium sounds with the same names into ARGUS_SFX_DIR.
-    """
-    user_dir = os.environ.get("ARGUS_SFX_DIR", "").strip()
-    if user_dir:
-        user = Path(user_dir).expanduser()
-        if all((user / n).exists() for n in DEFAULT_SFX):
-            return user
-    cache = engine_dir() / "public" / "sfx"
-    cache.mkdir(parents=True, exist_ok=True)
-    if not all((cache / n).exists() for n in DEFAULT_SFX):
-        synth = {
-            "whoosh.mp3": [
-                "-f", "lavfi", "-i", "anoisesrc=color=pink:d=0.45:seed=5",
-                "-af", "highpass=f=350,lowpass=f=2400,afade=t=in:st=0:d=0.18,"
-                       "afade=t=out:st=0.2:d=0.25,volume=2.2",
-                "-q:a", "4",
-            ],
-            "pop.mp3": [
-                "-f", "lavfi", "-i", "sine=frequency=620:duration=0.12",
-                "-af", "afade=t=out:st=0.02:d=0.1,volume=1.6",
-                "-q:a", "4",
-            ],
-            "hit.wav": [
-                "-f", "lavfi", "-i", "sine=frequency=110:duration=0.3",
-                "-f", "lavfi", "-i", "anoisesrc=color=brown:d=0.08:seed=9",
-                "-filter_complex",
-                "[0]afade=t=out:st=0.03:d=0.27,volume=2.0[a];"
-                "[1]afade=t=out:st=0.01:d=0.07,volume=1.4[b];"
-                "[a][b]amix=inputs=2:duration=first",
-            ],
-        }
-        for name, args in synth.items():
-            dst = cache / name
-            if dst.exists():
-                continue
-            subprocess.run(
-                [CONFIG.ffmpeg, "-hide_banner", "-loglevel", "error", "-y", *args, str(dst)],
-                check=True,
-            )
-    return cache
-
-
-def engine_dir() -> Path:
-    override = os.environ.get("ARGUS_ENGINE_DIR", "").strip()
-    if override:
-        return Path(override).resolve()
-    # src/argus/tools/kinetic.py -> repo root -> engine/
-    return Path(__file__).resolve().parents[3] / "engine"
 
 
 def _npx() -> str:
     return "npx.cmd" if os.name == "nt" else "npx"
-
-
-def _find_browser() -> str | None:
-    env = os.environ.get("REMOTION_BROWSER", "").strip()
-    if env and Path(env).exists():
-        return env
-    cands = [
-        r"%ProgramFiles%\Google\Chrome\Application\chrome.exe",
-        r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe",
-        r"%LocalAppData%\Google\Chrome\Application\chrome.exe",
-        r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe",
-        r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe",
-    ]
-    for c in cands:
-        p = Path(os.path.expandvars(c))
-        if p.exists():
-            return str(p)
-    return None
 
 
 def _prepare_public(plan: dict, base: Path, pub: Path) -> None:

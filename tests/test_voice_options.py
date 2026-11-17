@@ -1,4 +1,4 @@
-"""voice_options tests: own + library voices, edge defaults, provider status. No network."""
+"""voice_options tests: own + library voices, edge defaults, provider status, compact answer. No network."""
 
 from __future__ import annotations
 
@@ -28,9 +28,14 @@ OWN = {"voices": [
 ], "has_more": False}
 
 LIBRARY = {"voices": [
-    {"public_owner_id": "o1", "voice_id": "libVoiceAAAAAAAAAAAA", "name": "Lena", "gender": "female", "age": "young",
-     "accent": "russian", "use_case": "social_media", "language": "ru",
+    {"public_owner_id": "o1", "voice_id": "libVoiceAAAAAAAAAAAA", "name": "Lena", "gender": "Female", "age": "young",
+     "accent": "russian", "use_case": "social_media", "language": "ru", "free_users_allowed": True,
      "description": "Bright and fast. " + "long " * 80, "preview_url": "https://example.test/lena.mp3"},
+    {"public_owner_id": "o2", "voice_id": "libVoiceBBBBBBBBBBBB", "name": "Pavel", "gender": "Male",
+     "age": "middle_aged", "accent": "russian", "language": "ru", "free_users_allowed": False,
+     "description": "Deep baritone for documentaries"},
+    {"public_owner_id": "o3", "voice_id": "libVoiceCCCCCCCCCCCC", "name": "Maks", "gender": "Male",
+     "age": "old", "language": "ru", "description": "Calm storyteller"},  # no free_users_allowed field
 ]}
 
 MODELS = [
@@ -39,6 +44,17 @@ MODELS = [
      "maximum_text_length_per_request": 10000},
     {"model_id": "eleven_multilingual_sts_v2", "name": "STS", "can_do_text_to_speech": False},
 ]
+
+BIG_OWN = {"voices": [
+    {"voice_id": f"own{i:03d}" + "X" * 14, "name": f"Voice {i}", "category": "professional",
+     "description": "word " * 60, "labels": {"gender": "male", "age": "young", "accent": "american", "language": "en"}}
+    for i in range(100)
+]}
+BIG_LIBRARY = {"voices": [
+    {"voice_id": f"lib{i:03d}" + "Y" * 14, "name": f"Library {i}", "gender": "Female", "age": "young",
+     "accent": "british", "language": "en", "free_users_allowed": i % 2 == 0, "description": "text " * 60}
+    for i in range(50)
+]}
 
 
 class Reply:
@@ -56,9 +72,10 @@ class Reply:
 
 
 class FakeApi:
-    def __init__(self, library: object = LIBRARY, fail_library: int | None = None) -> None:
+    def __init__(self, library: object = LIBRARY, own: object = OWN, fail_library: int | None = None) -> None:
         self.calls: list[tuple[str, dict]] = []
         self.library = library
+        self.own = own
         self.fail_library = fail_library
 
     def __call__(self, request, timeout=None):
@@ -66,7 +83,7 @@ class FakeApi:
         query = {k: v[0] for k, v in parse_qs(parsed.query).items()}
         self.calls.append((parsed.path, query))
         if parsed.path == "/v2/voices":
-            return Reply(OWN)
+            return Reply(self.own)
         if parsed.path == "/v1/shared-voices":
             if self.fail_library:
                 raise urllib.error.HTTPError(request.full_url, self.fail_library, "no", {}, io.BytesIO(b'{"detail":"paid plan"}'))
@@ -75,9 +92,17 @@ class FakeApi:
             return Reply(MODELS)
         raise AssertionError(f"unexpected request {request.full_url}")
 
+    def paths(self) -> list[str]:
+        return [path for path, _ in self.calls]
+
 
 def _config(monkeypatch: pytest.MonkeyPatch, **changes) -> None:
     monkeypatch.setattr(voiceover, "CONFIG", dataclasses.replace(CONFIG, **changes))
+
+
+def _size(result: dict) -> int:
+    """Characters of the answer as the MCP client gets it: JSON with indent 2, no \\u escapes."""
+    return len(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @pytest.fixture
@@ -100,6 +125,8 @@ def keyed(monkeypatch: pytest.MonkeyPatch) -> FakeApi:
     return api
 
 
+# ------------------------------------------------------------------ edge, gemini, providers
+
 def test_without_keys_only_edge_defaults_and_status_are_returned(no_keys) -> None:
     result = voiceover.voice_options(language="ru")
 
@@ -109,7 +136,7 @@ def test_without_keys_only_edge_defaults_and_status_are_returned(no_keys) -> Non
     assert result["providers"]["gemini"]["available"] is False
     assert result["own_voices"] == [] and result["library_voices"] == []
     assert [v["id"] for v in result["edge_voices"]] == ["ru-RU-DmitryNeural", "ru-RU-SvetlanaNeural"]
-    assert result["edge_voices"][0]["gender"] == "male" and result["edge_voices"][0]["languages"] == ["ru-RU"]
+    assert result["edge_voices"][0] == {"id": "ru-RU-DmitryNeural", "name": "Dmitry", "gender": "male", "language": "ru-RU"}
 
 
 def test_edge_filters_by_gender_query_and_unknown_language(no_keys) -> None:
@@ -121,6 +148,15 @@ def test_edge_filters_by_gender_query_and_unknown_language(no_keys) -> None:
     assert unknown["edge_voices"] == [] and any("edge-tts --list-voices" in n for n in unknown["notes"])
 
 
+def test_query_matches_any_word_in_any_case_for_edge_and_gemini_voices(no_keys) -> None:
+    result = voiceover.voice_options(query="SVETLANA guy")
+    assert [v["name"] for v in result["edge_voices"]] == ["Svetlana", "Guy"]
+
+    gemini = voiceover.voice_options(query="charon, ZEPHYR; nobody")["gemini_voices"]
+    assert sorted(gemini) == ["Charon", "Zephyr"]
+    assert voiceover.voice_options(query="nobody zzz")["gemini_voices"] == []
+
+
 def test_providers_follow_the_configured_keys(monkeypatch: pytest.MonkeyPatch, no_keys) -> None:
     assert "Charon" in voiceover.voice_options()["gemini_voices"]
     _config(monkeypatch, elevenlabs_api_key="", gemini_api_key="g")
@@ -130,45 +166,84 @@ def test_providers_follow_the_configured_keys(monkeypatch: pytest.MonkeyPatch, n
     assert set(status) == {"elevenlabs", "gemini", "edge", "faster_whisper"}
 
 
-def test_own_voices_filter_by_gender_and_put_the_requested_language_first(keyed) -> None:
+# ------------------------------------------------------------------ own voices
+
+def test_own_voices_are_compact_filter_by_gender_and_put_the_requested_language_first(keyed) -> None:
     result = voiceover.voice_options(language="ru")
     assert result["default_provider"] == "elevenlabs"
     assert [v["name"] for v in result["own_voices"]] == ["Sasha", "Boris", "Brian"]  # ru first, then the rest
-    assert [v["language_match"] for v in result["own_voices"]] == [True, True, False]
+    assert [v["language"] for v in result["own_voices"]] == ["ru", "ru", "en"]
 
     men = voiceover.voice_options(gender="male")["own_voices"]
     assert [v["name"] for v in men] == ["Brian", "Boris"]
-    brian = men[0]
-    assert brian["id"] == "ownVoiceAAAAAAAAAAAA" and brian["source"] == "premade"
-    assert (brian["gender"], brian["age"], brian["accent"], brian["use_case"]) == (
-        "male", "middle_aged", "american", "narration")
-    assert brian["preview_url"] == "https://example.test/brian.mp3"
-
-    assert [v["name"] for v in voiceover.voice_options(query="resonant")["own_voices"]] == ["Brian"]
-
-
-def test_library_search_sends_the_filters_and_trims_long_descriptions(keyed) -> None:
-    result = voiceover.voice_options(language="Russian", gender="Female", query="young energetic", limit=5)
-
-    path, params = next(c for c in keyed.calls if c[0] == "/v1/shared-voices")
-    assert params == {"page_size": "5", "language": "ru", "gender": "female",
-                      "search": "young energetic", "sort": "trending"}
-    lena = result["library_voices"][0]
-    assert lena["id"] == "libVoiceAAAAAAAAAAAA" and lena["source"] == "library"
-    assert lena["languages"] == ["ru"] and len(lena["description"]) <= 160
+    assert men[0] == {
+        "id": "ownVoiceAAAAAAAAAAAA", "name": "Brian", "gender": "male", "age": "middle_aged",
+        "accent": "american", "language": "en", "description": "deep, resonant narrator",
+    }
+    # empty fields are left out; nothing but the seven fields is ever returned
+    assert men[1] == {"id": "ownVoiceCCCCCCCCCCCC", "name": "Boris", "gender": "male", "language": "ru"}
 
 
-def test_models_report_how_each_one_wants_delivery_written(keyed) -> None:
-    models = {m["id"]: m for m in voiceover.voice_options()["elevenlabs_models"]}
-    assert set(models) == {"eleven_v3", "eleven_multilingual_v2"}  # speech-to-speech is not a voice model
-    assert models["eleven_v3"]["max_chars"] == 5000 and "audio tags" in models["eleven_v3"]["delivery"]
-    assert "SSML" in models["eleven_multilingual_v2"]["delivery"]
+def test_a_language_without_own_voices_is_explained(keyed) -> None:
+    result = voiceover.voice_options(language="de")
+    assert len(result["own_voices"]) == 3
+    assert any("no own voice is labelled 'de'" in note for note in result["notes"])
 
 
-def test_limit_caps_every_list(keyed) -> None:
-    result = voiceover.voice_options(limit=1)
-    assert len(result["own_voices"]) == 1 and len(result["edge_voices"]) == 1 and len(result["gemini_voices"]) == 1
-    assert len(voiceover.voice_options(limit=500)["gemini_voices"]) == 30  # the cap is 50, Gemini has 30
+def test_query_searches_name_description_accent_and_labels_by_any_word_in_any_case(keyed) -> None:
+    def names(query: str) -> list[str]:
+        return [v["name"] for v in voiceover.voice_options(query=query)["own_voices"]]
+
+    assert names("resonant") == ["Brian"]                  # description
+    assert names("AMERICAN") == ["Brian"]                  # accent label, upper case
+    assert names("Young") == ["Sasha"]                     # age label
+    assert names("narration") == ["Brian"]                 # use case label
+    assert names("Russian") == ["Sasha"]                   # description of another voice
+    assert names("deep young") == ["Brian", "Sasha"]       # any word is enough
+    assert names("boris, professional!") == ["Boris"]      # punctuation is not part of a word
+    assert names("warm american") == ["Brian", "Sasha"]    # one word each, the account's order on a tie
+    assert names("nothing matches this") == []
+
+
+def test_voices_matching_more_query_words_come_first(keyed) -> None:
+    # Sasha: "warm" + "russian" (description) + "young" (age); Brian: "deep"
+    assert [v["name"] for v in voiceover.voice_options(query="deep young warm russian")["own_voices"]] == ["Sasha", "Brian"]
+
+
+# ------------------------------------------------------------------ library voices
+
+def test_library_search_runs_once_per_word_and_splits_off_the_paid_plan_voices(keyed) -> None:
+    result = voiceover.voice_options(language="Russian", gender="Female", query="Young ENERGETIC!", limit=5)
+
+    searches = [params for path, params in keyed.calls if path == "/v1/shared-voices"]
+    assert searches == [
+        {"page_size": "5", "language": "ru", "gender": "female", "search": word, "sort": "trending"}
+        for word in ("young", "energetic")
+    ]
+    lena, maks = result["library_voices"]
+    assert lena["id"] == "libVoiceAAAAAAAAAAAA" and maks["name"] == "Maks"  # Lena matches "young"; Maks matches nothing
+    assert set(lena) == {"id", "name", "gender", "age", "accent", "language", "description"}
+    assert (lena["gender"], lena["language"]) == ("female", "ru")
+    assert len(lena["description"]) == voiceover.VOICE_DESCRIPTION_CHARS and lena["description"].endswith("…")
+    assert "preview_url" not in lena and "source" not in lena
+
+    paid = result["library_voices_paid_plan_only"]
+    assert [v["name"] for v in paid["voices"]] == ["Pavel"]
+    assert "paid ElevenLabs plan" in paid["note"] and "free_users_allowed=false" in paid["note"]
+    assert "Pavel" not in json.dumps(result["library_voices"])
+
+
+def test_without_a_query_the_library_is_searched_once(keyed) -> None:
+    result = voiceover.voice_options(language="ru")
+    assert [path for path in keyed.paths() if path == "/v1/shared-voices"] == ["/v1/shared-voices"]
+    assert [v["name"] for v in result["library_voices"]] == ["Lena", "Maks"]
+
+
+def test_there_is_no_paid_list_when_every_library_voice_is_free(monkeypatch: pytest.MonkeyPatch, keyed) -> None:
+    monkeypatch.setattr("urllib.request.urlopen", FakeApi(library={"voices": LIBRARY["voices"][:1]}))
+    result = voiceover.voice_options()
+    assert [v["name"] for v in result["library_voices"]] == ["Lena"]
+    assert "library_voices_paid_plan_only" not in result
 
 
 def test_a_refused_library_search_does_not_hide_own_voices(monkeypatch: pytest.MonkeyPatch, keyed) -> None:
@@ -178,6 +253,84 @@ def test_a_refused_library_search_does_not_hide_own_voices(monkeypatch: pytest.M
     assert len(result["own_voices"]) == 3 and result["library_voices"] == []
     assert "402" in result["errors"]["library_voices"] and "sk_test" not in json.dumps(result)
 
+
+# ------------------------------------------------------------------ size and details
+
+def test_models_and_delivery_rules_come_only_with_details(keyed) -> None:
+    plain = voiceover.voice_options()
+    assert "elevenlabs_models" not in plain and "delivery" not in plain
+    assert "/v1/models" not in keyed.paths()  # not even requested
+    assert any("details=True" in note for note in plain["notes"])
+
+    full = voiceover.voice_options(details=True)
+    assert "/v1/models" in keyed.paths()
+    assert "details=True" not in " ".join(full.get("notes", []))
+    models = {m["id"]: m for m in full["elevenlabs_models"]}
+    assert set(models) == {"eleven_v3", "eleven_multilingual_v2"}  # speech-to-speech is not a voice model
+    assert models["eleven_v3"]["max_chars"] == 5000 and "audio tags" in models["eleven_v3"]["delivery"]
+    assert "SSML" in models["eleven_multilingual_v2"]["delivery"]
+    assert full["delivery"]["model"] == "eleven_v3" and "[whispers]" in full["delivery"]["audio_tags"]
+
+
+def test_delivery_vocabulary_matches_the_model(monkeypatch, keyed) -> None:
+    delivery = voiceover.voice_options(details=True)["delivery"]
+    assert any("stability" in rule for rule in delivery["rules"])
+
+    _config(monkeypatch, elevenlabs_api_key="sk_test", eleven_model="eleven_multilingual_v2")
+    v2 = voiceover.voice_options(details=True)["delivery"]
+    assert "audio_tags" not in v2 and "<break" in v2["rules"][0]
+
+
+def test_no_key_means_no_elevenlabs_delivery_guide_even_with_details(no_keys) -> None:
+    result = voiceover.voice_options(details=True)
+    assert "delivery" not in result and "elevenlabs_models" not in result
+
+
+def test_limit_caps_every_list(monkeypatch: pytest.MonkeyPatch, keyed) -> None:
+    result = voiceover.voice_options(limit=1)
+    assert len(result["own_voices"]) == 1 and len(result["edge_voices"]) == 1 and len(result["gemini_voices"]) == 1
+    assert len(result["library_voices"]) == 1 and len(result["library_voices_paid_plan_only"]["voices"]) == 1
+
+    # `limit` itself is capped at 50 (checked with the size cap out of the way)
+    monkeypatch.setattr(voiceover, "VOICE_RESPONSE_MAX_CHARS", 10**6)
+    monkeypatch.setattr("urllib.request.urlopen", FakeApi(own=BIG_OWN))
+    assert len(voiceover.voice_options(limit=500)["own_voices"]) == 50
+
+
+def test_the_answer_stays_under_6000_characters_and_says_what_was_left_out(monkeypatch: pytest.MonkeyPatch, keyed) -> None:
+    monkeypatch.setattr("urllib.request.urlopen", FakeApi(library=BIG_LIBRARY, own=BIG_OWN))
+    result = voiceover.voice_options(limit=50)
+
+    assert _size(result) <= voiceover.VOICE_RESPONSE_MAX_CHARS == 6000
+    assert any("left out" in note and "language, gender or query" in note for note in result["notes"])
+    assert result["own_voices"][0]["id"].startswith("own000")  # the best-ranked voices are the ones kept
+    kept = [*result["own_voices"], *result["library_voices"], *result["library_voices_paid_plan_only"]["voices"]]
+    assert kept and all(len(v["description"]) <= 80 for v in kept)
+    assert len(result["own_voices"]) < 50  # something really was dropped
+
+
+def test_details_come_on_top_of_the_voices_and_the_answer_still_fits(monkeypatch: pytest.MonkeyPatch, keyed) -> None:
+    monkeypatch.setattr("urllib.request.urlopen", FakeApi(library=BIG_LIBRARY, own=BIG_OWN))
+    plain = voiceover.voice_options(limit=50)
+    full = voiceover.voice_options(limit=50, details=True)
+
+    assert _size(full) <= 6000
+    assert "delivery" in full and len(full["elevenlabs_models"]) == 2  # the rules are never the part that is cut
+    assert len(full["own_voices"]) < len(plain["own_voices"])  # the room they take comes out of the voices
+    assert any("left out" in note for note in full["notes"])
+
+
+def test_a_small_answer_has_no_left_out_note(keyed) -> None:
+    result = voiceover.voice_options()
+    assert _size(result) <= 6000
+    assert not any("left out" in note for note in result.get("notes", []))
+
+
+def test_the_answer_without_a_key_is_small_too(no_keys) -> None:
+    assert _size(voiceover.voice_options(limit=50)) <= 6000
+
+
+# ------------------------------------------------------------------ provider choice
 
 def test_with_one_working_provider_there_is_nothing_to_ask(no_keys) -> None:
     choice = voiceover.voice_options()["provider_choice"]
@@ -215,20 +368,22 @@ def test_env_override_decides_the_recommendation(monkeypatch, keyed) -> None:
     assert voiceover.voice_options()["provider_choice"]["recommended"] == "gemini"
 
 
-def test_delivery_vocabulary_comes_with_a_key_and_matches_the_model(monkeypatch, keyed) -> None:
-    delivery = voiceover.voice_options()["delivery"]
-    assert delivery["model"] == "eleven_v3" and "[whispers]" in delivery["audio_tags"]
-    assert any("stability" in rule for rule in delivery["rules"])
-
-    _config(monkeypatch, elevenlabs_api_key="sk_test", eleven_model="eleven_multilingual_v2")
-    v2 = voiceover.voice_options()["delivery"]
-    assert "audio_tags" not in v2 and "<break" in v2["rules"][0]
-
-
-def test_no_key_means_no_elevenlabs_delivery_guide(no_keys) -> None:
-    assert "delivery" not in voiceover.voice_options()
-
-
 def test_the_decision_stays_with_the_model(no_keys) -> None:
     """v2 returns options, not an instruction to ask the user (design §7, requirement 7.2)."""
     assert "decision_hint" not in voiceover.voice_options()
+
+
+def test_the_tool_passes_details_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    from argus import server
+
+    seen: dict = {}
+
+    def fake(**kwargs):
+        seen.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(voiceover, "voice_options", fake)
+    server.voice_options(language="ru", query="calm", details=True)
+    assert seen == {"language": "ru", "gender": None, "query": "calm", "limit": 10, "details": True}
+    server.voice_options()
+    assert seen["details"] is False
