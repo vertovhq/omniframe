@@ -62,6 +62,7 @@ MAX_VIEW_SIDE = 2048
 
 HASH_CHUNK = 8 * 1024 * 1024  # content key = size + first and last 8 MB
 CACHE_VERSION = 1             # bump when the cached files change meaning
+FRAMES_VERSION = 2            # bump when select_frames or the frame sheets change; checked only for frames.<N>.json
 
 # Verbatim prompt: Whisper otherwise "tidies" Russian speech and drops stumbles and
 # repeats, which the editing flow needs to see. Same prompt as the montazh skills.
@@ -69,6 +70,17 @@ RUSSIAN_VERBATIM_PROMPT = (
     "Ну, э-э, я я хотел, хотел сказать, что что это, это ми- миллион. "
     "Можно, можно ли стать... И при, и при таких условиях."
 )
+# The same idea for English: a prompt that contains fillers and repeats makes Whisper
+# keep them. (OpenAI's prompting guide suggests including such words in the prompt.)
+ENGLISH_VERBATIM_PROMPT = (
+    "Umm, so, so I wanted to, uh, I wanted to say that, that this is, um, a million. "
+    "Can you, can you become... And with, and with those conditions."
+)
+VERBATIM_PROMPTS = {"ru": RUSSIAN_VERBATIM_PROMPT, "en": ENGLISH_VERBATIM_PROMPT}
+
+# Words are also returned inside the summary, so the model can cut on them without opening
+# a file. Over this many words only `words_path` is given (a talk of about 8 minutes).
+INLINE_WORDS_LIMIT = 1200
 
 _PTS_RE = re.compile(r"pts_time:\s*(-?[0-9]+(?:\.[0-9]+)?)")
 _whisper_models: dict[str, object] = {}
@@ -318,8 +330,9 @@ def transcribe(src: Path, language: str | None, duration: float, report: Callabl
 
     Audio goes in as a 16 kHz numpy array (avoids PyAV/faster-whisper incompatibilities);
     `vad_filter` skips silence, `condition_on_previous_text=False` and `temperature=0`
-    keep long files from drifting. Russian gets the verbatim prompt so stumbles and
-    repeats survive.
+    keep long files from drifting. Russian and English get a verbatim prompt so
+    stumbles and repeats survive; other languages get none (a prompt in another
+    language would bias the text).
     """
     model = _whisper_model(CONFIG.whisper_model)
     audio = decode_audio(src, 16000)
@@ -336,7 +349,7 @@ def transcribe(src: Path, language: str | None, duration: float, report: Callabl
         vad_filter=True,
         vad_parameters={"min_silence_duration_ms": 300},
         condition_on_previous_text=False,
-        initial_prompt=RUSSIAN_VERBATIM_PROMPT if lang == "ru" else None,
+        initial_prompt=VERBATIM_PROMPTS.get(lang or ""),
         temperature=0,
     )
     words: list[dict] = []
@@ -392,7 +405,8 @@ def _frames_stage(src: Path, cache: Path, analysis: dict, max_frames: int, repor
     """Selected frames and their contact sheets for this frame budget -> (stage, from_cache)."""
     path = cache / f"frames.{max_frames}.json"
     stored = _read_json(path)
-    if stored and stored.get("version") == CACHE_VERSION:
+    # a frames file written by an older select_frames has no frames_version (or an older one): rebuild it
+    if stored and stored.get("version") == CACHE_VERSION and stored.get("frames_version") == FRAMES_VERSION:
         files = [Path(f["file"]) for f in stored["frames"]] + [Path(s["file"]) for s in stored["sheets"]]
         if all(f.is_file() for f in files):
             return stored, True
@@ -419,7 +433,13 @@ def _frames_stage(src: Path, cache: Path, analysis: dict, max_frames: int, repor
         build_sheet([(Path(f["file"]), f["t"], f["shot"]) for f in group], frame_size, out)
         sheets.append({"file": str(out), "times": [f["t"] for f in group]})
 
-    stage = {"version": CACHE_VERSION, "frame_size": list(frame_size), "frames": frames, "sheets": sheets}
+    stage = {
+        "version": CACHE_VERSION,
+        "frames_version": FRAMES_VERSION,
+        "frame_size": list(frame_size),
+        "frames": frames,
+        "sheets": sheets,
+    }
     _write_json(path, stage)
     return stage, False
 
@@ -510,6 +530,16 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         "images": images,
         "image_max_side": SHEET_MAX_SIDE,
     }
+    if transcript:
+        spoken = json.loads(Path(transcript["words_path"]).read_text(encoding="utf-8"))
+        result["word_count"] = len(spoken)
+        if len(spoken) <= INLINE_WORDS_LIMIT:
+            result["words"] = [[w["w"], w["s"], w["e"]] for w in spoken]  # [word, start, end], as in words.json
+        else:
+            result["words_note"] = (
+                f"{len(spoken)} words are too many to list here; open words_path "
+                "(a list of {w, s, e}) for the word timings"
+            )
     if transcript_note:
         result["transcript_note"] = transcript_note
     if analysis.get("sound_events_note"):

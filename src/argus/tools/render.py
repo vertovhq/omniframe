@@ -15,6 +15,13 @@ Flow of one call:
 3. Outputs go to `<project>/renders/`; a final render also saves `<project>/plan.json`.
    The work folder is deleted when the job succeeds.
 
+Custom scene components (`tools/components.py`): `prepare_render` checks their source; the job
+reserves the engine folder (lock), installs and typechecks them, and frees the folder as soon
+as the bundle is built. Compile errors come back as `{"valid": false, "errors": [...]}`.
+
+Clips (`tools/media_prep.py`): before the node step the job swaps each clip's file for a
+proxy in `<project>/cache/proxies/` when it is variable-rate, not H.264, or needs `clean_audio`.
+
 This module also holds the helpers that `tools/kinetic.py` shares until task 18 removes
 it: `engine_dir`, `_find_browser` and the default sound-effect synthesis.
 """
@@ -46,13 +53,14 @@ from ..plan import (
     FORMAT_SIZES,
     TAIL_S,
     CardScene,
-    CustomScene,
     MediaBackground,
     Plan,
     WordsRemap,
     validate_plan,
 )
 from ..project import project_dir, slugify
+from . import media_prep
+from .components import EngineHold, check_components, used_components
 from .watch import format_time
 
 MODES = ("stills", "preview", "final")
@@ -71,6 +79,7 @@ COMPARE_MAX_HEIGHT = 960
 COMPARE_LABEL_H = 44
 COMPARE_GAP = 8
 
+CLIP_END_SLACK_S = 0.1         # container durations are rounded; `out` may exceed the file by this much
 PROTOCOL = "@@ARGUS "          # prefix of the stdout lines of engine/scripts/render.mjs
 DEFAULT_SFX = ("whoosh.mp3", "pop.mp3", "hit.wav")
 MEDIA_DIR = "m"                # inside the public dir; plan files are linked here
@@ -258,11 +267,6 @@ def _caption_words(plan: Plan, bases: Sequence[Path]) -> tuple[list[dict] | None
 def _plan_warnings(plan: Plan) -> list[str]:
     """Things the plan asks for that this engine version does not draw or apply."""
     notes: list[str] = []
-    if plan.clips:
-        notes.append("`clips` are accepted but not drawn yet: this engine version has no video track, so frames show scenes only")
-    for i, scene in enumerate(plan.scenes):
-        if isinstance(scene, CustomScene):
-            notes.append(f"scenes[{i}] is a custom scene ('{scene.component}'): custom components are not supported yet, it draws nothing")
     music = plan.audio.music if plan.audio else None
     if music is not None and music.duck < 1 and plan.captions is None:
         notes.append("audio.music.duck has no effect without `captions`: the ducking follows the caption words")
@@ -358,6 +362,9 @@ def prepare_render(
         if resolve_asset(value, bases) is None and not (kind == "sfx" and _builtin_sfx(value)):
             errors.append(f"{where}: file not found: {value} (relative paths are looked up in the project folder {project_root})")
 
+    component_errors, component_warnings = check_components(parsed, project_root)
+    errors += component_errors
+
     words, word_errors = _caption_words(parsed, bases)
     errors += word_errors
 
@@ -372,14 +379,17 @@ def prepare_render(
     clip_lengths: dict[int, float] = {}
     for i, clip in enumerate(parsed.clips):
         file = resolve_asset(clip.src, bases)
-        if clip.length is None and file is not None:
-            try:
-                length = stream_info(file).duration - (clip.in_ or 0.0)
-            except FFmpegError as exc:
-                errors.append(f"clips[{i}].src: cannot read the file ({str(exc).splitlines()[0]})")
-                continue
-            if length > 0:
-                clip_lengths[i] = length
+        if file is None or media_prep.is_image(file):
+            continue  # missing files are reported above; a picture has no length of its own
+        try:
+            source_s = stream_info(file).duration
+        except FFmpegError as exc:
+            errors.append(f"clips[{i}].src: cannot read the file ({str(exc).splitlines()[0]})")
+            continue
+        errors += _clip_range_errors(i, clip, source_s)
+        length = source_s - (clip.in_ or 0.0)
+        if clip.length is None and length > 0:
+            clip_lengths[i] = length
 
     resolved: Plan | None = None
     if not errors:
@@ -422,8 +432,20 @@ def prepare_render(
         "caption_words": words,
         "times": clean_times,
         "compare": compare_payload,
-        "warnings": _plan_warnings(resolved),
+        "warnings": _plan_warnings(resolved) + component_warnings,
     }, []
+
+
+def _clip_range_errors(index: int, clip: Any, source_s: float) -> list[str]:
+    """A clip must lie inside its file; past the end the engine would show a frozen or black picture."""
+    if source_s <= 0:
+        return [f"clips[{index}].src: the file has no length (is it a video?)"]
+    start = clip.in_ or 0.0
+    if start >= source_s:
+        return [f"clips[{index}].in: {start:g} s is past the end of the file ({source_s:.2f} s)"]
+    if clip.out is not None and clip.out > source_s + CLIP_END_SLACK_S:
+        return [f"clips[{index}].out: {clip.out:g} s is past the end of the file ({source_s:.2f} s)"]
+    return []
 
 
 def _check_compare(compare: Any, n_times: int, bases: Sequence[Path]) -> tuple[dict | None, list[str]]:
@@ -498,8 +520,45 @@ class _PublicDir:
         return rel
 
 
-def _engine_props(plan: dict, words: list[dict] | None, public: _PublicDir, *, with_audio: bool) -> dict:
-    """The plan as the engine wants it: every file path points into the public dir, words are inline."""
+def _prepare_clip_media(
+    plan: Plan,
+    bases: Sequence[Path],
+    root: Path,
+    *,
+    with_audio: bool,
+    report: Callable[..., None],
+) -> list[media_prep.ClipMedia]:
+    """The file the engine plays for each clip: the source, or a proxy in `<project>/cache/proxies/`.
+
+    A still has no sound, so `clean_audio` is not applied (and does not force a proxy) there.
+    """
+    sources: list[tuple[Path, bool]] = []
+    for i, clip in enumerate(plan.clips):
+        src = resolve_asset(clip.src, bases)
+        if src is None:
+            raise FileNotFoundError(f"clips[{i}].src: file not found: {clip.src}")
+        sources.append((src, clip.clean_audio and with_audio))
+    if not sources:
+        return []
+    return media_prep.prepare_clips(
+        sources, root / "cache" / "proxies", fps=plan.fps, report=lambda note: report(0.02, note),
+    )
+
+
+def _engine_props(
+    plan: dict,
+    words: list[dict] | None,
+    public: _PublicDir,
+    *,
+    with_audio: bool,
+    clip_media: Sequence[media_prep.ClipMedia] | None = None,
+) -> dict:
+    """The plan as the engine wants it: every file path points into the public dir, words are inline.
+
+    `clip_media` (from `_prepare_clip_media`) swaps a clip's file for its proxy. For a clip
+    without `out` it also sets `length`, the seconds the clip lasts (file length minus `in`);
+    this field exists only in the engine props, it is not part of the plan.
+    """
     props = json.loads(json.dumps(plan))  # deep copy
     for role, font in props["style"]["fonts"].items():
         if font.get("src"):
@@ -508,7 +567,10 @@ def _engine_props(plan: dict, words: list[dict] | None, public: _PublicDir, *, w
     if background and background.get("type") == "media":
         background["src"] = public.add(background["src"], "style.background.src")
     for i, clip in enumerate(props.get("clips", [])):
-        clip["src"] = public.add(clip["src"], f"clips[{i}].src")
+        media = clip_media[i] if clip_media is not None else None
+        clip["src"] = public.add(str(media.path) if media is not None else clip["src"], f"clips[{i}].src")
+        if media is not None and clip.get("out") is None and media.length:
+            clip["length"] = round(max(0.0, media.length - (clip.get("in") or 0.0)), 3)
     for i, scene in enumerate(props.get("scenes", [])):
         if scene.get("kind") == "card":
             scene["media"] = public.add(scene["media"], f"scenes[{i}].media")
@@ -538,8 +600,28 @@ def _run_node(
     report: Callable[..., None],
     lo: float,
     hi: float,
+    hold: EngineHold | None = None,
 ) -> dict:
-    """Run `engine/scripts/render.mjs` and return its result event; progress goes to `report`."""
+    """Run `engine/scripts/render.mjs` and return its result event; progress goes to `report`.
+
+    `hold` (the engine folder reserved by `EngineHold.acquire`) is released when the script
+    reports that the bundle is built, and in any case when this function ends.
+    """
+    try:
+        return _run_node_script(spec, work, report, lo, hi, hold)
+    finally:
+        if hold is not None:
+            hold.release()
+
+
+def _run_node_script(
+    spec: dict,
+    work: Path,
+    report: Callable[..., None],
+    lo: float,
+    hi: float,
+    hold: EngineHold | None,
+) -> dict:
     node = shutil.which("node")
     if node is None:
         raise RuntimeError("Node.js was not found on PATH. Install Node 18+ (https://nodejs.org) and run `npm install` in engine/.")
@@ -570,6 +652,9 @@ def _run_node(
             event = msg.get("event")
             if event == "progress":
                 report(lo + (hi - lo) * float(msg.get("value", 0)), msg.get("note"))
+            elif event == "bundled":
+                if hold is not None:
+                    hold.release()  # the bundle no longer reads engine/src
             elif event == "result":
                 result = msg
             elif event == "error":
@@ -713,7 +798,12 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
 
     report(0.01, "preparing files")
     public = _PublicDir(work / "public", [Path(b) for b in payload["bases"]])
-    props = _engine_props(payload["plan"], payload.get("caption_words"), public, with_audio=mode != "stills")
+    bases = [Path(b) for b in payload["bases"]]
+    clip_media = _prepare_clip_media(plan, bases, root, with_audio=mode != "stills", report=report)
+    props = _engine_props(
+        payload["plan"], payload.get("caption_words"), public,
+        with_audio=mode != "stills", clip_media=clip_media,
+    )
     spec: dict[str, Any] = {
         "props": props,
         "publicDir": str(public.root),
@@ -733,6 +823,27 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     }
     if payload.get("warnings"):
         result["warnings"] = list(payload["warnings"])
+    proxies = [
+        {"clip": i, "source": str(m.source), "proxy": str(m.path), "why": list(m.reasons)}
+        for i, m in enumerate(clip_media) if m.proxied
+    ]
+    if proxies:
+        result["proxies"] = proxies
+
+    # Reserve the engine folder until the bundle is built; custom components are installed and
+    # typechecked here. `_run_node` releases the hold (and `acquire` cleans up when it raises).
+    report(0.02, "preparing the engine")
+    hold = EngineHold(engine_dir(), root, used_components(plan), work)
+    compile_errors = hold.acquire()
+    if compile_errors:
+        hold.release()
+        shutil.rmtree(work, ignore_errors=True)
+        return {
+            "valid": False,
+            "errors": compile_errors,
+            "note": "the custom components do not compile; nothing was rendered. Fix the listed "
+                    "problems in <project>/components and call again",
+        }
 
     if mode == "stills":
         times: list[float] = payload["times"]
@@ -741,7 +852,7 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         _remove_stale(renders, f"{name}-compare-{tag}-*")
         files = [renders / f"{name}-stills-{tag}-{i + 1:02d}-t{t:.2f}s.jpg" for i, t in enumerate(times)]
         spec.update(mode="stills", times=times, outputs=[str(f) for f in files], quality=STILL_JPEG_QUALITY)
-        _run_node(spec, work, report, 0.03, 0.9 if compare else 0.97)
+        _run_node(spec, work, report, 0.03, 0.9 if compare else 0.97, hold)
         entries: list[dict] = []
         if compare:
             report(0.92, "building the side-by-side images")
@@ -770,7 +881,7 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
             mode="media", output=str(raw), scale=PREVIEW_SCALE if preview else 1,
             crf=PREVIEW_CRF if preview else FINAL_CRF,
         )
-        _run_node(spec, work, report, 0.03, 0.9)
+        _run_node(spec, work, report, 0.03, 0.9, hold)
         report(0.92, "finishing the file")
         if preview:
             os.replace(raw, out)

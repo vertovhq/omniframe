@@ -188,23 +188,19 @@ def test_caption_words_from_file_inline_and_remap(root: Path) -> None:
     assert errors == [], errors
     assert [(w["w"], w["s"]) for w in payload["caption_words"]] == [("world", 0.1)]
     assert payload["plan"]["duration"] == pytest.approx(2.6)  # the scene (at 0 + 2 s) is the last thing, plus the tail
-    assert any("`clips`" in w for w in payload["warnings"])
+    assert not any("clips" in w for w in payload["warnings"])  # the engine draws clips since task 14
 
     plan["clips"][0].update({"in": 1.0, "out": 3.0})  # no word in that range
     _, errors = _prepare(plan, root)
     assert any(e.startswith("captions.words:") and "falls inside" in e for e in errors)
 
 
-def test_warnings_for_custom_scenes_and_unducked_music(root: Path) -> None:
+def test_warning_for_unducked_music(root: Path) -> None:
     _tone(root / "audio" / "m.wav")
-    plan = _plan(
-        scenes=[{"kind": "custom", "at": 0, "component": "ScoreBoard"}],
-        audio={"music": {"src": "audio/m.wav", "duck": 0.3}},
-    )
+    plan = _plan(audio={"music": {"src": "audio/m.wav", "duck": 0.3}})
     payload, errors = _prepare(plan, root, mode="final")
     assert errors == []
-    text = " ".join(payload["warnings"])
-    assert "ScoreBoard" in text and "duck" in text
+    assert "duck" in " ".join(payload["warnings"])
 
 
 def test_example_plan_reports_the_files_it_needs(root: Path) -> None:

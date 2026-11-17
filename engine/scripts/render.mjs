@@ -9,6 +9,7 @@
 // log noise from webpack/Chromium that Python keeps only for error messages.
 //
 //   {"event": "progress", "value": 0..1, "note": "..."}   progress of the whole script
+//   {"event": "bundled"}                                     the bundle is built; engine/src is no longer read
 //   {"event": "result", ...}                                 the last line on success
 //   {"event": "error", "message": "..."}                     the last line on failure
 //
@@ -55,6 +56,8 @@ async function main() {
     publicDir: spec.publicDir,
     onProgress: (p) => progress((p / 100) * BUNDLE_SHARE, 'bundling the engine'),
   });
+  // The bundle is self-contained: Python may now restore engine/src and free the engine lock.
+  emit({event: 'bundled'});
   progress(BUNDLE_SHARE, 'opening the browser');
 
   const puppeteerInstance = await openBrowser('chrome', {

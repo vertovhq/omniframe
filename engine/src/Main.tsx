@@ -5,11 +5,13 @@ import type {EngineProps, PlanFormat, Scene} from './types';
 import {AudioTracks} from './audio';
 import {Background, Grain} from './background';
 import {CaptionsLayer} from './captions';
+import {ClipsLayer} from './clips';
 import {HudLayer} from './hud';
 import {fontFor, loadStyleFonts, resolveMedia, resolveStyle, StyleContext} from './style';
 import {assignWordTimings, sceneWindows} from './text';
 import type {LocalWord} from './text';
 import {collectSfx} from './sfx';
+import {registry} from './custom/registry';
 import {
   ActSceneView,
   BigSceneView,
@@ -43,8 +45,15 @@ const SceneView: FC<{
       return <CtaSceneView scene={scene} />;
     case 'chip':
       return <ChipSceneView scene={scene} />;
+    case 'custom': {
+      // The registry holds the components of this render only (see custom/README.md).
+      const Component = registry[scene.component];
+      if (!Component) {
+        throw new Error(`custom component "${scene.component}" is not in the registry`);
+      }
+      return <Component {...(scene.props ?? {})} />;
+    }
     default:
-      // 'custom' scenes come from the component registry (task 16)
       return null;
   }
 };
@@ -60,7 +69,8 @@ type SceneEntry = {
 /**
  * Kinetic: JSON-driven video in 9:16 or 16:9 (`format`), styled by tokens (`style`).
  *
- * Layers, bottom to top: background (colors, gradient or media, vignette) → full scenes
+ * Layers, bottom to top: background (colors, gradient or media, vignette) → clips
+ * (`clips.tsx`: video/image track with zoom keyframes) → full scenes
  * (each opaque, from `at` until its `until` or the next full scene) → overlay scenes and the
  * HUD (transparent, drawn above) → captions → grain. Scene content is centered inside the
  * style's safe area; sizes scale with the short side of the frame and `text_scale`.
@@ -70,7 +80,7 @@ type SceneEntry = {
  * and `sfx_list` still work until `tools/kinetic.py` is removed (task 18); the v1 `sfx`
  * flag (automatic sound design) is ignored.
  *
- * Still to come: clips (task 14), custom scenes (task 16).
+ * Custom scenes (`kind: 'custom'`) come from `custom/registry.ts`, generated per render.
  */
 export const Main: FC<EngineProps> = ({
   duration,
@@ -83,6 +93,7 @@ export const Main: FC<EngineProps> = ({
   words,
   scenes,
   hud,
+  clips,
   sfx_volume = 1,
   sfx_list,
   music,
@@ -177,6 +188,7 @@ export const Main: FC<EngineProps> = ({
           sfxVolume={sfx_volume}
           duration={safeDuration}
         />
+        <ClipsLayer clips={clips} duration={safeDuration} />
         {entries.filter((e) => !e.scene.overlay).map((e) => renderScene(e, true))}
         {entries.filter((e) => e.scene.overlay).map((e) => renderScene(e, false))}
         {hudWindow ? (

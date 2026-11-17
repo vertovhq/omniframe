@@ -250,6 +250,47 @@ def test_other_frame_budget_reuses_shots_but_rebuilds_frames(five_segments: Path
     assert len(other["frames"]) == 3
 
 
+def test_frames_file_from_an_older_select_frames_is_rebuilt(five_segments: Path,
+                                                            monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _FakeWhisper()
+    monkeypatch.setattr(watch, "whisper_available", lambda: True)
+    monkeypatch.setattr(watch, "_whisper_model", lambda name: fake)
+    first = _run(five_segments, max_frames=24, transcript=True)
+    frames_file = project.project_dir("t") / "cache" / "watch" / first["cache_key"] / "frames.24.json"
+    assert json.loads(frames_file.read_text(encoding="utf-8"))["frames_version"] == watch.FRAMES_VERSION
+
+    # what an older select_frames left behind: no frames_version and only 3 frames
+    stored = json.loads(frames_file.read_text(encoding="utf-8"))
+    stored.pop("frames_version")
+    stored["frames"] = stored["frames"][:3]
+    frames_file.write_text(json.dumps(stored), encoding="utf-8")
+
+    def no_rerun(*args, **kwargs):
+        raise AssertionError("analysis must come from the cache")
+
+    monkeypatch.setattr(watch, "detect_cuts", no_rerun)
+    monkeypatch.setattr(watch, "detect_sound_events", no_rerun)
+    selections: list[int] = []
+    real_select = watch.select_frames
+
+    def counting_select(*args, **kwargs):
+        selections.append(1)
+        return real_select(*args, **kwargs)
+
+    monkeypatch.setattr(watch, "select_frames", counting_select)
+
+    rebuilt = _run(five_segments, max_frames=24, transcript=True)
+    assert rebuilt["cache_hit"] is False
+    assert len(selections) == 1                              # the frames stage ran again
+    assert len(rebuilt["frames"]) == len(first["frames"]) > 3
+    assert rebuilt["shots"] == first["shots"]                # analysis came from the cache
+    assert len(fake.calls) == 1                              # transcript came from the cache
+
+    assert json.loads(frames_file.read_text(encoding="utf-8"))["frames_version"] == watch.FRAMES_VERSION
+    again = _run(five_segments, max_frames=24, transcript=True)
+    assert again["cache_hit"] is True and len(selections) == 1
+
+
 def test_validation_errors(five_segments: Path, tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         watch.watch_video(str(tmp_path / "nope.mp4"), "x")
@@ -293,14 +334,29 @@ def test_transcript_words_and_cache(five_segments: Path, monkeypatch: pytest.Mon
     call = fake.calls[0]
     assert call["word_timestamps"] is True and call["vad_filter"] is True
     assert call["condition_on_previous_text"] is False and call["temperature"] == 0
-    assert call["initial_prompt"] == watch.RUSSIAN_VERBATIM_PROMPT  # verbatim prompt only for Russian
+    assert call["initial_prompt"] == watch.RUSSIAN_VERBATIM_PROMPT  # Russian: verbatim prompt
+    assert result["words"] == [["Ну", 0.1, 0.3], ["ну", 0.4, 0.6]] and result["word_count"] == 2
 
     again = _run(five_segments, transcript=True)
     assert again["cache_hit"] is True and len(fake.calls) == 1
 
     english = _run(five_segments, transcript=True, language="en")
     assert english["language"] == "en" and len(fake.calls) == 2
-    assert fake.calls[1]["initial_prompt"] is None
+    assert fake.calls[1]["initial_prompt"] == watch.ENGLISH_VERBATIM_PROMPT  # English: verbatim prompt too
+
+    german = _run(five_segments, transcript=True, language="de")
+    assert german["language"] == "de" and fake.calls[2]["initial_prompt"] is None  # no prompt in other languages
+
+
+def test_words_are_listed_inline_only_up_to_the_limit(five_segments: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(watch, "whisper_available", lambda: True)
+    monkeypatch.setattr(watch, "_whisper_model", lambda name: _FakeWhisper())
+    monkeypatch.setattr(watch, "INLINE_WORDS_LIMIT", 1)
+
+    result = _run(five_segments, transcript=True)  # the fake speaks two words
+    assert "words" not in result and result["word_count"] == 2
+    assert "words_path" in result["words_note"]
+    assert len(json.loads(Path(result["words_path"]).read_text(encoding="utf-8"))) == 2
 
 
 def test_transcript_missing_package_is_reported(five_segments: Path, monkeypatch: pytest.MonkeyPatch) -> None:

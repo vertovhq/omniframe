@@ -7,8 +7,11 @@ Two of the three scenarios, on synthetic media and the real engine and job worke
 3. idea: the graphics-only sample plan with a voice made the way edge-tts makes one (word
    boundaries from a stand-in for the edge_tts client), render the final video and export it.
 
-The footage scenario (2) belongs to task 15. Nothing here uses the network. The tests are
-skipped when `engine/node_modules` is missing.
+2. footage: a synthetic talking clip with fixture words (a stand-in for Whisper): the words
+   `watch_video` returns, the cut list of `examples/plans/footage_16x9.json`, the captions moved
+   onto the kept clips, the final video and QA. The video is as long as the kept ranges.
+
+Nothing here uses the network. The tests are skipped when `engine/node_modules` is missing.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import subprocess
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image as PILImage
@@ -49,6 +53,24 @@ EDGE_WORD_STEP_S = 0.45
 EDGE_WORD_LENGTH_S = 0.4
 EDGE_TICKS = 10_000_000  # WordBoundary offset and duration are in 100 ns units
 NARRATION = "one json plan is all it takes describe the video and argus makes it follow for more"
+
+# scenario 2: a 20 s recording. The sample plan keeps 1.2-7.8 s and 10.4-16.0 s of it. The words
+# are in seconds of the recording: fillers before the first range, a stumble between the two
+# ranges (8.0-10.1 s) and a goodbye after the second.
+TALK_S = 20.0
+KEPT_RANGES = ((1.2, 7.8), (10.4, 16.0))
+KEPT_S = sum(end - start for start, end in KEPT_RANGES)  # 12.2 s
+TALK_WORDS = [
+    ("um", 0.20, 0.50), ("so", 0.60, 0.90),
+    ("my", 1.40, 1.70), ("heart", 1.80, 2.20), ("rate", 2.30, 2.70), ("is", 2.80, 3.00),
+    ("the", 3.10, 3.30), ("first", 3.40, 3.80), ("thing", 3.90, 4.30), ("i", 4.60, 4.80),
+    ("check", 4.90, 5.30), ("every", 5.40, 5.80), ("morning", 5.90, 6.50), ("okay", 6.60, 7.20),
+    ("so", 8.00, 8.30), ("so", 8.40, 8.70), ("um", 9.00, 9.40), ("uh", 9.80, 10.10),
+    ("tip", 10.60, 10.90), ("two", 11.00, 11.40), ("is", 11.50, 11.70), ("sleep", 11.80, 12.30),
+    ("your", 12.60, 12.90), ("heart", 13.00, 13.40), ("needs", 13.50, 13.90), ("it", 14.00, 14.20),
+    ("more", 14.30, 14.80), ("than", 14.90, 15.20), ("coffee", 15.30, 15.90),
+    ("thanks", 16.50, 16.90), ("for", 17.00, 17.20), ("watching", 17.30, 18.00),
+]
 
 
 # ------------------------------------------------------------------ fixtures and helpers
@@ -126,6 +148,34 @@ def _edge_module(voice_wav: bytes) -> types.ModuleType:
     module = types.ModuleType("edge_tts")
     module.Communicate = Communicate
     return module
+
+
+def _talking_clip(path: Path) -> Path:
+    """A 16:9 recording of TALK_S seconds: a moving test picture and a steady tone for the voice."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _ffmpeg(
+        "-f", "lavfi", "-i", f"testsrc2=size=640x360:rate=30:duration={TALK_S}",
+        "-f", "lavfi", "-i", f"sine=frequency=180:duration={TALK_S}", "-ar", "48000",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(path),
+    )
+    return path
+
+
+class _FakeWhisper:
+    """Stands in for faster-whisper: says TALK_WORDS (with the fillers kept) as one segment."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def detect_language(self, audio, **kw):
+        return "en", 0.99, {}
+
+    def transcribe(self, audio, **kw):
+        self.calls.append(kw)
+        words = [SimpleNamespace(word=f" {w}", start=s, end=e) for w, s, e in TALK_WORDS]
+        text = " " + " ".join(w for w, _s, _e in TALK_WORDS)
+        seg = SimpleNamespace(start=TALK_WORDS[0][1], end=TALK_WORDS[-1][2], text=text, words=words)
+        return iter([seg]), SimpleNamespace(language=kw.get("language") or "en")
 
 
 def _summary_and_images(out) -> tuple[dict, list[Image]]:
@@ -243,6 +293,72 @@ def test_reference_to_tiktok(tmp_path: Path) -> None:
     assert len(covers) == 1
     _assert_tiktok_folder(root, name, caption)
     assert "#argus #shorts" in (root / "final" / "post.md").read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------ scenario 2: footage
+
+@needs_engine
+def test_footage_edit_with_remapped_captions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Watch the recording, cut it with the sample plan, caption the kept words, render, pass QA."""
+    root = project.project_dir("footage-talk")
+    # the sample plan names these files by relative path; they are looked up in the project folder
+    talk = _talking_clip(root / "examples" / "media" / "talk_sample.mp4")
+    _tone(root / "audio" / "music.mp3", 196, 16.0)
+
+    # watch: the recording's words come back verbatim, fillers and repeats included
+    fake = _FakeWhisper()
+    monkeypatch.setattr(watch, "whisper_available", lambda: True)
+    monkeypatch.setattr(watch, "_whisper_model", lambda name: fake)
+    seen = watch.run_job({"path": str(talk), "project": "footage-talk", "transcript": True}, _quiet)
+    assert seen["duration"] == pytest.approx(TALK_S, abs=0.1) and seen["has_audio"] is True
+    assert seen["language"] == "en" and fake.calls[0]["initial_prompt"] == watch.ENGLISH_VERBATIM_PROMPT
+    assert seen["words"] == [[w, s, e] for w, s, e in TALK_WORDS]  # all 32, nothing tidied away
+    assert seen["word_count"] == len(TALK_WORDS)
+    words_file = Path(seen["words_path"])
+    assert [(w["w"], w["s"], w["e"]) for w in json.loads(words_file.read_text(encoding="utf-8"))] == TALK_WORDS
+    # the plan names the transcript as examples/media/talk_sample.words.json: the same words
+    sample_words = root / "examples" / "media" / "talk_sample.words.json"
+    sample_words.write_text(words_file.read_text(encoding="utf-8"), encoding="utf-8")
+
+    # the plan: the sample, unchanged. Its cut list is the clips; its length is the kept ranges
+    plan = json.loads((SAMPLES / "footage_16x9.json").read_text(encoding="utf-8"))
+    assert [(c["in"], c["out"]) for c in plan["clips"]] == list(KEPT_RANGES)
+    assert plan["clips"][1]["at"] == pytest.approx(plan["clips"][0]["at"] + KEPT_RANGES[0][1] - KEPT_RANGES[0][0])
+    assert plan["duration"] == pytest.approx(KEPT_S)
+
+    # captions: only the words inside the kept ranges, on the new timeline
+    payload, errors = render.prepare_render(
+        plan, root, mode="final", times=None, compare=None, format=None, name="footage",
+    )
+    assert errors == [] and payload is not None
+    assert payload["plan"]["duration"] == pytest.approx(KEPT_S)
+    spoken = payload["caption_words"]
+    kept = [w for w, s, e in TALK_WORDS if any(a <= (s + e) / 2 <= b for a, b in KEPT_RANGES)]
+    assert [w["w"] for w in spoken] == kept
+    assert "um" not in kept and "uh" not in kept and "thanks" not in kept  # fillers and the goodbye are cut
+    first_in_second = next(w for w in spoken if w["w"] == "tip")
+    assert (first_in_second["s"], first_in_second["e"]) == pytest.approx((6.8, 7.1), abs=0.02)  # 10.6 - 10.4 + 6.6
+    assert spoken[0]["s"] == pytest.approx(0.2, abs=0.02)  # "my" at 1.4 s, the first range starts at 1.2 s
+    assert all(0 <= w["s"] < w["e"] <= KEPT_S + 0.05 for w in spoken)
+
+    # stills just before and after the cut, and at the zoom
+    times = [0.5, 6.5, 6.8, 9.0]
+    stills, shown = _summary_and_images(render.render_video(
+        plan, "footage-talk", mode="stills", times=times, wait_s=WAIT,
+    ))
+    assert [entry["t"] for entry in stills["images"]] == times and len(shown) == len(times)
+
+    # the final video: 1920x1080, as long as the kept ranges (+-1 frame), with sound, and it passes QA
+    final = render.render_video(plan, "footage-talk", mode="final", name="footage", wait_s=WAIT)
+    assert isinstance(final, dict) and "output" in final, final
+    video = Path(final["output"])
+    assert video == root / "renders" / "footage-final-16x9.mp4"
+    assert (final["output_width"], final["output_height"]) == (1920, 1080)
+    assert final["has_audio"] is True
+    assert final["output_duration"] == pytest.approx(KEPT_S, abs=1 / 30 + 0.01)
+    assert not final.get("warnings"), final.get("warnings")
+    report = qa.verify_video(video, format="16:9", target="youtube")
+    assert report["passed"], report["hard_failures"]
 
 
 # ------------------------------------------------------------------ scenario 3: idea

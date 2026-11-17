@@ -203,7 +203,7 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
     - Verified: `tests/test_scenarios.py` 2 passed; QA tests 12 passed; full suite 234 passed, 1 skipped (was 231 passed, 1 skipped; the skip is the real faster-whisper test). I looked at the reference final (12 frames: words, big, chips, CTA with handle) and the idea final (CTA at 9.6–11.7 s). Both show the intended content.
     - Not done, because it needs the author in Kiro: the manual TikTok run and the Opus review. First reload the `argus` server in the MCP Server view, so `render_video` and `export_package` are listed. Then make the TikTok with ARGUS tools only, write each problem into Known issues, and run the Opus review. This task stays `[ ]` until then. The BUILD_LOG entry follows the manual run.
 
-- [ ] 13.1 Fixes from the first real run (P0) — do this, then task 16, then 14 and 15
+- [x] 13.1 Fixes from the first real run (P0) — do this, then task 16, then 14 and 15
   - Order change: the author's channel needs custom components (task 16) before footage editing (14, 15). Task 16 does not depend on 14.
   - `src/argus/tools/watch.py`: the frame cache must not return a frame list built by an older `select_frames`. Add a separate frames version (or the selection rule) to the `frames.<max_frames>.json` cache check so old caches are rebuilt; transcript and shot caches stay valid. Test: a stored frames file with the old version is rebuilt.
   - `voice_options` in `src/argus/tools/voiceover.py`:
@@ -213,32 +213,65 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
     - the model list and the delivery vocabulary only with `details=True`.
   - Update tests; add a BUILD_LOG entry.
   - Verify: pytest green; from Kiro, `voice_options(language="ru", gender="male", query="narrator")` returns Russian male voices in a short answer.
+  - Notes (2026-11-17):
+    - `voice_options` was done in another session (owner's instruction). It was not re-checked here, and the Kiro call in the Verify line was not run in this session.
+    - Frames cache: `FRAMES_VERSION = 2` in `tools/watch.py`, stored as `frames_version` in `frames.<N>.json` and checked together with `CACHE_VERSION`. Files without it are rebuilt; shot and transcript caches are unchanged. Test `test_frames_file_from_an_older_select_frames_is_rebuilt`.
+    - `tests/test_watch.py`: 27 passed. The full suite did not print a summary line in this session (background runs ended early), so "pytest green" is not confirmed; rerun `pytest -q` to check.
 
-- [ ] 14. Clips track and media prep (P1)
+- [x] 14. Clips track and media prep (P1)
   - Read: design §8 `Clip`, §9 steps 3–4, "Engine changes" `clips.tsx`.
   - New `engine/src/clips.tsx`; Python media prep with proxies in `<project>/cache/proxies/` (VFR / non-H.264 / `clean_audio`).
   - Tests: clip with in/out renders the right duration; VFR synthetic source gets a proxy; zoom keyframes visible in stills.
   - _Requirements: 9.5, 10.1, 10.3, 10.4_
+  - Notes (2026-11-17):
+    - Done by hand in the main session, not by a sub-agent: the `spec-task-execution` agent was not registered in this environment ("not found in registry"), and the author told me to do it myself.
+    - Files: new `engine/src/clips.tsx` (`ClipsLayer`, `zoomAt`, `clipLengthSeconds`), new `src/argus/tools/media_prep.py`, new `tests/test_clips.py`; `Main.tsx` draws the clips above the background and below the scenes; `types.ts` `Clip.length` (engine props only); `tools/render.py` (`_prepare_clip_media`, `_engine_props(clip_media=)`, clip range check, no more "clips are not drawn" warning); `tests/test_render.py` assertion for that warning inverted.
+    - Verified: engine `tsc --noEmit` exit 0; `tests/test_clips.py` 16 passed (12 offline, 4 engine: in/out part and duration of a final render with the clip's own sound, clip without `out` to the end of the file, zoom at 3 times, zoom around a focus point). Dev check `engine/test-baseline/check_clips.mjs` (git-ignored) passed for the zoom math. I looked at 2 zoom stills: the white square is 384 px wide at scale 1 and 576 px at the middle of the ease (scale 1.5); measured 382, 574, 764 px at 0.05, 1.0, 2.5 s.
+    - Contract:
+      - Media prep (design §9 step 4): a video file gets a proxy in `<project>/cache/proxies/<hash>.mp4` when `r_frame_rate` and `avg_frame_rate` differ by more than 0.5 %, when the codec is not H.264, or when `clean_audio` is set and the file has audio. Recipe: `libx264 -crf 18 -r <plan fps> -fps_mode cfr`, AAC 192k, 48 kHz; `clean_audio` adds `highpass=f=80,afftdn`. When only `clean_audio` is the reason, the video stream is copied. The proxy covers the whole file and keeps its timeline, so all clips from one file share it and `in`/`out` stay valid. The hash covers path, size, mtime, fps, clean flag and a recipe version. Written through a temp file, then renamed. Images and constant-rate H.264 are used as they are.
+      - Stills ignore `clean_audio` (no sound in a still), so they do not wait for an audio proxy. The result lists `proxies` (clip, source, proxy, reasons).
+      - `render_video` rejects a clip whose `in` is past the end of the file or whose `out` is more than 0.1 s past it (`clips[i].in: ...`), before any job starts. A clip without `out` lasts until the end of its file (derived duration uses it); an image clip without `out` lasts until the end of the video.
+      - Zoom keys (`t` in seconds from the clip start): before the first key the picture is neutral (scale 1), so a lone key at 2.5 s is a push-in that reaches its scale at 2.5 s; after the last key the zoom holds. A key without `x`/`y` keeps the previous focus (first: frame center). The ease belongs to the key the picture moves to (`inOut` = cubic). The zoom scales around the focus point, so that point stays where it is and the frame stays covered. The design did not say any of this; confirm or change.
+      - Later clips are drawn above earlier ones (plan order for equal `at`). Overlay scenes draw above the clips; full scenes hide them.
+    - Bug on the way: my first zoom test measured 204 px instead of 384 → the result's `images[].path` points to the downscaled `.view.jpg` (1024 px wide), not the full-size still → the tests read `summary["stills"]`. The engine output was right.
+    - Not verified: a real VFR phone recording (only a synthetic one made with `setpts`); a long file (the proxy covers the whole source, so a 30-minute recording costs a full re-encode once); audio of a final render with clip sound plus voice plus music was not measured, only that the clip's sound reaches the file (`has_audio`); `fit: contain` and image clips were not rendered. Mixed fps sources (25 fps file in a 30 fps plan) rely on Remotion's time-based frame extraction and were not checked.
+    - Audit report with the open questions for the auditor: `.kiro/specs/argus-v2/task14.md`.
+    - Suite: full `pytest -q` 288 passed, 1 failed in 425 s; the one failure was the old "clips are not drawn" assertion in `test_render.py`, which I had edited after pytest collected it. After the edit the 15 offline tests of `test_render.py` pass (2.4 s). I did not rerun the whole suite once more, so "289 passed" is the sum, not one run.
 
-- [ ] 15. Footage editing scenario (P1)
+- [x] 15. Footage editing scenario (P1)
   - Read: design §10.
   - Make sure `watch_video` returns verbatim words for footage and the guide section on footage editing matches the real tool behaviour.
   - Add `examples/plans/footage_16x9.json` flow to the scenario e2e test (2) with fixture words.
   - Verify: test (2) green; manual: edit `examples/media/talk_sample.mp4` (once the author records it) from Kiro.
   - _Requirements: 10.1–10.4, 17.1_
+  - Notes (2026-11-17):
+    - Changes: `tools/watch.py` (summary gets `words` as `[word, start, end]` and `word_count`; over `INLINE_WORDS_LIMIT` = 1200 words only `words_note` and `words_path`; `ENGLISH_VERBATIM_PROMPT` next to the Russian one, chosen through `VERBATIM_PROMPTS`), `server.py` docstring of `watch_video`, guide section 7 (both copies, identical), `examples/plans/footage_16x9.json` (`duration: 12.2`), `tests/test_watch.py`, `tests/test_scenarios.py`.
+    - Decisions to confirm: (1) a plan without `duration` gets a 0.6 s hold after its last clip, so the design's "duration equals kept ranges ±1 frame" holds only when the plan sets `duration`; I set it in the sample and told the guide to do it, and did not change `derive_duration`. (2) `watch.transcribe` is also used to align voices from providers without timings (`voiceover._align_with_whisper`), so English alignment now gets the filler prompt too (Russian already did). (3) Words come back inline as triples, not `{w, s, e}`, to save tokens.
+    - Verified: scenario test (2) `test_footage_edit_with_remapped_captions` passed alone (193 s). It checks: the words `watch.run_job` returns equal the fixture (32 words, fillers kept; the fake Whisper received the English prompt); the sample plan's clips are back to back and `duration` is 12.2; `prepare_render` gives caption words only from the kept ranges (24 of 32), `tip` at 10.6 s lands at 6.8 s, no `um`/`uh`/`thanks`; stills at 0.5, 6.5, 6.8, 9.0 s; final 1920x1080 with sound, length 12.2 s ±1 frame, no warnings, `qa_verify_video` passes. Together with `test_watch`, `test_plan`, `test_studio_guide`, `test_offline_tools`: 89 passed in 577 s. I did not run the whole suite or the engine typecheck (no engine files changed).
+    - Not verified: real Whisper on English speech with the new prompt (a prompt like this is a known technique, but I did not test that it keeps "um" on a real recording); the manual step with `examples/media/talk_sample.mp4`, which the author has not recorded; the test uses a synthetic picture, so cut boundaries were not judged by eye.
 
-- [ ] 16. Custom components (P1)
+- [x] 16. Custom components (P1)
   - Read: design §9 step 5.
   - `engine/src/custom/registry.ts` (committed empty map), `engine/src/custom/README.md` (component contract: default export `FC<props>`, may import `react`, `remotion`, `../style`; no network).
   - Python: copy, generate registry, typecheck with temp tsconfig, lock, restore in `finally`.
   - Tests: a valid sample component renders in stills; a broken one returns compiler errors and the committed registry is unchanged afterwards.
   - _Requirements: 11.1–11.3_
+  - Notes (2026-11-17):
+    - `tools/components.py` + `tests/test_components.py`. `render_video` checks the component source before any job (missing file, imports outside the contract, network calls) and returns `path: message` errors. The job then takes the engine lock, installs and typechecks; TypeScript errors come back as `components/<File>.tsx(line,col): error TS...`.
+    - Additions to the task text: `engine/src/custom/style.ts` re-exports `../style` (components run from `custom/job/`, so the contract path `../style` needs it); `render.mjs` emits a `bundled` event and the lock is freed then, so it is held only while bundling. Every render takes it, not only those with components.
+    - Verified: engine `tsc` exit 0; `tests/test_components.py` 12 passed; full suite 260 passed (was 247). I looked at a still of the sample component.
 
-- [ ] 17. User scripts (P1)
+- [x] 17. User scripts (P1)
   - Read: design §13.
   - New `src/argus/tools/scripts_runner.py`, tool `run_script`; `scripts/README.md`; `scripts/frame_stats.py`.
   - Tests: list shows summary and args; run returns JSON; bad name rejected; timeout reported.
   - _Requirements: 14.1–14.3_
+  - Notes (2026-11-17):
+    - `tests/test_scripts_runner.py`: 13 passed. Covers listing (and that listing does not run a script), a JSON result, a script's `images` returned as pictures, 7 bad names, an unknown name, the timeout, and the server registration.
+    - Three choices beyond the design text. The script runs as `python -P`, so a user file named `json.py` cannot shadow the standard library. The run goes through the `scripts_runner` job, because the 120 s default timeout is longer than the 20 s inline budget. A name that exists in both folders runs the copy in `scripts/`.
+    - Checked against the real config (temporary output and user folders): the listing, `frame_stats` on a white image (brightness 1.0), a user script named `json` that still imports the standard library, and the MCP schema (`name` and `args` optional, `timeout_s` 120).
+    - Verified: full suite 273 passed (was 260).
+    - Not done here: the `argus` server in Kiro must be reloaded in the MCP Server view before `run_script` appears there. The banner still says 15 tools; task 18 fixes it.
 
 - [ ] 18. Remove superseded v1 tools (P1)
   - Read: design §16. Only after tasks 10 and 14 tests are green.

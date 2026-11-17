@@ -86,10 +86,32 @@ After their "ok", carry the video to the end on your own.
 
 - Keep the speaker's meaning and voice. Remove stumbles, false starts, repeated takes
   (keep the best take, usually the last) and long pauses.
-- Build the cut list from the transcript words. Check cut points with `get_frames` so
-  a cut does not land mid-gesture or mid-blink.
-- Add captions that follow the clips, punch-in zooms on key phrases, b-roll or graphics
-  where the speaker describes something visual, a music bed, and a cover frame.
+- Run `watch_video` once on the recording. It returns `words` (`[word, start, end]` in
+  seconds of the recording, listed for up to 1200 words; for a longer talk open
+  `words_path`, a list of `{w, s, e}`) and `segments` (sentences). For English and
+  Russian the fillers, stumbles and repeats are kept in the words. In other
+  languages Whisper may tidy them away, so a stumble can be missing from the words:
+  say so to the user.
+- Build the cut list from the words: kept ranges `[in, out]` in seconds of the
+  recording. Cut in the pause between words, never inside a word. Check each cut with
+  `get_frames` on the frames just before `out` and just after the next `in`, so a cut
+  does not land mid-gesture or mid-blink.
+- Write the plan: one entry in `clips` per kept range, all with the same `src`, laid back
+  to back (`at` of a clip = `at` + `out` - `in` of the one before). Plan `duration`
+  then equals the kept ranges together. `zoom` keys are in seconds from the start of
+  that clip on the timeline; put a punch-in on a key phrase. `clean_audio: true`
+  filters a noisy room (high-pass and noise reduction).
+- Captions: `captions.words = {"source": <words_path>, "remap": "clips"}`. ARGUS keeps
+  the words that fall inside the kept ranges and moves them to the new timeline;
+  do not retype or shift words by hand. Add `"media": <recording>` when the first clip
+  is not the recording.
+- Graphics where the speaker describes something visual: `overlay: true` scenes or
+  custom components, drawn over the clips. B-roll: another clip with `muted: true`
+  placed inside a talking clip; later clips are drawn above earlier ones and the
+  speaker's voice goes on underneath. Add a music bed with `duck` below 1: the music
+  lowers while the caption words are spoken.
+- Check stills at the cuts and at every zoom, then render the final, run `qa_verify_video`
+  and export with a cover frame from a moment the speaker looks at the camera.
 
 ## 8. Review your own work before the user sees it
 

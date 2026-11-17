@@ -1,4 +1,6 @@
 node_modules/
+src/custom/job/
+.render.lock
 .remotion/
 *.log
 test_out*

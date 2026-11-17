@@ -255,6 +255,12 @@ export type Clip = {
   muted?: boolean;
   zoom?: ZoomKey[];
   clean_audio?: boolean;
+  /**
+   * Engine props only, not in the plan (`plan.py` has no such field). Set by the render for a
+   * clip without `out`: seconds the clip lasts (source length minus `in`). A clip with neither
+   * `out` nor `length` runs until the end of the video.
+   */
+  length?: number;
 };
 
 /** `words` file path, inline words, or a transcript to move onto the kept clips. */

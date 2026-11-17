@@ -20,7 +20,7 @@ except ImportError:  # pragma: no cover
 from . import __version__, jobs
 from .config import CONFIG
 from .media_out import Image
-from .tools import assemble, beats, export, memory, qa, render, sfx, studio, subtitles, timeline, watch
+from .tools import assemble, beats, export, memory, qa, render, scripts_runner, sfx, studio, subtitles, timeline, watch
 
 mcp = MCPServer(
     "Argus",
@@ -227,9 +227,12 @@ def watch_video(
     labelled `mm:ss.s  #shot`) and a JSON summary: `shots` (every cut found over the
     whole file as [start, end] seconds), `frames` (time, file path and shot number of
     each frame, full resolution), `sound_events` (times of sharp sounds with strength
-    0..1), `segments` (spoken text with timecodes) and `words_path` (a words.json file
-    with `{w, s, e}` per word, stumbles and repeats kept). The transcript needs
-    faster-whisper; without it the summary says so in `transcript_note`.
+    0..1), `segments` (spoken text with timecodes), `words` (every spoken word as
+    `[word, start, end]` in seconds of the file, for up to 1200 words) and `words_path`
+    (a words.json file with `{w, s, e}` per word: the file to give a plan as
+    `captions.words.source`). Whisper is asked to keep fillers, stumbles and repeats
+    for English and Russian; for other languages it may tidy them away. The transcript
+    needs faster-whisper; without it the summary says so in `transcript_note`.
     `project` is a short name for the work (it decides where the cache and files
     live; use the same name for the whole video). `max_frames` is the frame budget
     (default 24, up to 120): shot starts first, an extra frame in long shots, evenly
@@ -302,10 +305,17 @@ def render_video(
     `<project>/renders/<name>-<mode>-<format>.mp4` (stills: `.jpg`); `name` defaults to
     "video".
 
+    Custom scenes: when no built-in scene fits, write a React component into
+    `<project>/components/<Name>.tsx` (default export; may import only `react`, `remotion`,
+    `../style` and other files of that folder; no network) and use it as
+    `{"kind": "custom", "at": 2, "component": "<Name>", "props": {...}}`. It is
+    typechecked on every render. Compiler errors come back as `{"valid": false, "errors":
+    ["components/<Name>.tsx(4,9): error TS...", ...]}` and nothing is rendered.
+
     An invalid plan, a missing file or bad `times` returns `{"valid": false, "errors":
     ["scenes[3].kind: ...", ...]}` with every problem as `path: message`, and nothing is
     rendered. `warnings` in the result list what the plan asked for that the engine does
-    not draw yet.
+    not draw or apply yet, and risky code in custom components.
     """
     return render.render_video(
         plan, project, mode=mode, times=times, compare=compare, format=format, name=name,
@@ -510,6 +520,28 @@ def learn_and_record_memory(
     close to their words. technical_rule: how you will apply it from now on.
     """
     return memory.learn_and_record_memory(lesson_title, user_directive, technical_rule)
+
+
+@mcp.tool()
+def run_script(
+    name: str | None = None,
+    args: dict | None = None,
+    timeout_s: float = scripts_runner.DEFAULT_TIMEOUT_S,
+) -> list[str | Image] | dict:
+    """Run one of the user's own Python scripts, or list them when `name` is left out.
+
+    Call it without `name` to see the scripts in the repo's `scripts/` folder and in
+    `ARGUS_SCRIPTS_DIR`: each has a `summary` and an `args` example to copy. Call it with
+    `name` (lowercase letters, digits, underscore) and `args` (a JSON object) to run one.
+    The script's JSON result comes back as `result`. Set `args["project"]` to run inside
+    that project's folder, so relative paths in `args` resolve there; without it the
+    script runs in the output folder. A result may list `images` (file paths): they come
+    back as pictures. `timeout_s` (default 120, from 1 to 3600) stops a script that runs
+    too long; the result then has `timed_out: true`. A script that runs longer than about
+    20 seconds continues in the background: call `job_status` with the `job_id`.
+    Scripts run with the user's own rights, so run only scripts the user wrote or trusts.
+    """
+    return scripts_runner.run_script(name, args, timeout_s=timeout_s)
 
 
 @mcp.tool()
