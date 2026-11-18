@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "argus-studio"
 # single source of truth: src/argus/__init__.py -> __version__
 dynamic = ["version"]
-description = "ARGUS — MCP server for producing viral vertical videos: Veo 3.1 clips, mastered AI voiceover, karaoke subtitles, acoustic timeline and QA."
+description = "ARGUS — MCP server for producing viral vertical videos: Veo 3.1 clips, voiceover with word timings, a Remotion render engine, QA and export."
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [{ name = "ARGUS contributors" }]

@@ -1,10 +1,11 @@
 """argus doctor — one-command environment self-check.
 
 Verifies everything the pipeline needs before a new user hits
-"ничего не работает": python/ffmpeg/ffprobe (incl. a live libass subtitle
-probe), Node.js + npx, engine/node_modules, edge-tts (installed + service
-alive), playwright+chromium (optional unless flow mode), the Gemini key and
-the optional ElevenLabs key (status only, never an error) and OMNIFRAME_OUTPUT_DIR.
+"ничего не работает". Critical: python, ffmpeg, ffprobe, Node.js + npx, the engine
+(node_modules with remotion and the renderer/bundler packages), numpy, Pillow and
+OMNIFRAME_OUTPUT_DIR. Optional (a warning, never an error): faster-whisper, edge-tts
+(installed + service alive), playwright+chromium (critical only in flow mode), the
+Gemini key and the ElevenLabs key.
 
 Console:  argus-doctor [--json] [--flow] [--no-live]
 MCP:      doctor(check_flow=False) -> the same report as JSON.
@@ -28,27 +29,17 @@ from . import __version__
 from .config import ArgusConfig, load_config
 
 # ids whose failure flips the exit code / report["ok"]; warnings never do
-CRITICAL_IDS = frozenset({"python", "ffmpeg", "ffprobe", "libass", "node", "npx", "engine", "edge_tts", "output_dir"})
+CRITICAL_IDS = frozenset({"python", "ffmpeg", "ffprobe", "node", "npx", "engine", "numpy", "pillow", "output_dir"})
+
+# packages the renderer needs inside engine/node_modules (engine/package.json)
+ENGINE_PACKAGES = ("remotion", "@remotion/renderer", "@remotion/bundler")
 
 HINT_NODE = "установи Node.js 18+: winget install OpenJS.NodeJS.LTS (или https://nodejs.org)"
-HINT_FFMPEG = "поставь full-сборку с libass: winget install Gyan.FFmpeg (или choco install ffmpeg, или https://www.gyan.dev/ffmpeg/builds/)"
-HINT_EDGE = "pip install edge-tts"
+HINT_FFMPEG = "поставь ffmpeg: winget install Gyan.FFmpeg (или choco install ffmpeg, или https://www.gyan.dev/ffmpeg/builds/)"
+HINT_CORE = 'pip install -e .  (numpy и Pillow входят в основные зависимости)'
+HINT_EDGE = 'pip install edge-tts  (или pip install -e ".[voice]")'
+HINT_ASR = 'pip install -e ".[asr]"  (faster-whisper)'
 HINT_FLOW = 'pip install -e ".[flow]" && playwright install chromium'
-
-# minimal valid .ass for the libass probe
-_PROBE_ASS = """[Script Info]
-ScriptType: v4.00+
-PlayResX: 320
-PlayResY: 240
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,0:00:00.50,Default,,0,0,0,,привет
-"""
 
 # 1-word live synthesis probe for edge-tts (runs in a child python, 15s budget)
 _EDGE_PROBE = (
@@ -107,29 +98,32 @@ def check_ffprobe(cfg: ArgusConfig) -> dict:
     return _exe_status("ffprobe", "ffprobe", cfg.ffprobe, "ARGUS_FFPROBE")
 
 
-def check_libass(cfg: ArgusConfig) -> dict:
-    """0.5s trial render with an .ass subtitle — proves ffmpeg is built with libass."""
-    exe = _which(cfg.ffmpeg)
-    if not exe:
-        return _check("libass", "ffmpeg libass", "fail", "ffmpeg не найден", HINT_FFMPEG)
+def _check_module(cid: str, label: str, module: str, missing_status: str, hint: str, note: str = "") -> dict:
+    """Import `module` in a child python: ok when it loads, `missing_status` otherwise."""
     try:
-        with tempfile.TemporaryDirectory() as td:
-            (Path(td) / "probe.ass").write_text(_PROBE_ASS, encoding="utf-8")
-            p = _run(
-                [exe, "-hide_banner", "-v", "error",
-                 "-f", "lavfi", "-i", "color=c=black:s=320x240:d=0.5:r=30",
-                 "-vf", "ass=probe.ass", "-frames:v", "15", "-f", "null", "-"],
-                timeout=30, cwd=td,
-            )
+        p = _run([sys.executable, "-c", f"import {module}"], timeout=30)
     except (OSError, subprocess.TimeoutExpired) as e:
-        return _check("libass", "ffmpeg libass", "fail", str(e), HINT_FFMPEG)
-    if p.returncode == 0:
-        return _check("libass", "ffmpeg libass", "ok", "пробный рендер субтитра (.ass) прошёл")
-    err = (p.stderr or p.stdout or "").strip().splitlines()
-    err = err[-1] if err else "неизвестная ошибка"
-    if "filter" in err.lower() and "ass" in err.lower():
-        return _check("libass", "ffmpeg libass", "fail", err, "ffmpeg без libass; " + HINT_FFMPEG)
-    return _check("libass", "ffmpeg libass", "fail", err, HINT_FFMPEG)
+        return _check(cid, label, missing_status, str(e), hint)
+    if p.returncode != 0:
+        detail = "модуль не установлен" + (f"; {note}" if note else "")
+        return _check(cid, label, missing_status, detail, hint)
+    return _check(cid, label, "ok", "установлен")
+
+
+def check_numpy() -> dict:
+    return _check_module("numpy", "numpy", "numpy", "fail", HINT_CORE)
+
+
+def check_pillow() -> dict:
+    return _check_module("pillow", "Pillow", "PIL", "fail", HINT_CORE)
+
+
+def check_faster_whisper() -> dict:
+    # опциональный: без него watch_video не отдаёт транскрипт (кадры и звуковые события работают)
+    return _check_module(
+        "faster_whisper", "faster-whisper", "faster_whisper", "warn", HINT_ASR,
+        "опционально: без него watch_video не отдаёт транскрипт",
+    )
 
 
 def _node_version(exe: str) -> dict:
@@ -174,10 +168,14 @@ def check_engine() -> dict:
             "engine", "engine/ (Remotion)", "fail", f"движок не найден: {eng}",
             "склонируй репо argus-studio или задай ARGUS_ENGINE_DIR на папку engine/",
         )
-    if not (eng / "node_modules").exists():
+    install = f"cd {eng} && npm install --no-audit --no-fund"
+    modules = eng / "node_modules"
+    if not modules.exists():
+        return _check("engine", "engine/ (Remotion)", "fail", f"нет node_modules: {eng}", install)
+    missing = [name for name in ENGINE_PACKAGES if not (modules / name).is_dir()]
+    if missing:
         return _check(
-            "engine", "engine/ (Remotion)", "fail", f"нет node_modules: {eng}",
-            f"cd {eng} && npm install --no-audit --no-fund",
+            "engine", "engine/ (Remotion)", "fail", f"нет пакетов рендера: {', '.join(missing)} ({eng})", install,
         )
     return _check("engine", "engine/ (Remotion)", "ok", str(eng))
 
@@ -210,9 +208,10 @@ def check_edge_tts(live: bool) -> dict:
     try:
         p = _run([sys.executable, "-c", "import edge_tts"], timeout=30)
     except (OSError, subprocess.TimeoutExpired) as e:
-        return _check("edge_tts", "edge-tts", "fail", str(e), HINT_EDGE)
+        return _check("edge_tts", "edge-tts", "warn", str(e), HINT_EDGE)
     if p.returncode != 0:
-        return _check("edge_tts", "edge-tts", "fail", "модуль не установлен", HINT_EDGE)
+        # опциональный: бесплатный голос; без него есть Gemini и ElevenLabs по ключам
+        return _check("edge_tts", "edge-tts", "warn", "модуль не установлен; опционально: бесплатный голос", HINT_EDGE)
     if not live:
         return _check("edge_tts", "edge-tts", "ok", "установлен (live-проба пропущена)")
     alive, err = probe_edge()
@@ -296,10 +295,12 @@ def run_checks(flow: bool | None = None, live: bool = True, config: ArgusConfig 
         check_python(),
         check_ffmpeg(cfg),
         check_ffprobe(cfg),
-        check_libass(cfg),
         check_node(),
         check_npx(),
         check_engine(),
+        check_numpy(),
+        check_pillow(),
+        check_faster_whisper(),
         check_edge_tts(live),
         check_playwright(flow),
         check_gemini_key(cfg),

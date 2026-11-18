@@ -273,18 +273,29 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
     - Verified: full suite 273 passed (was 260).
     - Not done here: the `argus` server in Kiro must be reloaded in the MCP Server view before `run_script` appears there. The banner still says 15 tools; task 18 fixes it.
 
-- [ ] 18. Remove superseded v1 tools (P1)
+- [x] 18. Remove superseded v1 tools (P1)
   - Read: design §16. Only after tasks 10 and 14 tests are green.
   - Delete `tools/kinetic.py`, `tools/assemble.py`, `tools/subtitles.py`, `tools/timeline.py`, `src/argus/fonts/` and their tool wrappers; move any helper still needed.
   - `doctor.py`: checks per design §15 (drop libass; add numpy, Pillow, engine renderer deps; optional faster-whisper). Update `tests/test_doctor.py`, `tests/test_offline_tools.py`.
   - `server.py` banner: real tool count computed, not hardcoded.
   - Verify: pytest green; engine typecheck; `grep` finds no references to removed tools in `src`, `tests`, `README*`, `STARTER.md`, `INSTALL.md`, `docs/`.
   - _Requirements: 15.3, 17.2_
+  - Notes (2026-11-17):
+    - A checkpoint commit (`aada601`, tasks 14-17) was made before any deletion, so the removal can be undone with git.
+    - No helper had to move: `engine_dir`, `_find_browser` and the built-in SFX files were already in `tools/render.py` (task 10), and the caption helpers in `captions.py` (task 7). `server.py` lost its four wrappers; `tools/__init__.py` imports only `memory` and `qa`.
+    - `doctor.py` follows design §15: critical are python, ffmpeg, ffprobe, node, npx, the engine (now also `remotion`, `@remotion/renderer`, `@remotion/bundler` inside `node_modules`), numpy, Pillow and the output dir. faster-whisper and edge-tts are warnings (edge-tts used to be critical; §15 lists it as optional). `startup_banner()` in `server.py` gives the real tool count.
+    - Tests: `test_offline_tools.py` lost the subtitles, timeline and assemble tests; `test_captions.py` the re-export test; `test_render.py` now checks that the server registers exactly the 17 v2 tools and that the banner count matches; `test_doctor.py` covers numpy/Pillow (critical), faster-whisper/edge-tts (warning) and a missing renderer package.
+    - README, README.ru, STARTER and `docs/TUTORIAL.md` got the minimum edits so they name no removed tool; task 21 still rewrites them. A line of `docs/BUILD_LOG.md` (task 10) that named `kinetic.py` was reworded. Comments in `engine/src/{Main.tsx,types.ts,sfx.ts}` no longer promise `kinetic.py`; the engine still reads the v1 props (`theme`, `voice`, `music`, `sfx_list`), which `engine/sample-props.json` uses.
+    - Verified: engine `tsc` exit 0; full suite 290 passed. One earlier full run failed a clips test while a second pytest ran on the same engine folder; it passed alone and in the clean rerun.
 
-- [ ] 19. End-to-end suite and CI (P1)
+- [x] 19. End-to-end suite and CI (P1)
   - All three scenario tests from design §17 green locally.
   - `.github/workflows/ci.yml`: keep Python matrix and typecheck; add engine e2e job if it runs in < ~10 min.
   - _Requirements: 17.1_
+  - Notes (2026-11-17):
+    - Local: `pytest tests/test_scenarios.py -v --durations=0` → 3 passed in 181.48 s (footage 86.6 s, reference 47.6 s, idea 45.8 s). The log was read by Kiro before it was deleted.
+    - CI: new job `e2e` in `.github/workflows/ci.yml` (ubuntu-latest, `timeout-minutes: 15`, Python 3.14, ffmpeg, Node 20, `npm ci` in `engine/`, `pytest tests/test_scenarios.py`). The Python matrix and the `engine` typecheck job are unchanged.
+    - Not verified: a run of the `e2e` job on GitHub Actions, so its duration and result are unknown. Linux is untested: `_find_browser` returns nothing there, so Remotion uses its own browser. If `engine/node_modules` were missing, the tests would skip and the job would still pass; check the log for `3 passed`.
 
 - [ ] 20. Feature freeze and dogfooding (P1, Nov 30)
   - Author produces two real TikToks from references and one footage edit in Kiro.

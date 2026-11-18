@@ -6,7 +6,6 @@ import dataclasses
 import json
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -17,7 +16,7 @@ from argus import jobs  # noqa: E402
 from argus.config import CONFIG  # noqa: E402
 from argus.ffmpeg import detect_pauses, measure_loudness, run_ffmpeg, stream_info  # noqa: E402
 from argus.media_out import Image  # noqa: E402
-from argus.tools import assemble, memory, qa, subtitles, timeline  # noqa: E402
+from argus.tools import memory, qa  # noqa: E402
 from argus.tools.render import finalize_video  # noqa: E402
 
 
@@ -56,70 +55,6 @@ def master_video(tmp_path_factory: pytest.TempPathFactory) -> Path:
         str(path),
     ])
     return path
-
-
-# ---------------------------------------------------------------- subtitles
-
-def test_pop_subtitles_builds_ass(tmp_path: Path) -> None:
-    ts = tmp_path / "ts.json"
-    ts.write_text(json.dumps([
-        {"word": "Брат", "start": 0.0, "end": 0.18},
-        {"word": "смотри", "start": 0.18, "end": 0.45},
-        {"word": "{ВАЖНО}", "start": 0.45, "end": 0.72},
-    ]), encoding="utf-8")
-    out = tmp_path / "subs.ass"
-    stats = subtitles.build_pop_subtitles(ts, out, fps=30.0)
-
-    text = out.read_text(encoding="utf-8")
-    assert stats["words"] == 3
-    assert stats["style"] == "clean"
-    assert "PlayResX: 1080" in text and "PlayResY: 1920" in text
-    # clean default: white text, thin outline, no yellow anywhere
-    assert "&H00FFFFFF" in text and "&H0066E0FF" not in text
-    assert text.count("Dialogue:") == 3
-    # frame quantization: 0.18s * 30fps = frame 5.4 -> frame 5 -> 0.17
-    assert "0:00:00.17" in text
-    # unsafe braces are neutralized
-    assert "(ВАЖНО)" in text
-
-
-def test_subtitles_styles(tmp_path: Path) -> None:
-    ts = tmp_path / "ts.json"
-    ts.write_text(json.dumps([{"word": "тест", "start": 0.0, "end": 0.3}]), encoding="utf-8")
-    pop = tmp_path / "pop.ass"
-    subtitles.build_pop_subtitles(ts, pop, style="pop", fps=30.0)
-    pop_text = pop.read_text(encoding="utf-8")
-    assert "&H0066E0FF" in pop_text and "Arial Black" in pop_text
-    outline = tmp_path / "outline.ass"
-    subtitles.build_pop_subtitles(ts, outline, style="outline", fps=30.0)
-    assert "&H00FFFFFF" in outline.read_text(encoding="utf-8")
-    with pytest.raises(ValueError):
-        subtitles.build_pop_subtitles(ts, tmp_path / "x.ass", style="neon")
-
-
-def test_highlight_colour_parsing() -> None:
-    assert subtitles.hex_to_ass("#FFE066") == "&H0066E0FF"
-    assert subtitles.hex_to_ass("&H00FFFFFF") == "&H00FFFFFF"
-    with pytest.raises(ValueError):
-        subtitles.hex_to_ass("yellow")
-
-
-# ----------------------------------------------------------------- timeline
-
-def test_timeline_snaps_cuts_to_pauses(speech_like_audio: Path) -> None:
-    result = timeline.calculate_acoustic_timeline(
-        speech_like_audio,
-        "First sentence. Second one here. Third and final sentence!",
-        target_scene_count=3,
-    )
-    assert result["scene_count"] == 3
-    assert result["pauses_found"] >= 2
-    assert result["snapped_ratio"] >= 0.5  # cuts found real silences
-    cuts = result["cut_points"]
-    assert cuts == sorted(cuts)
-    # a cut must not land inside a tone block (1.2s each, silences between)
-    for scene in result["scenes"]:
-        assert scene["end"] > scene["start"]
 
 
 # ----------------------------------------------------------------------- qa
@@ -282,42 +217,6 @@ def test_qa_tool_returns_summary_and_images_through_the_job(qa_output: Path, mon
     images = [item for item in out[1:] if isinstance(item, Image)]
     assert summary["passed"] is True
     assert len(images) == len(summary["images"]) == 2
-
-
-# ------------------------------------------------------------------ assemble
-
-def test_assemble_joins_clips(tmp_path: Path, speech_like_audio: Path) -> None:
-    clip_a = tmp_path / "a.mp4"
-    clip_b = tmp_path / "b.mp4"
-    for clip in (clip_a, clip_b):
-        _ffmpeg([
-            "-f", "lavfi", "-i", "testsrc2=size=720x1280:rate=30:duration=1",
-            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo:d=1",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(clip),
-        ])
-    out = tmp_path / "master.mp4"
-    # async contract: call returns immediately with a status file; the detached
-    # worker finishes and flips state to "done"
-    report = assemble.assemble_master_video(
-        [str(clip_a), str(clip_b)], str(speech_like_audio), str(out)
-    )
-    assert report["state"] == "running"
-    status_path = Path(report["status_file"])
-    assert status_path.exists()
-
-    deadline = time.time() + 60
-    state, status = "running", {}
-    while time.time() < deadline:
-        status = json.loads(status_path.read_text(encoding="utf-8"))
-        state = status.get("state")
-        if state in ("done", "error"):
-            break
-        time.sleep(0.5)
-    assert state == "done", status
-    assert out.exists()
-    info = stream_info(out)
-    assert f"{info.width}x{info.height}" == "1080x1920"
-    assert info.duration > 1.9  # two 1s clips joined
 
 
 # ------------------------------------------------------------------- memory

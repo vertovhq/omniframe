@@ -1,8 +1,7 @@
 """ARGUS MCP server.
 
-Exposes the vertical-video production pipeline as MCP tools:
-Veo clips, mastered voiceover, karaoke subtitles, acoustic timeline,
-master assembly and QA verification.
+Exposes the video production pipeline as MCP tools: watching footage, voiceover,
+Veo clips, rendering, QA, export and the user's own scripts.
 """
 
 from __future__ import annotations
@@ -20,7 +19,7 @@ except ImportError:  # pragma: no cover
 from . import __version__, jobs
 from .config import CONFIG
 from .media_out import Image
-from .tools import assemble, beats, export, memory, qa, render, scripts_runner, sfx, studio, subtitles, timeline, watch
+from .tools import beats, export, memory, qa, render, scripts_runner, sfx, studio, watch
 
 mcp = MCPServer(
     "Argus",
@@ -323,90 +322,6 @@ def render_video(
 
 
 @mcp.tool()
-def build_pop_subtitles(
-    timestamps_json_path: str,
-    output_ass_path: str,
-    style: str = "clean",
-    highlight_color: str = "#FFE066",
-    accent: list[str] | None = None,
-    accent_color: str = "#4DA3FF",
-) -> dict:
-    """Generate frame-accurate karaoke subtitles (.ass).
-
-    Input: JSON list of {word, start, end} (seconds). One word per cue,
-    centered at eye level (MarginV 420), bold wide font.
-    Styles: "clean" (default - white text, soft shadow, modern), "outline"
-    (white with thick black outline, classic shorts), "pop" (legacy yellow).
-    accent: list of words ("word", "prefix*" or "*" for all) tinted with
-    accent_color - same semantics as the montazh skills' subs.accent.
-    """
-    return subtitles.build_pop_subtitles(
-        timestamps_json_path, output_ass_path, style=style, highlight_color=highlight_color,
-        accent=accent, accent_color=accent_color,
-    )
-
-
-@mcp.tool()
-def calculate_acoustic_timeline(
-    audio_path: str,
-    script_text: str,
-    target_scene_count: int = 7,
-) -> dict:
-    """Calculate scene cut points snapped to real speech pauses.
-
-    Cuts never land mid-word: candidate cuts are snapped to the nearest
-    silence centre detected by ffmpeg. Returns scenes with sentence text.
-    Works fully offline (ffmpeg only).
-    """
-    return timeline.calculate_acoustic_timeline(audio_path, script_text, target_scene_count)
-
-
-@mcp.tool()
-def assemble_master_video(
-    clips: list[str],
-    voiceover: str,
-    output_path: str,
-    subtitles_ass: str | None = None,
-    music: str | None = None,
-    music_gain_db: float = -18.0,
-) -> dict:
-    """Assemble the final master video.
-
-    Normalizes every clip to the master grid, concatenates in order,
-    mixes the voiceover (plus optional ducked music bed), loudness-normalizes
-    to -14 LUFS and burns the karaoke subtitles. Works offline (ffmpeg only).
-    """
-    return assemble.assemble_master_video(
-        clips,
-        voiceover,
-        output_path,
-        subtitles_ass=subtitles_ass,
-        music=music,
-        music_gain_db=music_gain_db,
-    )
-
-
-@mcp.tool()
-def build_kinetic_video(plan: dict, output_path: str, preview: bool = False) -> dict:
-    """Render a vertical kinetic-typography video from pure graphics (no AI generation).
-
-    plan: {"theme": "dark"|"light", "voice": optional audio path,
-    "words": optional [{w,s,e}] word timings, "scenes": [{at, kind, ...}],
-    "hud": optional overlay over all scenes {at, until, rows: [{label, value}],
-    pos: "top"|"bottom", accent_changes: [{at, row, value}]} - a semi-transparent
-    dark plate with monospace values; after an accent_change the row's value
-    swaps and is accent-highlighted}.
-    Scene kinds: words (word-by-word text), title (kicker+headline),
-    card (media with caption), big (one huge word), counter (number counts up),
-    act (chapter), cta (end card with handle). Modern clean look - no yellow.
-    preview=True renders at half resolution.
-    """
-    from .tools.kinetic import build_kinetic_video as impl
-
-    return impl(plan, output_path, preview=preview)
-
-
-@mcp.tool()
 def qa_verify_video(
     video_path: str,
     format: str | None = None,
@@ -548,12 +463,13 @@ def run_script(
 def doctor(check_flow: bool = False) -> dict:
     """One-command environment self-check (same report as the argus-doctor CLI).
 
-    Verifies: python >=3.11; ffmpeg/ffprobe on PATH (or ARGUS_FFMPEG/ARGUS_FFPROBE)
-    with a live libass subtitle probe; Node >=18 + npx; engine/node_modules
-    (hint: cd engine && npm install); edge-tts installed with a live 1-word
-    synthesis probe (15s timeout, retried); playwright+chromium (marked optional
-    unless check_flow=True); Gemini key and optional ElevenLabs key presence
-    (status only, never an error); OMNIFRAME_OUTPUT_DIR exists/created.
+    Critical (a failure makes `ok` false): python >=3.11; ffmpeg/ffprobe on PATH (or
+    ARGUS_FFMPEG/ARGUS_FFPROBE); Node >=18 + npx; the engine (engine/node_modules with
+    remotion, @remotion/renderer and @remotion/bundler; hint: cd engine && npm install);
+    numpy and Pillow; OMNIFRAME_OUTPUT_DIR exists/created.
+    Optional (a warning only): faster-whisper (transcripts), edge-tts (free voice, with a
+    live 1-word synthesis probe), playwright+chromium (critical when check_flow=True),
+    Gemini key and ElevenLabs key presence.
     Returns JSON: {checks, critical_failures, ok}.
     """
     from .doctor import run_checks
@@ -561,15 +477,20 @@ def doctor(check_flow: bool = False) -> dict:
     return run_checks(flow=True if check_flow else None)
 
 
-def main() -> None:
-    """Run the MCP server over stdio."""
+def startup_banner() -> str:
+    """One status line for stderr; the tool count is read from the registered tools."""
     banner = (
-        f"[ARGUS] Studio v{__version__} АКТИВЕН | 15 тулз | "
-        f"{CONFIG.width}x{CONFIG.height}@{CONFIG.fps:.0f} | вывод: {Path(CONFIG.output_dir)}"
+        f"[ARGUS] Studio v{__version__} ACTIVE | {len(_registered_tool_names())} tools | "
+        f"{CONFIG.fps:.0f} fps | output: {Path(CONFIG.output_dir)}"
     )
     if not CONFIG.gemini_api_key and not CONFIG.elevenlabs_api_key:
-        banner += " | API keys: MISSING (generation tools disabled, offline tools OK)"
-    print(banner, file=sys.stderr)
+        banner += " | API keys: MISSING (paid providers disabled, offline tools OK)"
+    return banner
+
+
+def main() -> None:
+    """Run the MCP server over stdio."""
+    print(startup_banner(), file=sys.stderr)
     try:
         jobs.cleanup_old_jobs()
     except Exception as exc:  # housekeeping must never stop the server

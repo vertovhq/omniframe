@@ -22,8 +22,8 @@ as the bundle is built. Compile errors come back as `{"valid": false, "errors": 
 Clips (`tools/media_prep.py`): before the node step the job swaps each clip's file for a
 proxy in `<project>/cache/proxies/` when it is variable-rate, not H.264, or needs `clean_audio`.
 
-This module also holds the helpers that `tools/kinetic.py` shares until task 18 removes
-it: `engine_dir`, `_find_browser` and the default sound-effect synthesis.
+This module also holds the engine helpers: `engine_dir`, `_find_browser` and the synthesis
+of the built-in sound files a plan may name (`sfx/whoosh.mp3`, `sfx/pop.mp3`, `sfx/hit.wav`).
 """
 
 from __future__ import annotations
@@ -86,7 +86,7 @@ MEDIA_DIR = "m"                # inside the public dir; plan files are linked he
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 
-# ------------------------------------------------------------------ engine helpers (shared with kinetic.py)
+# ------------------------------------------------------------------ engine helpers
 
 def _ensure_default_sfx() -> Path:
     """Synthesize the default whoosh/pop/hit set once into engine/public/sfx.

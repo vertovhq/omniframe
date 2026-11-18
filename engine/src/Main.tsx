@@ -77,8 +77,7 @@ type SceneEntry = {
  *
  * Audio (`audio.tsx`): voice, music (volume, ducking under speech, fades) and the plan's
  * `audio.sfx`. The engine adds no sound effects of its own. The v1 props `voice`, `music`
- * and `sfx_list` still work until `tools/kinetic.py` is removed (task 18); the v1 `sfx`
- * flag (automatic sound design) is ignored.
+ * and `sfx_list` are still read, though no tool sends them any more; the v1 `sfx` flag (automatic sound design) is ignored.
  *
  * Custom scenes (`kind: 'custom'`) come from `custom/registry.ts`, generated per render.
  */

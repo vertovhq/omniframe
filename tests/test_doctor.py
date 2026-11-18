@@ -65,23 +65,43 @@ def _mock_run_ok(monkeypatch, node_version: str = "v20.11.1") -> None:
             return SimpleNamespace(returncode=0, stdout="10.2.4\n", stderr="")
         if "-version" in argv:  # ffmpeg/ffprobe -version
             return SimpleNamespace(returncode=0, stdout=f"{cmd[0]} version 7.1-2024", stderr="")
-        if "ass=probe.ass" in argv:  # libass trial render
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
         if cmd[:2] == [sys.executable, "-c"]:
-            return SimpleNamespace(returncode=0, stdout="", stderr="")  # import edge_tts / playwright
+            return SimpleNamespace(returncode=0, stdout="", stderr="")  # import numpy / PIL / edge_tts / ...
         raise AssertionError(f"unexpected probe: {argv}")
 
     monkeypatch.setattr(doctor, "_run", fake_run)
 
 
-def _fake_engine(tmp_path: Path, monkeypatch, *, with_modules: bool = True) -> Path:
+def _fake_engine(tmp_path: Path, monkeypatch, *, with_modules: bool = True, skip: tuple[str, ...] = ()) -> Path:
+    """An engine folder; `with_modules` adds node_modules with the renderer packages except `skip`."""
     eng = tmp_path / "engine"
     eng.mkdir(parents=True, exist_ok=True)
     (eng / "package.json").write_text("{}", encoding="utf-8")
     if with_modules:
         (eng / "node_modules").mkdir(parents=True)
+        for name in doctor.ENGINE_PACKAGES:
+            if name not in skip:
+                (eng / "node_modules" / name).mkdir(parents=True)
     monkeypatch.setenv("ARGUS_ENGINE_DIR", str(eng))
     return eng
+
+
+def _run_failing_import(monkeypatch, module: str) -> None:
+    """Every probe succeeds except `import <module>` in the child python."""
+
+    def fake_run(cmd, timeout=20.0, cwd=None):
+        argv = " ".join(cmd)
+        if cmd[-1] == "--version":
+            return SimpleNamespace(returncode=0, stdout="v20.11.1\n" if "node" in Path(cmd[0]).name else "10.2.4\n", stderr="")
+        if "-version" in argv:
+            return SimpleNamespace(returncode=0, stdout="x version 1", stderr="")
+        if cmd[:2] == [sys.executable, "-c"]:
+            if cmd[2] == f"import {module}":
+                return SimpleNamespace(returncode=1, stdout="", stderr=f"No module named {module}")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        raise AssertionError(f"unexpected probe: {argv}")
+
+    monkeypatch.setattr(doctor, "_run", fake_run)
 
 
 # ------------------------------------------------------------------- happy path
@@ -97,7 +117,10 @@ def test_all_critical_ok(tmp_path, monkeypatch):
     assert report["ok"] is True
     assert report["critical_failures"] == []
     ids = {c["id"] for c in report["checks"]}
-    assert ids == set(doctor.CRITICAL_IDS) | {"playwright", "gemini_key", "elevenlabs_key"}
+    optional = {"faster_whisper", "edge_tts", "playwright", "gemini_key", "elevenlabs_key"}
+    assert ids == set(doctor.CRITICAL_IDS) | optional
+    assert not {i for i in ids if "ass" in i}  # no ASS subtitle check any more
+    assert {"numpy", "pillow"} <= set(doctor.CRITICAL_IDS)
     for c in report["checks"]:
         assert c["status"] in ("ok", "warn")
         if c["status"] == "fail":
@@ -138,8 +161,7 @@ def test_ffmpeg_missing_fails_with_hint(tmp_path, monkeypatch):
     report = doctor.run_checks(flow=False, live=False, config=cfg)
 
     assert report["ok"] is False
-    # libass fails too: its trial render needs ffmpeg to exist
-    assert set(report["critical_failures"]) == {"ffmpeg", "ffprobe", "libass"}
+    assert set(report["critical_failures"]) == {"ffmpeg", "ffprobe"}
     by_id = {c["id"]: c for c in report["checks"]}
     for cid in ("ffmpeg", "ffprobe"):
         assert by_id[cid]["status"] == "fail"
@@ -160,27 +182,43 @@ def test_node_too_old(tmp_path, monkeypatch):
     assert report["ok"] is False and "node" in report["critical_failures"]
 
 
-def test_libass_missing(tmp_path, monkeypatch):
-    def fake_run(cmd, timeout=20.0, cwd=None):
-        argv = " ".join(cmd)
-        if cmd[-1] == "--version":
-            return SimpleNamespace(returncode=0, stdout="v20.11.1\n" if "node" in Path(cmd[0]).name else "10.2.4\n", stderr="")
-        if "-version" in argv:
-            return SimpleNamespace(returncode=0, stdout="ffmpeg version 7.1", stderr="")
-        if "ass=probe.ass" in argv:
-            return SimpleNamespace(returncode=1, stdout="", stderr="No such filter: 'ass'")
-        if cmd[:2] == [sys.executable, "-c"]:
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
-        raise AssertionError(f"unexpected probe: {argv}")
-
-    monkeypatch.setattr(doctor, "_run", fake_run)
+@pytest.mark.parametrize(("module", "check_id"), [("numpy", "numpy"), ("PIL", "pillow")])
+def test_core_python_packages_are_critical(tmp_path, monkeypatch, module, check_id):
+    _run_failing_import(monkeypatch, module)
     _pin_which(monkeypatch, tmp_path)
     _fake_engine(tmp_path, monkeypatch)
     report = doctor.run_checks(flow=False, live=False, config=_make_cfg(tmp_path))
 
-    libass = next(c for c in report["checks"] if c["id"] == "libass")
-    assert libass["status"] == "fail"
-    assert "libass" in libass["hint"]
+    check = next(c for c in report["checks"] if c["id"] == check_id)
+    assert check["status"] == "fail" and "pip install" in check["hint"]
+    assert report["critical_failures"] == [check_id]
+    assert report["ok"] is False
+
+
+@pytest.mark.parametrize(("module", "check_id"), [("faster_whisper", "faster_whisper"), ("edge_tts", "edge_tts")])
+def test_optional_python_packages_only_warn(tmp_path, monkeypatch, module, check_id):
+    _run_failing_import(monkeypatch, module)
+    _pin_which(monkeypatch, tmp_path)
+    _fake_engine(tmp_path, monkeypatch)
+    report = doctor.run_checks(flow=False, live=False, config=_make_cfg(tmp_path))
+
+    check = next(c for c in report["checks"] if c["id"] == check_id)
+    assert check["status"] == "warn" and check["hint"]
+    assert report["critical_failures"] == []
+    assert report["ok"] is True
+
+
+def test_engine_missing_renderer_packages(tmp_path, monkeypatch):
+    _mock_run_ok(monkeypatch)
+    _pin_which(monkeypatch, tmp_path)
+    eng = _fake_engine(tmp_path, monkeypatch, skip=("@remotion/renderer",))
+    report = doctor.run_checks(flow=False, live=False, config=_make_cfg(tmp_path))
+
+    engine = next(c for c in report["checks"] if c["id"] == "engine")
+    assert engine["status"] == "fail"
+    assert "@remotion/renderer" in engine["detail"] and "@remotion/bundler" not in engine["detail"]
+    assert f"cd {eng}" in engine["hint"] and "npm install" in engine["hint"]
+    assert report["critical_failures"] == ["engine"]
 
 
 def test_engine_needs_npm_install(tmp_path, monkeypatch):
@@ -241,8 +279,6 @@ def test_playwright_optional_vs_flow(tmp_path, monkeypatch):
             return SimpleNamespace(returncode=0, stdout="v20.11.1\n" if "node" in Path(cmd[0]).name else "10.2.4\n", stderr="")
         if "-version" in argv:
             return SimpleNamespace(returncode=0, stdout="x version 1", stderr="")
-        if "ass=probe.ass" in argv:
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
         if cmd[:2] == [sys.executable, "-c"]:
             if "import playwright" in cmd[2]:  # playwright отсутствует
                 return SimpleNamespace(returncode=1, stdout="", stderr="No module named playwright")

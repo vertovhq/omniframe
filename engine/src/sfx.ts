@@ -2,7 +2,7 @@ import type {SfxEvent} from './types';
 
 /**
  * Sound effects come only from the plan (`audio.sfx`, and the v1 `sfx_list` that
- * `tools/kinetic.py` still sends). The engine adds none of its own: no whoosh on cuts,
+ * no tool sends any more). The engine adds none of its own: no whoosh on cuts,
  * no pop or hit on scenes. The model decides where a sound goes and which file it is.
  *
  * Merges the given lists, drops events without a usable time or source, fills in the

@@ -10,7 +10,6 @@ from argus.captions import (
     remap_words_to_clips,
 )
 from argus.plan import validate_plan
-from argus.tools import subtitles
 
 
 def _w(word, start, end):
@@ -102,8 +101,3 @@ def test_clean_and_group():
     lines = group_phrases([_w("one", 0, 0.3), _w("two.", 0.3, 0.6), _w("three", 0.6, 0.9)])
     assert [[w["word"] for w in ln] for ln in lines] == [["one", "two."], ["three"]]
 
-
-def test_subtitles_module_still_reexports_helpers():
-    assert subtitles.clean_word_timings is clean_word_timings
-    assert subtitles.group_phrases is group_phrases
-    assert subtitles._load_words is load_words

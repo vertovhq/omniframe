@@ -334,8 +334,8 @@ export type Plan = {
 
 /**
  * What the `Kinetic` composition receives: a plan v2 (`format`, `style` tokens) or the
- * v1 props (`theme`, `accent`) that `tools/kinetic.py` still sends until task 18. With v1
- * props the format is 9:16 and the style is the `theme` preset. `style` may also be a
+ * v1 props (`theme`, `accent`), which no tool sends any more but the Studio's sample props
+ * still use. With v1 props the format is 9:16 and the style is the `theme` preset. `style` may also be a
  * preset name, which is handy in the Studio.
  */
 export type EngineProps = Omit<KineticProps, 'scenes'> &

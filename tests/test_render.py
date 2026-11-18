@@ -22,7 +22,7 @@ from argus import jobs, project  # noqa: E402
 from argus.config import CONFIG  # noqa: E402
 from argus.ffmpeg import probe, stream_info  # noqa: E402
 from argus.media_out import Image  # noqa: E402
-from argus.tools import kinetic, qa, render  # noqa: E402
+from argus.tools import qa, render  # noqa: E402
 
 ENGINE = Path(__file__).resolve().parents[1] / "engine"
 needs_engine = pytest.mark.skipif(
@@ -301,19 +301,34 @@ def test_finalize_without_audio_only_tags(tmp_path: Path) -> None:
     assert info["note"] == "no audio to normalise" and not stream_info(tmp_path / "out.mp4").has_audio
 
 
-# ------------------------------------------------------------------ shared helpers
-
-def test_kinetic_still_shares_the_moved_helpers() -> None:
-    assert kinetic._find_browser is render._find_browser
-    assert kinetic.engine_dir is render.engine_dir
-    assert kinetic._ensure_default_sfx is render._ensure_default_sfx
-    assert kinetic.DEFAULT_SFX == render.DEFAULT_SFX
-
+# ------------------------------------------------------------------ server wiring
 
 def test_server_registers_render_video() -> None:
     from argus import server
 
     assert "render_video" in server._registered_tool_names()
+
+
+REGISTERED_TOOLS = {
+    "studio_guide", "job_status", "generate_veo_clip", "flow_login", "synthesize_voiceover",
+    "voice_options", "watch_video", "get_frames", "render_video", "qa_verify_video",
+    "export_package", "calculate_beat_grid", "search_sfx", "download_sfx",
+    "learn_and_record_memory", "run_script", "doctor",
+}
+
+
+def test_server_registers_exactly_the_v2_tools() -> None:
+    """A tool that is added or removed shows up here; the v1 tools are gone."""
+    from argus import server
+
+    assert set(server._registered_tool_names()) == REGISTERED_TOOLS
+
+
+def test_startup_banner_counts_the_registered_tools() -> None:
+    from argus import server
+
+    count = len(server._registered_tool_names())
+    assert f"| {count} tools |" in server.startup_banner()
 
 
 # ------------------------------------------------------------------ engine e2e

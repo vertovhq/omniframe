@@ -13,34 +13,39 @@
 ARGUS assembles 1080×1920 clips from anything: Veo 3.1 clips via the official Gemini API
 or via your own Google Flow browser session (free monthly credits, no manual cookies),
 or with no AI at all — vertical kinetic typography rendered locally by the bundled
-Remotion engine from a JSON plan. Plus voiceover with voice cloning, frame-accurate
-subtitles, pause-snapped scene cutting, master assembly and QA — all as MCP tools your
-AI assistant can drive.
+Remotion engine from a JSON plan. Plus voiceover with word timings, captions drawn from
+those timings, rendering, QA and export — all as MCP tools your AI assistant can drive.
 
 The monorepo also ships three editing skills («Эпизод», «Мани», «Эссе») that replicate
 personal editing styles from a plan.json — see [`skills/`](skills/README.md) (docs in Russian).
 
 ```
                     ┌─▶ generate_veo_clip (api | flow) ──┐
-prompts ────────┤                                        ├──▶ assemble ──▶ QA ──▶ master
-script ─────────┴─▶ build_kinetic_video (graphics) ─────┘      ▲        (1080×1920, −14 LUFS)
-voice ──▶ TTS / voice clone ──▶ timeline ──▶ subtitles ────────┘
+prompts ────────┤                                        ├──▶ render_video ──▶ QA ──▶ export_package
+script ─────────┴─▶ graphics scenes in the plan ─────────┘      ▲   (9:16 / 16:9, −14 LUFS)
+voice ──▶ synthesize_voiceover (audio + word timings) ──────────┘
 ```
 
-## Tools (10)
+## Tools
 
 | Tool | What it does | Offline |
 |---|---|---|
+| `studio_guide` | Working method, available tools and providers, and the user's saved preferences. Called first in every session | ✅ |
+| `watch_video` | Shots, contact sheets, transcript words and sound events of a video, as images and timecodes | ✅ |
+| `get_frames` | Exact frames of a video as images (optionally cropped) | ✅ |
+| `voice_options` | Voices and providers available now | ✅ |
+| `synthesize_voiceover` | Voice audio plus word timings (edge-tts, Gemini, ElevenLabs), mastered to −14 LUFS | edge-tts needs network |
 | `generate_veo_clip` | Veo 3.1 clip. `provider="api"` — official API (paid; Veo has no free API tier); `provider="flow"` — your flow.google session (free credits, one-time `flow_login`) | — |
 | `flow_login` | One-time Flow login wizard: opens a window, you log in, the session profile is saved. No cookie files. One own account — credit farming gets accounts banned | — |
-| `build_kinetic_video` | **Vertical video from pure graphics**: word-by-word typography, cards, counters, chapters, chip badges, CTA. Auto sound design (whoosh on cuts, pops/hits), music bed. Dark/light themes | ✅ |
-| `synthesize_voiceover` | Gemini TTS + radio mastering (−14 LUFS). Voice cloning via `tts.py` in skills | — |
-| `build_pop_subtitles` | Karaoke .ass subtitles. Styles: `clean` (white, default), `outline`, `pop` (legacy yellow) | ✅ |
-| `calculate_acoustic_timeline` | Cut points snapped to real speech pauses | ✅ |
-| `assemble_master_video` | Concat clips + voice/music mix + subtitle burn-in | ✅ |
-| `qa_verify_video` | Strict checks: 1080×1920, fps, scan, LUFS ±2 | ✅ |
-| `learn_and_record_memory` | Production lessons into KNOWLEDGE_BASE.md | ✅ |
-| `doctor` | One-command environment self-check (`argus-doctor` CLI or MCP): python / ffmpeg+libass / Node / engine / edge-tts / playwright / Gemini key / output dir — ✓/✗/⚠ table with an exact install command under every ✗ | ✅ |
+| `render_video` | Plan → stills, preview or final in 9:16 / 16:9: graphics scenes, footage clips, captions, music and sound effects from the plan | ✅ |
+| `job_status` | State and result of a long operation that returned a `job_id` | ✅ |
+| `qa_verify_video` | Technical checks (size, fps, loudness, peaks, black gaps, A/V length) plus frames to look at | ✅ |
+| `export_package` | Final folder: videos, covers, `post.md` | ✅ |
+| `calculate_beat_grid` | Tempo and beat grid of a music track | ✅ |
+| `search_sfx`, `download_sfx` | Freesound CC0 sound effects | — |
+| `run_script` | Runs your own Python scripts from `scripts/` | ✅ |
+| `learn_and_record_memory` | Saves a lasting user preference; `studio_guide` returns it in later sessions | ✅ |
+| `doctor` | One-command environment self-check (`argus-doctor` CLI or MCP): python / ffmpeg / Node / engine / numpy / Pillow / optional faster-whisper, edge-tts, playwright, keys / output dir — ✓/✗/⚠ table with an exact install command under every ✗ | ✅ |
 
 ## Install
 
@@ -91,9 +96,10 @@ generate_veo_clip(prompt="...", output_path="out/c2.mp4", provider="flow")  # fr
 **Through graphics** (no AI, local, free):
 
 ```text
-build_kinetic_video(plan={
-  "theme": "dark",
-  "voice": "out/voiceover.mp3",
+render_video(project="demo", mode="stills", times=[1, 4, 8], plan={
+  "version": 2,
+  "format": "9:16",
+  "style": "dark",
   "hud": {                                   # overlay drawn over all scenes
     "at": 0.5, "until": 5.5,                 # plate lifetime, seconds
     "rows": [
@@ -110,24 +116,28 @@ build_kinetic_video(plan={
     {"at": 2.5, "kind": "title", "kicker": "chapter 1", "text": "what is going on here"},
     {"at": 5.0, "kind": "counter", "value": 87, "suffix": "%", "sub": "never finish the video"},
     {"at": 6.5, "kind": "cta", "text": "grab it free", "handle": "@you"}
-  ]
-}, output_path="out/kinetic.mp4")
+  ],
+  "audio": {"voice": {"src": "audio/voice.mp3"}}
+})
 ```
+
+Look at the stills, then render `mode="preview"` and `mode="final"`. More plans are in
+[`examples/plans/`](examples/plans).
 
 `hud` is a plan-level game-UI overlay (not a scene): a semi-transparent dark plate
 with monospace values that lives over all scenes inside its interval without
 touching them. On `accent_changes` the row's value swaps and gets the accent
 highlight (progress "0/100" → "20/100").
 
-Then the same either way: `synthesize_voiceover` → `calculate_acoustic_timeline` →
-`build_pop_subtitles(style="clean")` → `assemble_master_video` → `qa_verify_video`.
+Then the same either way: `synthesize_voiceover` → `render_video` (stills, preview, final;
+captions come from the plan's `captions` block) → `qa_verify_video` → `export_package`.
 
 ## Honest notes
 
 - Veo via API is paid (~$0.40/s quality, ~$0.10–0.12/s Fast); there is no free API tier.
   The free path is `provider="flow"` with your own flow.google credits; it depends on their
   UI — selectors live in one place in `src/argus/tools/flow_browser.py`.
-- Subtitles default to the `clean` white style; the yellow `pop` style is legacy opt-in.
+- Captions are drawn by the engine from the plan's `captions` block; there are no `.ass` files.
 - Prompts go to Veo exactly as written — no content-policy workarounds.
 - `skills/` ships without paid-subscription sounds or personal media — add your own.
 
