@@ -72,16 +72,23 @@ class Reply:
 
 
 class FakeApi:
-    def __init__(self, library: object = LIBRARY, own: object = OWN, fail_library: int | None = None) -> None:
+    def __init__(self, library: object = LIBRARY, own: object = OWN, fail_library: int | None = None,
+                 tier: str = "creator", plan_error: bool = False) -> None:
         self.calls: list[tuple[str, dict]] = []
         self.library = library
         self.own = own
         self.fail_library = fail_library
+        self.tier = tier
+        self.plan_error = plan_error
 
     def __call__(self, request, timeout=None):
         parsed = urlparse(request.full_url)
         query = {k: v[0] for k, v in parse_qs(parsed.query).items()}
         self.calls.append((parsed.path, query))
+        if parsed.path == "/v1/user/subscription":
+            if self.plan_error:
+                raise urllib.error.HTTPError(request.full_url, 500, "no", {}, io.BytesIO(b'{"detail":"down"}'))
+            return Reply({"tier": self.tier})
         if parsed.path == "/v2/voices":
             return Reply(self.own)
         if parsed.path == "/v1/shared-voices":
@@ -255,6 +262,36 @@ def test_a_refused_library_search_does_not_hide_own_voices(monkeypatch: pytest.M
 
 
 # ------------------------------------------------------------------ size and details
+
+def test_free_plan_moves_non_premade_and_library_voices_to_the_paid_list(monkeypatch: pytest.MonkeyPatch,
+                                                                         keyed) -> None:
+    monkeypatch.setattr("urllib.request.urlopen", FakeApi(tier="free"))
+    result = voiceover.voice_options()
+    assert result["plan"] == {"tier": "free"}
+    assert [v["name"] for v in result["own_voices"]] == ["Brian"]  # premade only
+    assert result["library_voices"] == []
+    paid = result["library_voices_paid_plan_only"]
+    assert paid["note"] == voiceover.FREE_PLAN_NOTE
+    assert {v["name"] for v in paid["voices"]} == {"Sasha", "Boris", "Lena", "Pavel", "Maks"}
+
+
+def test_paid_plan_keeps_each_voice_where_it_was(keyed) -> None:
+    result = voiceover.voice_options()
+    assert result["plan"] == {"tier": "creator"}
+    assert [v["name"] for v in result["own_voices"]] == ["Brian", "Sasha", "Boris"]
+    paid = result["library_voices_paid_plan_only"]
+    assert paid["note"] == voiceover.LIBRARY_PAID_NOTE
+    assert [v["name"] for v in paid["voices"]] == ["Pavel"]  # only free_users_allowed=false
+
+
+def test_unreadable_plan_is_said_and_no_voice_is_marked(monkeypatch: pytest.MonkeyPatch, keyed) -> None:
+    monkeypatch.setattr("urllib.request.urlopen", FakeApi(plan_error=True))
+    result = voiceover.voice_options()
+    assert result["plan"]["tier"] is None
+    assert "could not read the ElevenLabs plan" in result["plan"]["note"]
+    assert "plan" in result["errors"]
+    assert [v["name"] for v in result["own_voices"]] == ["Brian", "Sasha", "Boris"]  # nothing refused
+
 
 def test_models_and_delivery_rules_come_only_with_details(keyed) -> None:
     plain = voiceover.voice_options()

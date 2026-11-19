@@ -134,6 +134,16 @@ LIBRARY_PAID_NOTE = (
     "Voice Library voices with free_users_allowed=false: through the API they work only on a paid ElevenLabs plan "
     "(a free plan gets HTTP 402/403). Pick from own_voices and library_voices unless the user has a paid plan."
 )
+# The plan decides which voices the API accepts. GET /v1/user/subscription gives `tier`, e.g. "free":
+# https://elevenlabs.io/docs/api-reference/user/get-subscription
+ELEVEN_SUBSCRIPTION_PATH = "/v1/user/subscription"
+# On the free plan the API refuses every Voice Library voice and every own voice that is not premade
+# (HTTP 402 paid_plan_required, seen in a test run; a premade voice worked). Those go to the paid-plan list.
+FREE_PLAN_NOTE = (
+    "The ElevenLabs free plan refuses these through the API (HTTP 402 paid_plan_required), so they are listed "
+    "here and not in own_voices or library_voices. On the free plan only premade own voices and the edge or "
+    "gemini voices work. A paid plan unlocks the rest."
+)
 _TAG_RE = re.compile(r"\[[^\[\]]*\]|<[^<>]*>")  # [audio tags] and <ssml/> markup
 _SENTENCE_END_RE = re.compile(r"(?<=[.!?…])\s+")
 _noop: Callable[..., None] = lambda *args, **kwargs: None  # noqa: E731
@@ -1015,6 +1025,20 @@ def _provider_status() -> dict:
     }
 
 
+def _eleven_tier(errors: dict[str, str]) -> str | None:
+    """The plan tier ("free", "starter", ...) from the subscription endpoint, or None when it cannot be read."""
+    try:
+        data = _eleven_json("GET", ELEVEN_SUBSCRIPTION_PATH, timeout=VOICE_LIST_TIMEOUT_S)
+    except Exception as exc:
+        errors["plan"] = str(exc)[:300]
+        return None
+    tier = str(data.get("tier") or "").strip().lower()
+    if not tier:
+        errors["plan"] = "the subscription answer has no tier"
+        return None
+    return tier
+
+
 def _eleven_models(errors: dict[str, str]) -> list[dict]:
     """ElevenLabs text-to-speech models with their character limits and how each wants delivery written."""
     models: list[dict] = []
@@ -1046,7 +1070,10 @@ def voice_options(
     when any word occurs, in any case, in its name, description, accent, age, gender, use case,
     language or labels. `own_voices`: the account's voices, matching language first, then the most
     matched words. `library_voices`: Voice Library voices usable on every plan.
-    `library_voices_paid_plan_only`: library voices with `free_users_allowed=false`, with a note.
+    `library_voices_paid_plan_only`: voices that need a paid plan, with a note. These are the library voices
+    with `free_users_allowed=false`; on the free plan also every library voice and the own voices that are
+    not premade (the API refuses them there). `plan`: the ElevenLabs tier; when it cannot be read,
+    `plan.note` says so and no voice is marked.
     `edge_voices`, `gemini_voices`: free defaults and Gemini names. Every list is capped at `limit`,
     and the whole answer at VOICE_RESPONSE_MAX_CHARS (the longest lists lose voices first).
     `details=True` adds `elevenlabs_models` and `delivery` (audio tags and pacing rules), which
@@ -1063,7 +1090,15 @@ def voice_options(
     library: list[dict] = []
     library_paid: list[dict] = []
     models: list[dict] = []
+    plan: dict | None = None
+    refused: list[dict] = []  # own voices the free plan refuses (not premade)
     if PROVIDERS["elevenlabs"].available():
+        tier = _eleven_tier(errors)
+        free = tier == "free"
+        plan = {"tier": tier} if tier else {
+            "tier": None,
+            "note": "could not read the ElevenLabs plan, so voices that need a paid plan are not marked (see errors.plan)",
+        }
         try:
             data = _eleven_json("GET", "/v2/voices", {"page_size": 100, "include_total_count": "false"},
                                 timeout=VOICE_LIST_TIMEOUT_S)
@@ -1075,6 +1110,9 @@ def voice_options(
                 hits = _word_hits(words, searchable)
                 if words and not hits:
                     continue
+                if free and entry.get("category") != "premade":
+                    refused.append(voice)
+                    continue
                 ranked.append((not (code and code in languages), -hits, voice))
             ranked.sort(key=lambda item: item[:2])  # matching language first, then the most matched words
             own = [voice for _, _, voice in ranked][:limit]
@@ -1083,6 +1121,10 @@ def voice_options(
         except Exception as exc:
             errors["own_voices"] = str(exc)[:300]
         library, library_paid = _library_search(words, code, sex, limit, errors)
+        if free:
+            # the free plan refuses every Voice Library voice through the API, so all of them go to the paid list
+            library_paid = (refused + library + library_paid)[:limit]
+            library = []
         if details:
             models = _eleven_models(errors)
     else:
@@ -1102,7 +1144,10 @@ def voice_options(
         "gemini_voices": gemini,
     }
     if library_paid:
-        result["library_voices_paid_plan_only"] = {"note": LIBRARY_PAID_NOTE, "voices": library_paid}
+        note = FREE_PLAN_NOTE if plan and plan.get("tier") == "free" else LIBRARY_PAID_NOTE
+        result["library_voices_paid_plan_only"] = {"note": note, "voices": library_paid}
+    if plan is not None:
+        result["plan"] = plan
     if PROVIDERS["elevenlabs"].available():
         if details:
             result["delivery"] = delivery_guide()

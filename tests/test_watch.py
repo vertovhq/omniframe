@@ -328,14 +328,16 @@ def test_transcript_words_and_cache(five_segments: Path, monkeypatch: pytest.Mon
 
     result = _run(five_segments, transcript=True)
     assert result["language"] == "ru"
-    assert result["segments"] == [{"s": 0.1, "e": 0.6, "text": "Ну ну"}]
+    segments = json.loads(Path(result["segments_path"]).read_text(encoding="utf-8"))
+    assert segments == [{"s": 0.1, "e": 0.6, "text": "Ну ну"}]
+    assert result["transcript_head"] == "Ну ну" and "segments" not in result and "words" not in result
     words = json.loads(Path(result["words_path"]).read_text(encoding="utf-8"))
     assert words == [{"w": "Ну", "s": 0.1, "e": 0.3}, {"w": "ну", "s": 0.4, "e": 0.6}]  # repeats kept
     call = fake.calls[0]
     assert call["word_timestamps"] is True and call["vad_filter"] is True
     assert call["condition_on_previous_text"] is False and call["temperature"] == 0
     assert call["initial_prompt"] == watch.RUSSIAN_VERBATIM_PROMPT  # Russian: verbatim prompt
-    assert result["words"] == [["Ну", 0.1, 0.3], ["ну", 0.4, 0.6]] and result["word_count"] == 2
+    assert result["word_count"] == 2
 
     again = _run(five_segments, transcript=True)
     assert again["cache_hit"] is True and len(fake.calls) == 1
@@ -348,21 +350,48 @@ def test_transcript_words_and_cache(five_segments: Path, monkeypatch: pytest.Mon
     assert german["language"] == "de" and fake.calls[2]["initial_prompt"] is None  # no prompt in other languages
 
 
-def test_words_are_listed_inline_only_up_to_the_limit(five_segments: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+class _LongWhisper(_FakeWhisper):
+    """About eight minutes of speech: 240 sentences of ten words each."""
+
+    def transcribe(self, audio, **kw):
+        self.calls.append(kw)
+        segs = []
+        for i in range(240):
+            words = [
+                SimpleNamespace(word=f" слово{i}x{j}", start=i * 2.0 + j * 0.15, end=i * 2.0 + j * 0.15 + 0.12)
+                for j in range(10)
+            ]
+            text = " " + " ".join(w.word.strip() for w in words) + "."
+            segs.append(SimpleNamespace(start=i * 2.0, end=i * 2.0 + 1.8, text=text, words=words))
+        return iter(segs), SimpleNamespace(language="ru")
+
+
+def test_words_and_sentences_are_never_listed_inline(five_segments: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(watch, "whisper_available", lambda: True)
     monkeypatch.setattr(watch, "_whisper_model", lambda name: _FakeWhisper())
-    monkeypatch.setattr(watch, "INLINE_WORDS_LIMIT", 1)
 
     result = _run(five_segments, transcript=True)  # the fake speaks two words
-    assert "words" not in result and result["word_count"] == 2
-    assert "words_path" in result["words_note"]
+    assert "words" not in result and "segments" not in result
+    assert result["word_count"] == 2 and "words_path" in result["words_note"]
     assert len(json.loads(Path(result["words_path"]).read_text(encoding="utf-8"))) == 2
+    assert Path(result["segments_path"]).is_file()
+
+
+def test_a_long_talk_result_stays_far_below_the_client_limit(five_segments: Path,
+                                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(watch, "whisper_available", lambda: True)
+    monkeypatch.setattr(watch, "_whisper_model", lambda name: _LongWhisper())
+
+    result = _run(five_segments, transcript=True, max_frames=24)
+    assert result["word_count"] == 2400
+    assert len(json.dumps(result, ensure_ascii=False)) < 10_000  # the client cuts results at 30,000
+    assert len(result["transcript_head"]) <= watch.TRANSCRIPT_HEAD_CHARS + 3
 
 
 def test_transcript_missing_package_is_reported(five_segments: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(watch, "whisper_available", lambda: False)
     result = _run(five_segments, transcript=True)
-    assert result["words_path"] is None and result["segments"] == []
+    assert result["words_path"] is None and result["segments_path"] is None
     assert "faster-whisper" in result["transcript_note"]
 
 
@@ -375,7 +404,7 @@ def test_real_transcript_runs_when_faster_whisper_is_installed(five_segments: Pa
     except (OSError, ConnectionError) as exc:  # the model download needs the network
         pytest.skip(f"whisper model unavailable offline: {exc}")
     assert result["words_path"] and Path(result["words_path"]).is_file()
-    assert isinstance(result["segments"], list)
+    assert Path(result["segments_path"]).is_file()
 
 
 # ------------------------------------------------------------------ get_frames

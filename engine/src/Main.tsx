@@ -12,6 +12,7 @@ import {assignWordTimings, sceneWindows} from './text';
 import type {LocalWord} from './text';
 import {collectSfx} from './sfx';
 import {registry} from './custom/registry';
+import {ClockContext, PlanTimingContext} from './timing';
 import {
   ActSceneView,
   BigSceneView,
@@ -98,6 +99,7 @@ export const Main: FC<EngineProps> = ({
   music,
   captions,
   audio,
+  cues,
 }) => {
   const {fps, width, height} = useVideoConfig();
   const format: PlanFormat = formatInput ?? (width > height ? '16:9' : '9:16');
@@ -129,6 +131,8 @@ export const Main: FC<EngineProps> = ({
   const musicRef = audio?.music ?? music;
   // Ducking follows the caption words (already loaded by the Python side), else v1 `words`.
   const speechWords = Array.isArray(captions?.words) ? captions.words : words;
+  // What custom scenes may read: the voice words and the plan's cues (kit/timing.tsx).
+  const planTiming = useMemo(() => ({words: speechWords ?? [], cues: cues ?? {}}), [speechWords, cues]);
 
   const entries = useMemo<SceneEntry[]>(() => {
     const windows = sceneWindows(orderedScenes, safeDuration);
@@ -164,42 +168,46 @@ export const Main: FC<EngineProps> = ({
     >
       {opaque ? <Background /> : null}
       <SceneShell durationInFrames={e.dur}>
-        <SceneView scene={e.scene} words={e.words} />
+        <ClockContext.Provider value={{origin: e.from, end: e.from + e.dur}}>
+          <SceneView scene={e.scene} words={e.words} />
+        </ClockContext.Provider>
       </SceneShell>
     </Sequence>
   );
 
   return (
     <StyleContext.Provider value={style}>
-      <AbsoluteFill
-        style={{
-          backgroundColor: style.colors.bg,
-          color: style.colors.text,
-          fontFamily: fontFor(style, 'body').css,
-        }}
-      >
-        <Background />
-        <AudioTracks
-          voice={voiceRef}
-          music={musicRef}
-          sfx={sfxEvents}
-          speech={speechWords}
-          sfxVolume={sfx_volume}
-          duration={safeDuration}
-        />
-        <ClipsLayer clips={clips} duration={safeDuration} />
-        {entries.filter((e) => !e.scene.overlay).map((e) => renderScene(e, true))}
-        {entries.filter((e) => e.scene.overlay).map((e) => renderScene(e, false))}
-        {hudWindow ? (
-          <Sequence from={hudWindow.from} durationInFrames={hudWindow.dur} name="hud">
-            <AbsoluteFill style={{pointerEvents: 'none'}}>
-              <HudLayer hud={hud!} durationInFrames={hudWindow.dur} />
-            </AbsoluteFill>
-          </Sequence>
-        ) : null}
-        {captions ? <CaptionsLayer captions={captions} /> : null}
-        <Grain />
-      </AbsoluteFill>
+      <PlanTimingContext.Provider value={planTiming}>
+        <AbsoluteFill
+          style={{
+            backgroundColor: style.colors.bg,
+            color: style.colors.text,
+            fontFamily: fontFor(style, 'body').css,
+          }}
+        >
+          <Background />
+          <AudioTracks
+            voice={voiceRef}
+            music={musicRef}
+            sfx={sfxEvents}
+            speech={speechWords}
+            sfxVolume={sfx_volume}
+            duration={safeDuration}
+          />
+          <ClipsLayer clips={clips} duration={safeDuration} />
+          {entries.filter((e) => !e.scene.overlay).map((e) => renderScene(e, true))}
+          {entries.filter((e) => e.scene.overlay).map((e) => renderScene(e, false))}
+          {hudWindow ? (
+            <Sequence from={hudWindow.from} durationInFrames={hudWindow.dur} name="hud">
+              <AbsoluteFill style={{pointerEvents: 'none'}}>
+                <HudLayer hud={hud!} durationInFrames={hudWindow.dur} />
+              </AbsoluteFill>
+            </Sequence>
+          ) : null}
+          {captions ? <CaptionsLayer captions={captions} /> : null}
+          <Grain />
+        </AbsoluteFill>
+      </PlanTimingContext.Provider>
     </StyleContext.Provider>
   );
 };

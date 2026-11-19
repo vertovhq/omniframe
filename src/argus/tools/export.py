@@ -10,6 +10,8 @@ The job (kind `export`, `run_job`):
    is not black.
 4. `final/post.md`: the texts per platform. A text over its platform limit is marked under
    its field.
+4b. With `save_to_library` (task 20.3, only after the user agreed): the listed components go to the
+   style library with a card and a 512 px poster taken from the final (`tools/library.py`).
 5. `<project>/.work/` is removed. Covers come back as images from small copies in
    `<project>/cache/export/`, so `final/` holds only the deliverables.
 
@@ -33,7 +35,7 @@ from .. import __version__, jobs
 from ..ffmpeg import FFmpegError, run_ffmpeg, stream_info, temp_sibling
 from ..plan import FORMAT_SIZES
 from ..project import project_dir, slugify
-from . import qa
+from . import library, qa
 
 # Cover sizes. The 9:16 cover is the video's own frame size. The 16:9 cover is a YouTube
 # thumbnail: 1280x720, JPG or PNG, under 2 MB. The 2 MB cap is the limit for uploads from the
@@ -201,6 +203,7 @@ def prepare_export(
     texts: Any,
     cover_times: Any = None,
     name: str | None = None,
+    save_to_library: Any = None,
 ) -> tuple[dict | None, list[str]]:
     """Validate a request. Returns `(job payload, [])` or `(None, errors)`. Writes nothing."""
     errors: list[str] = []
@@ -253,6 +256,14 @@ def prepare_export(
             else:
                 clean_cover[fmt] = float(value)
 
+    clean_library: dict | None = None
+    if save_to_library is not None:
+        poster_format = _poster_format(clean_videos)
+        clean_library, library_errors = library.validate_save(
+            save_to_library, root, library.project_library_dir(root), durations.get(poster_format or "")
+        )
+        errors += library_errors
+
     if errors:
         return None, errors
     payload = {
@@ -262,6 +273,8 @@ def prepare_export(
         "texts": clean_texts,
         "cover_times": clean_cover,
     }
+    if clean_library is not None:
+        payload["library"] = clean_library
     return payload, []
 
 
@@ -269,6 +282,13 @@ def prepare_export(
 
 def _tag(fmt: str) -> str:
     return fmt.replace(":", "x")
+
+
+def _poster_format(videos: dict) -> str | None:
+    """The video a library poster is taken from: the 9:16 one when there is one, else the first."""
+    if "9:16" in videos:
+        return "9:16"
+    return next(iter(videos), None)
 
 
 def _strictest_platform(fmt: str, texts: dict) -> str | None:
@@ -475,13 +495,30 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
             "reason": f"{fmt} cover {size[0]}x{size[1]} at {at:.2f} s",
         })
 
+    library_out: dict | None = None
+    request = payload.get("library")
+    if request:
+        report(0.92, "saving to the style library")
+        fmt = _poster_format(videos)
+        assert fmt is not None  # a request has at least one video
+        at = request["poster_time"] if request.get("poster_time") is not None else covers_out[fmt]["t"]
+        try:
+            library_out = {"saved": True, **library.save_entry(
+                request, root, library.project_library_dir(root), videos[fmt], float(at))}
+            view = root / "cache" / "export" / f"{base}_library_poster.view.jpg"
+            _write_view(Path(library_out["poster"]), view)
+            images.append({"path": str(view), "t": round(float(at), 3), "reason": f"library poster of {request['entry']}"})
+        except (OSError, FFmpegError, ValueError) as exc:
+            # The export itself worked; say that only the library step failed.
+            library_out = {"saved": False, "entry": request["entry"], "error": _first_line(exc)}
+
     report(0.95, "writing post.md")
     violations = text_violations(texts)
     post = final / "post.md"
     post.write_text(_post_markdown(base, videos_out, covers_out, texts, violations), encoding="utf-8")
 
     shutil.rmtree(root / ".work", ignore_errors=True)
-    return {
+    result = {
         "exported": True,
         "final_dir": str(final),
         "post": str(post),
@@ -492,6 +529,9 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         "removed_work": not (root / ".work").exists(),
         "images": images,
     }
+    if library_out is not None:
+        result["library"] = library_out
+    return result
 
 
 # ------------------------------------------------------------------ tool
@@ -502,6 +542,7 @@ def export_package(
     texts: Any,
     cover_times: Any = None,
     name: str | None = None,
+    save_to_library: Any = None,
     wait_s: float = jobs.DEFAULT_WAIT_S,
 ) -> dict | list:
     """Tool logic of `export_package`: validate, then run the `export` job.
@@ -510,7 +551,7 @@ def export_package(
     Jobs with the same final file name never run twice at once.
     """
     root = project_dir(project)
-    payload, errors = prepare_export(root, videos, texts, cover_times, name)
+    payload, errors = prepare_export(root, videos, texts, cover_times, name, save_to_library)
     if payload is None:
         return {
             "engine": f"ARGUS {__version__}",

@@ -23,6 +23,7 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 | Date | Tasks | Model / effort | Credits used / total |
 |---|---|---|---|
 | (author fills) | 1–8, 9 started | Sonnet 5.5 high | 330 / 4000 |
+| 2026-11-18 | 20 (video 1: retiming, sound, preview, final, QA, export) | Sonnet 5.5 | 91 credits, 1 h 20 min (per the author) |
 
 ## Entry template
 
@@ -191,4 +192,47 @@ _To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
 - Bugs & fixes: `control_pwsh_process` did not start the test command (the background list stayed empty) → cause not established → the run went through `execute_pwsh` with `run_in_background`, output to a file. The Kiro shell returned empty output for several calls → the log was read with `read_file`.
 - Kiro: spec task 19 and the tech steering (test command; a task is ticked only after its Verify steps).
 - Verified: local `pytest tests/test_scenarios.py -v --durations=0` → 3 passed in 181.48 s (footage 86.6 s, reference 47.6 s, idea 45.8 s). Not verified: a GitHub Actions run of the `e2e` job (duration and result unknown), and the Linux render path.
+- Credits: <author fills>
+
+## Task 20 — Dogfood video 1, «Яхта за рубль» (2026-11-18, Sonnet 5.5)
+- Built: retimed the nine drawn scenes to the real George voice (`Film.tsx` cues, local times in `Scenes1/2.tsx` with the voice words in comments), real captions from `voice.words.json`, CC0 music and 9 sound effects from Freesound, then stills (4 rounds), preview, final, QA and `export_package` → `final/yacht_9x16.mp4` (86.1 s), cover, `post.md`. The video and its components live outside the repo; the repo got the notes (`task20.md`) and Known issues 23–26.
+- Bugs & fixes: compile error `TS2304 eIn` in `Scenes2.tsx` → an earlier edit of scene 8 used `eIn` without importing it → `render_video` typechecked the component and refused to render → added the import. Final QA hard failure, true peak -0.28 dBTP at -14.1 LUFS → `finalize_video` has no limiter before the AAC encode → re-encoded the audio of the finished file with `alimiter=limit=0.708` → -1.16 dBTP; the render pipeline itself is not fixed (Known issue 24). `alimiter=limit=-2dB` gave only -0.50 dBTP.
+- Defects seen and left: long words in phrase captions lose the gap to the next word (Known issue 25, cause not confirmed). Known issue 21 (safe area) did not reproduce with the default safe area (issue 23). The Kiro shell again returned no output for waits, so I followed the renders with `job_status`.
+- Kiro: the `argus` MCP tools did the work: `render_video` stills showed the model the frames and its component typecheck caught the missing import before a render; `qa_verify_video` caught the peak that the loudness figure alone hid; `studio_guide` gave the working order (stills, preview, final, QA, export). Steering `product.md` / `tech.md` set the order and the build log; no hook result noted.
+- Verified: stills at about 30 times over four rounds, 8 preview frames, QA of the final after the limiter: 1080x1920, 30 fps, -14.1 LUFS, -1.16 dBTP, no black, freeze or silence → passed; `export_package` → 1 mp4, cover, `post.md`, no violations. Reviewed by the author, who listened to the voice and watched the final and accepted it (per the author); I did not hear the voice or the mix myself. No 16:9 version. Task 20 stays `[ ]` in `tasks.md` because it asks for three videos; this is video 1.
+- Credits: 91 credits and 1 h 20 min for this part (per the author)
+- Details: `.kiro/specs/argus-v2/task20.md`
+
+## Task 20.1 — Fixes from video 1 (2026-11-18, Haiku 5.5)
+- Built: `LIMITER_FILTER` (`alimiter`, -2 dBFS, `level=disabled`, `latency=true`) after `loudnorm` in `finalize_video`; word-gap margins for the active word in phrase captions (`engine/src/captions.tsx`); `captions.style.case` (`upper`/`as_is`) in plan, types and engine; `job_status(wait_s)`, capped at 20 s, with `eta_s`; compact `watch_video` result (`words_path`, `segments_path`, `transcript_head`, no inline words); `voice_options` reads the plan (`GET /v1/user/subscription`) and on the free tier moves non-premade own voices and all Voice Library voices to the paid-plan list.
+- Bugs & fixes: no synthetic mix reproduced the true-peak failure without the limiter (13 signals, -1.1 to -1.5 dBTP without it), so the test checks the filter itself (a 0.99 burst must come out at or below 0.8 linear). The active word's 1.08 scale covered the gap to the next word, so each word now reserves half its growth as side margin. `test_scenarios` read inline words, so it reads `words_path` now. The running `argus` server predates the `case` field (`unknown field 'case'`), so it needs a reload.
+- Real file: `project-1/renders/yacht-final-9x16.mp4` before `finalize_video` -0.28 dBTP at -14.06 LUFS, after it -1.82 dBTP at -14.06 LUFS (measured with `measure_loudness`, the function QA uses). The temporary `.tp-check.mp4` was deleted.
+- Kiro: `argus` MCP `render_video` stills for the gap check. The Kiro shell stopped returning output during long test runs, so runs wrote to files that were read back.
+- Verified: test_plan + test_captions 31 passed; test_jobs 18 passed; test_watch + test_studio_guide 42 passed; test_voice_options 29 passed; full `pytest tests` 298 passed and 1 failed (`test_footage_edit_with_remapped_captions`, fixed, rerun 1 passed); engine `tsc --noEmit` exit 0; caption stills show the gap in four frames.
+- Not verified: a final of an `examples/plans` sample passing QA with no manual limiter (not run); `case` in a still (server predates it); a live ElevenLabs call on the free tier (none made); caption gap in pixels (not measured).
+- Author direction: ElevenLabs is the priority voice provider; edge-tts is a fallback, not the default for finals. Verify items and the checkbox for 20.1 are left to the author. Credits: 40
+
+
+## Task 20.2 — Motion kit: universal blocks for custom scenes (2026-11-18, Sonnet 5.5)
+- Built: `engine/src/kit/` (motion, timing, wrappers, text, effects, info, `KIT.md` of 3,458 characters) and `custom/kit.ts` so a component imports `../kit`; `components.py` allows that import. `plan.cues` (seconds, or `{word, nth, offset}` found in `captions.words`) is resolved to seconds by `resolve_cues` (`captions.py`, checked in `prepare_render`) and reaches the engine through `timing.ts` (`PlanTimingContext`, `ClockContext`, set in `Main.tsx`); `useCue`, `useCues`, `useWords`, `useT`, `useDuration` return seconds on the scene's own clock. `studio_guide(custom_scenes=true)` adds `motion_kit`. STUDIO_GUIDE has the five text rules; `render_video` docstring and `custom/README.md` describe `../kit` and `cues`.
+- Bugs & fixes: the first write of `kit/timing.tsx` was cut off by a tool error and the file was not created → rewrote it. `Set-Content -Encoding UTF8` put a BOM into `types.ts` → removed the three bytes, diff back to 7 lines. The Kiro shell returned only echoed input, then ran nothing; the author cancelled the session. Later calls worked, and the stills rendered earlier were still on disk.
+- Kiro: spec task 20.2 gave the block list; the engine steering rule on determinism is why `Particles` use `random(seed)`; `render_video` stills with its component typecheck are the test of the kit. No hook result noted.
+- Verified: engine `tsc --noEmit` exit 0; `test_captions` + `test_plan` + `test_studio_guide` 48 passed; `test_components` offline subset 25 passed; three new engine tests passed in 24.41 s (`SceneTrack` switching on a word cue from a words file in a scene that starts at 1 s; the `KIT.md` example in 9:16 and in 16:9). Looked at four of the eight stills of the example (9:16 and 16:9 at 1.5 s and 3.6 s): text, plate and pop-up are centred and not clipped in both formats.
+- Not verified: full `pytest -q` after the change (started once at the end, output still empty after about 16 minutes, so no result; `Plan.to_dict()` now always has `cues: {}`, so a test that compares a whole plan dict could fail); no still or test for `LightCone`, dust `Particles`, `PollCard`, `Checklist`, `ProgressBar`, `Bubble`, `Label`, `Slide`, `Pop`; an unknown cue name in `useCue` (should stop the render with a message) was not tried; the running `argus` server must be reloaded; the target (under 20 minutes and 20 credits on the Kiroween video) is not measured and belongs after 20.3.
+- Credits: <author fills>
+- Questions for the auditor:
+  1. Word cues need `captions.words`, so a video with a voice and no captions cannot use them. Should the voice's own words file count, or is requiring `captions` right?
+  2. The kit is HTML/CSS in design px. The yacht code was SVG in a fixed 1080x1920 viewBox, and story drawings (characters, boats) still have to be SVG. Does the kit need a small SVG frame helper that scales a drawing to both formats, or should drawings stay outside it?
+  3. Kit hooks return seconds on the scene's own clock (video time minus the scene start), while plan times are video time. Is that the right default?
+  4. `SceneTrack` stacks scenes: the new one fades in over the old one, and the old one is removed when the new one is fully visible. A scene with transparent areas would pop at that moment. Is a dissolve mode needed, or is "each scene paints its own `Stage`" enough?
+  5. `Delta` falls back to `#FF4D5E` and `LightCone` to `#FFE9A8` when the style or props give no colour. Does that break "the kit has no look of its own"?
+  6. `studio_guide` returns the catalogue only with `custom_scenes=true`, to keep the default answer short. Should it always be included?
+  7. Nine blocks have no render test. Is typecheck plus the example scene enough for a P0 task, or should each block get a still?
+
+## Task 20.3 — Style library (2026-11-19, Sonnet 5.5)
+
+- Built: `tools/library.py`; `export_package(save_to_library=...)` writes `<output>/library/<entry>/` (component files, `card.md`, `poster.jpg` 512 px from the final) and rebuilds `index.md`; `studio_guide` returns `library` (index, up to 8 posters as images); a component imports `./library/<entry>/<File>`, `components.py` copies the used files into `custom/job/library/<entry>/` with `style.ts`/`kit.ts` re-exports. Guide text, `custom/README.md` and docstrings updated.
+- Bugs & fixes: two pytest runs at once → the shared `engine/src/custom/registry.ts` was left generated and `_engine_untouched` failed → one run at a time, no code change. A chained PowerShell `.Replace` edit overwrote an import line in `render.py` → restored with a direct edit. Kiro shell commands ran late and in one shared queue → results read from output files.
+- Kiro: none beyond the spec task text and steering rules.
+- Verified: `pytest -q` → 338 passed (8 min 6 s); new `tests/test_library.py` plus two engine tests in `test_components.py` (render with an imported entry; compile error names the entry). The author's Verify (yacht entry, two references) is not run yet; the `argus` MCP server must be reloaded.
 - Credits: <author fills>

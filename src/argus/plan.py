@@ -365,6 +365,7 @@ class CaptionStyle(_Model):
     outline: float | None = Field(None, ge=0)  # fraction of the short side
     shadow: float | None = Field(None, ge=0)   # fraction of the short side
     plate: str | None = None                   # background color behind the text
+    case: Literal["upper", "as_is"] = "as_is"  # "upper" draws every caption word in capitals
 
 
 class Captions(_Model):
@@ -410,6 +411,49 @@ class Audio(_Model):
     sfx: list[SfxEvent] = Field(default_factory=list)
 
 
+# --------------------------------------------------------------------------- cues
+
+
+class WordCue(_Model):
+    """A moment found in the voice: the start of the `nth` time `word` is spoken, plus `offset`.
+
+    `word` is one word or several in a row ("пятнадцать миллионов"). Case and punctuation are
+    ignored; a word ending in `*` matches any word that starts with the rest ("миллион*").
+    The words come from `captions.words`. `render_video` resolves the cue to seconds, so a new
+    voice moves the cue with it (design §9, Known issue 22).
+    """
+
+    word: str = Field(min_length=1)
+    nth: int = Field(1, ge=1)
+    offset: float = 0.0
+
+    @field_validator("word")
+    @classmethod
+    def _has_a_word(cls, v: str) -> str:
+        if not v.split():
+            raise ValueError("word must hold at least one word")
+        return v
+
+
+def _cue_tag(value: Any) -> str | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return "seconds"
+    if isinstance(value, (dict, WordCue)):
+        return "word_cue"
+    return None
+
+
+Cue = Annotated[
+    Union[
+        Annotated[float, Tag("seconds")],
+        Annotated[WordCue, Tag("word_cue")],
+    ],
+    Discriminator(_cue_tag),
+]
+CUE_HINT = "seconds on the output timeline, or {word, nth?, offset?} to follow a spoken word"
+CUE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+
+
 # --------------------------------------------------------------------------- plan
 
 
@@ -424,6 +468,18 @@ class Plan(_Model):
     hud: HudOverlay | None = None
     captions: Captions | None = None
     audio: Audio | None = None
+    cues: dict[str, Cue] = Field(default_factory=dict)  # named moments for custom scenes (kit `useCue`)
+
+    @field_validator("cues")
+    @classmethod
+    def _cue_names(cls, v: dict[str, Any]) -> dict[str, Any]:
+        bad = [n for n in v if not CUE_NAME_RE.fullmatch(n)]
+        if bad:
+            raise ValueError(f"cue names are letters, digits and _, starting with a letter: {', '.join(map(repr, bad))}")
+        for name, cue in v.items():
+            if isinstance(cue, float) and cue < 0:
+                raise ValueError(f"{name}: {cue} is before the start of the video")
+        return v
 
     @field_validator("style", mode="before")
     @classmethod
@@ -440,6 +496,17 @@ class Plan(_Model):
     def _remap_needs_clips(self) -> Plan:
         if self.captions and isinstance(self.captions.words, WordsRemap) and not self.clips:
             raise ValueError("captions.words: remap 'clips' needs at least one clip")
+        return self
+
+    @model_validator(mode="after")
+    def _word_cues_need_words(self) -> Plan:
+        if self.captions is None:
+            named = [n for n, c in self.cues.items() if isinstance(c, WordCue)]
+            if named:
+                raise ValueError(
+                    f"cues.{named[0]}: a cue that follows a spoken word needs `captions` "
+                    "(its `words` are the voice timings)"
+                )
         return self
 
     @property
@@ -531,7 +598,7 @@ def validate_plan(data: Any) -> tuple[Plan | None, list[str]]:
 
 
 # Union members are named in pydantic's `loc`; these are the names to drop from the path.
-_TAGS = frozenset(SCENE_KINDS) | {"solid", "gradient", "media", "path", "list", "remap"}
+_TAGS = frozenset(SCENE_KINDS) | {"solid", "gradient", "media", "path", "list", "remap", "seconds", "word_cue"}
 _TAG_CHOICES = {"kind": SCENE_KINDS, "type": ("solid", "gradient", "media")}
 
 
@@ -551,6 +618,7 @@ def _clean_loc(loc: tuple[str | int, ...]) -> list[str | int]:
             (len(path) >= 2 and path[-2] == "scenes" and isinstance(path[-1], int))
             or path[-2:] == ["captions", "words"]
             or path[-2:] == ["style", "background"]
+            or (len(path) >= 2 and path[-2] == "cues")
         )
         if isinstance(part, str) and part in _TAGS and slot and skipped_at != len(path):
             skipped_at = len(path)
@@ -635,7 +703,7 @@ def _format_errors(exc: ValidationError, data: Mapping[str, Any]) -> list[str]:
                 else:
                     msg = f"missing (expected {expected})"
             else:
-                msg = f"must be {WORDS_HINT}"
+                msg = f"must be {CUE_HINT if '_cue_tag' in disc else WORDS_HINT}"
         elif kind == "missing":
             msg = "required field is missing"
         elif kind == "value_error":

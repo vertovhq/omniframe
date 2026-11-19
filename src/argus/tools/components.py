@@ -17,6 +17,12 @@ A plan scene `{"kind": "custom", "component": "ScoreBoard"}` is drawn by
 
 Every render takes the lock while it bundles, with or without components, so a render
 never bundles another render's components.
+
+Style library (task 20.3): a component may also import a saved library entry,
+`import Boat from './library/<entry>/<File>'`. The entry lives in `<OMNIFRAME_OUTPUT_DIR>/library/<entry>/`
+(`tools/library.py`). Only the files that are imported, and what they import in turn, are copied
+into `custom/job/library/<entry>/`; two small re-export files there make the entry's own
+`../style` and `../kit` imports resolve, so an entry saved from a project works unchanged.
 """
 
 from __future__ import annotations
@@ -30,6 +36,7 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NamedTuple
 
 from ..jobs import pid_alive
 from ..plan import CustomScene, Plan
@@ -37,6 +44,22 @@ from ..plan import CustomScene, Plan
 COMPONENTS_DIR = "components"
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 EXTENSIONS = (".tsx", ".ts")
+
+LIBRARY_DIR = "library"          # folder name under OMNIFRAME_OUTPUT_DIR and, in a render, under custom/job/
+# `./library/<entry>/<File>`: a library entry file, imported by a project component.
+LIBRARY_IMPORT_RE = re.compile(r"^\./library/(?P<entry>[a-z0-9][a-z0-9-]*)/(?P<file>[A-Za-z][A-Za-z0-9_]*)$")
+# Inside job/library/ the entry's own `../style` and `../kit` point here; these files re-export the engine's.
+LIBRARY_SHIMS = {
+    "style.ts": "export * from '../../style';\n",
+    "kit.ts": "export * from '../../kit';\n",
+}
+
+
+class SourceFile(NamedTuple):
+    """A file a render needs: where it is, and its path inside `custom/job/` (posix, no leading slash)."""
+
+    path: Path
+    rel: str
 
 LOCK_NAME = ".render.lock"
 LOCK_WAIT_S = 300.0              # another render is bundling; wait this long for it
@@ -47,6 +70,7 @@ MAX_ERRORS = 25                  # compiler errors returned to the model
 # Imports a component may use (engine/src/custom/README.md).
 ALLOWED_PACKAGES = ("react", "react/jsx-runtime", "remotion")
 STYLE_IMPORT = "../style"
+KIT_IMPORT = "../kit"  # the motion kit, engine/src/kit (see engine/src/kit/KIT.md)
 
 # What `engine/src/custom/registry.ts` holds when it is committed. Only used to repair a
 # registry left behind by a crashed render; normally the file is restored byte for byte.
@@ -89,13 +113,25 @@ def used_components(plan: Plan) -> list[str]:
     return names
 
 
-def _source_file(project_root: Path, name: str) -> Path | None:
-    folder = project_root / COMPONENTS_DIR
+def _find_in(folder: Path, name: str) -> Path | None:
     for ext in EXTENSIONS:
         cand = folder / f"{name}{ext}"
         if cand.is_file():
             return cand
     return None
+
+
+def _source_file(project_root: Path, name: str) -> Path | None:
+    return _find_in(project_root / COMPONENTS_DIR, name)
+
+
+def _library_files(library_root: Path | None, entry: str) -> str:
+    """The component names of a library entry, for an error message."""
+    folder = None if library_root is None else library_root / entry
+    if folder is None or not folder.is_dir():
+        return "there is no such entry"
+    names = sorted({p.stem for p in folder.iterdir() if p.suffix in EXTENSIONS})
+    return "the entry has: " + ", ".join(names) if names else "the entry has no component files"
 
 
 def _strip_comments(text: str) -> str:
@@ -108,16 +144,23 @@ def _line_of(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
 
-def scan_source(path: Path, project_root: Path) -> tuple[list[str], list[str], list[str]]:
+def scan_source(
+    path: Path,
+    project_root: Path,
+    library_root: Path | None = None,
+    entry: str | None = None,
+) -> tuple[list[str], list[str], list[SourceFile]]:
     """Check one component file against the contract.
 
-    Returns `(errors, warnings, local files it imports)`. Messages read
-    `components/<File>:<line>: ...`.
+    A project component is `<project>/components/<File>`; with `entry` set the file is
+    `<library_root>/<entry>/<File>` and `./Name` means a file of the same entry.
+    Returns `(errors, warnings, the files it imports)`. Messages read
+    `components/<File>:<line>: ...` (`library/<entry>/<File>:<line>: ...` for an entry).
     """
-    label = f"{COMPONENTS_DIR}/{path.name}"
+    label = f"{COMPONENTS_DIR}/{path.name}" if entry is None else f"{LIBRARY_DIR}/{entry}/{path.name}"
     errors: list[str] = []
     warnings: list[str] = []
-    local: list[str] = []
+    local: list[SourceFile] = []
     try:
         raw = path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError) as exc:
@@ -128,19 +171,45 @@ def scan_source(path: Path, project_root: Path) -> tuple[list[str], list[str], l
     specs += [(m.start(), m.group("spec")) for m in _IMPORT_BARE.finditer(code)]
     for pos, spec in sorted(set(specs)):
         where = f"{label}:{_line_of(code, pos)}"
-        if spec in ALLOWED_PACKAGES or spec == STYLE_IMPORT:
+        if spec in ALLOWED_PACKAGES or spec in (STYLE_IMPORT, KIT_IMPORT):
             continue
         if spec.startswith("./") and NAME_RE.fullmatch(Path(spec).name) and "/" not in spec[2:]:
-            target = _source_file(project_root, spec[2:])
+            if entry is None:
+                target = _source_file(project_root, spec[2:])
+                where_files = f"{COMPONENTS_DIR}/{spec[2:]}.tsx"
+                rel = target.name if target else ""
+            else:
+                target = None if library_root is None else _find_in(library_root / entry, spec[2:])
+                where_files = f"{LIBRARY_DIR}/{entry}/{spec[2:]}.tsx"
+                rel = f"{LIBRARY_DIR}/{entry}/{target.name}" if target else ""
             if target is None:
-                errors.append(f"{where}: import '{spec}' has no file {COMPONENTS_DIR}/{spec[2:]}.tsx")
-            elif target.name not in local:
-                local.append(target.name)
+                errors.append(f"{where}: import '{spec}' has no file {where_files}")
+            elif all(item.path != target for item in local):
+                local.append(SourceFile(target, rel))
             continue
-        errors.append(
-            f"{where}: import '{spec}' is not allowed; a component may import only react, remotion, "
-            f"'{STYLE_IMPORT}' and other files of {COMPONENTS_DIR}/ as './Name'"
-        )
+        lib = LIBRARY_IMPORT_RE.fullmatch(spec)
+        if lib is not None and entry is None:
+            folder = None if library_root is None else library_root / lib["entry"]
+            target = None if folder is None else _find_in(folder, lib["file"])
+            if target is None:
+                errors.append(
+                    f"{where}: import '{spec}' has no file in the style library "
+                    f"({_library_files(library_root, lib['entry'])})"
+                )
+            elif all(item.path != target for item in local):
+                local.append(SourceFile(target, f"{LIBRARY_DIR}/{lib['entry']}/{target.name}"))
+            continue
+        if entry is None:
+            errors.append(
+                f"{where}: import '{spec}' is not allowed; a component may import only react, remotion, "
+                f"'{STYLE_IMPORT}', '{KIT_IMPORT}', other files of {COMPONENTS_DIR}/ as './Name' "
+                f"and style library files as './{LIBRARY_DIR}/<entry>/<File>'"
+            )
+        else:
+            errors.append(
+                f"{where}: import '{spec}' is not allowed in a library entry; it may import only react, "
+                f"remotion, '{STYLE_IMPORT}', '{KIT_IMPORT}' and other files of the same entry as './Name'"
+            )
     for pattern, what in (
         (_IMPORT_DYNAMIC, "dynamic import() is not allowed"),
         (_REQUIRE, "require() is not allowed"),
@@ -157,33 +226,42 @@ def scan_source(path: Path, project_root: Path) -> tuple[list[str], list[str], l
     return errors, warnings, local
 
 
-def collect_files(project_root: Path, names: Iterable[str]) -> tuple[list[Path], list[str], list[str]]:
+def collect_files(
+    project_root: Path,
+    names: Iterable[str],
+    library_root: Path | None = None,
+) -> tuple[list[SourceFile], list[str], list[str]]:
     """The source files a render needs: the named components plus the files they import.
 
+    Files of style library entries are included when a component imports them.
     Returns `(files, errors, warnings)`; `errors` has `scenes`-independent messages only.
     """
-    files: list[Path] = []
+    files: list[SourceFile] = []
     errors: list[str] = []
     warnings: list[str] = []
-    queue = list(names)
-    seen: set[str] = set()
-    while queue:
-        name = queue.pop(0)
-        if name in seen:
-            continue
-        seen.add(name)
+    queue: list[SourceFile] = []
+    for name in names:
         path = _source_file(project_root, name)
-        if path is None:
-            continue  # reported with the scene that names it
-        files.append(path)
-        e, w, local = scan_source(path, project_root)
+        if path is not None:  # a missing file is reported with the scene that names it
+            queue.append(SourceFile(path, path.name))
+    seen: set[Path] = set()
+    while queue:
+        item = queue.pop(0)
+        if item.path in seen:
+            continue
+        seen.add(item.path)
+        files.append(item)
+        entry = item.rel.split("/")[1] if item.rel.startswith(f"{LIBRARY_DIR}/") else None
+        e, w, local = scan_source(item.path, project_root, library_root, entry)
         errors += e
         warnings += w
-        queue += [Path(f).stem for f in local]
+        queue += local
     return files, errors, warnings
 
 
-def check_components(plan: Plan, project_root: Path) -> tuple[list[str], list[str]]:
+def check_components(
+    plan: Plan, project_root: Path, library_root: Path | None = None
+) -> tuple[list[str], list[str]]:
     """`(errors, warnings)` for the custom scenes of a plan, before any job starts."""
     errors: list[str] = []
     warnings: list[str] = []
@@ -193,7 +271,7 @@ def check_components(plan: Plan, project_root: Path) -> tuple[list[str], list[st
                 f"scenes[{i}].component: file not found: {COMPONENTS_DIR}/{scene.component}.tsx "
                 f"(write it in the project folder {project_root})"
             )
-    _, e, w = collect_files(project_root, used_components(plan))
+    _, e, w = collect_files(project_root, used_components(plan), library_root)
     return errors + e, warnings + w
 
 
@@ -250,6 +328,7 @@ class EngineHold:
     names: list[str]
     work: Path
     lock_wait_s: float = LOCK_WAIT_S
+    library_root: Path | None = None
     warnings: list[str] = field(default_factory=list)
     _locked: bool = False
     _registry_bytes: bytes | None = None
@@ -296,13 +375,18 @@ class EngineHold:
         self._registry_bytes = data
 
     def _install_and_check(self) -> list[str]:
-        files, errors, self.warnings = collect_files(self.project_root, self.names)
+        files, errors, self.warnings = collect_files(self.project_root, self.names, self.library_root)
         if errors:
             return errors
         self.job_dir.mkdir(parents=True, exist_ok=True)
         for src in files:
-            shutil.copy2(src, self.job_dir / src.name)
-        by_name = {f.stem: f for f in files}
+            target = self.job_dir / src.rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src.path, target)
+        if any(src.rel.startswith(f"{LIBRARY_DIR}/") for src in files):
+            for shim, text in LIBRARY_SHIMS.items():
+                (self.job_dir / LIBRARY_DIR / shim).write_text(text, encoding="utf-8", newline="\n")
+        by_name = {Path(f.rel).stem: f for f in files if "/" not in f.rel}
         missing = [n for n in self.names if n not in by_name]
         if missing:
             return [f"{COMPONENTS_DIR}/{n}.tsx: file not found" for n in missing]
@@ -310,7 +394,7 @@ class EngineHold:
         self._line_names = {}
         lines = ["import type {ComponentType} from 'react';"]
         for i, n in enumerate(self.names):
-            lines.append(f"import C{i} from './job/{by_name[n].stem}';")
+            lines.append(f"import C{i} from './job/{Path(by_name[n].rel).stem}';")
             self._line_names[len(lines)] = n
         lines += ["", "// Generated for one render by argus.tools.components; the committed file is an empty map."]
         lines += ["// eslint-disable-next-line @typescript-eslint/no-explicit-any"]
@@ -365,7 +449,9 @@ class EngineHold:
                 name = self._line_names.get(line, "?")
                 out.append(f"{COMPONENTS_DIR}/{name}.tsx: the default export is not a React component ({msg})")
             elif self.job_dir.resolve() in path.parents:
-                out.append(f"{COMPONENTS_DIR}/{path.name}({line},{m['col']}): {msg}")
+                rel = path.relative_to(self.job_dir.resolve()).as_posix()
+                shown = rel if rel.startswith(f"{LIBRARY_DIR}/") else f"{COMPONENTS_DIR}/{rel}"
+                out.append(f"{shown}({line},{m['col']}): {msg}")
             else:
                 out.append(f"{path.name}({line},{m['col']}): {msg}")
         if len(out) > MAX_ERRORS:

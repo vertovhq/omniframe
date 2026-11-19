@@ -42,6 +42,8 @@ RETENTION_S = 7 * 24 * 3600      # jobs older than this are deleted at server st
 MAX_RUN_S = 4 * 3600             # a running job older than this counts as stuck
 START_GRACE_S = 60.0             # a worker that has not reported a pid yet gets this long
 DEFAULT_WAIT_S = 20.0
+# `job_status(wait_s=...)` is capped here, so one tool call stays well under the client's timeout.
+MAX_STATUS_WAIT_S = 20.0
 POLL_S = 0.15
 ERROR_TAIL_CHARS = 1500
 
@@ -317,6 +319,10 @@ def _snapshot(job_id: str) -> dict:
         "note": status.get("note"),
         "elapsed_s": round(float(status.get("finished") or now) - float(began), 1),
     }
+    progress = status.get("progress")
+    if out["state"] == "running" and isinstance(progress, (int, float)) and 0 < progress < 1:
+        # Linear estimate from the time spent so far; a rough number, not a promise.
+        out["eta_s"] = round(out["elapsed_s"] * (1 - progress) / progress, 1)
     if status.get("state") == "done":
         out["result"] = status.get("result") or {}
     elif status.get("state") == "error":
@@ -360,9 +366,27 @@ def result_for_model(result: dict) -> dict | list:
     return _with_images(summary, result.get("images"), _image_max_side(result))
 
 
-def job_status(job_id: str) -> dict | list:
-    """Tool logic of `job_status`: status dict, or `[json, Image, ...]` when the result has images."""
+def clamp_status_wait(wait_s: float | None) -> float:
+    """`job_status` waits at most `MAX_STATUS_WAIT_S` seconds; negative or missing means no wait."""
+    try:
+        value = float(wait_s or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    if value != value:  # NaN
+        return 0.0
+    return min(max(0.0, value), MAX_STATUS_WAIT_S)
+
+
+def job_status(job_id: str, wait_s: float = 0.0) -> dict | list:
+    """Tool logic of `job_status`: status dict, or `[json, Image, ...]` when the result has images.
+
+    With `wait_s` it waits, polling, until the job is done or failed or the time is up.
+    """
+    deadline = time.monotonic() + clamp_status_wait(wait_s)
     snap = _snapshot(job_id)
+    while snap["state"] not in ("done", "error") and time.monotonic() < deadline:
+        time.sleep(max(0.0, min(POLL_S, deadline - time.monotonic())))
+        snap = _snapshot(job_id)
     result = snap.get("result")
     if snap["state"] == "done" and isinstance(result, dict) and result.get("images"):
         kept = {k: v for k, v in result.items() if k not in ("images", "image_max_side")}

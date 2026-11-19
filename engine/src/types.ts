@@ -280,6 +280,8 @@ export type CaptionStyle = {
   shadow?: number;
   /** Background color behind the text. */
   plate?: string;
+  /** 'as_is' (default) keeps the words as written; 'upper' draws them in capitals. */
+  case?: 'upper' | 'as_is';
 };
 
 export type Captions = {
@@ -316,6 +318,9 @@ export type PlanAudio = {
   sfx?: SfxEvent[];
 };
 
+/** A moment found in the voice: where word is spoken (nth time, default 1) plus offset seconds. */
+export type WordCue = {word: string; nth?: number; offset?: number};
+
 export type Plan = {
   version: 2;
   format: PlanFormat;
@@ -330,6 +335,8 @@ export type Plan = {
   hud?: HudOverlay;
   captions?: Captions;
   audio?: PlanAudio;
+  /** Named moments for custom scenes: seconds, or a spoken word. */
+  cues?: Record<string, number | WordCue>;
 };
 
 /**
@@ -342,4 +349,6 @@ export type EngineProps = Omit<KineticProps, 'scenes'> &
   Partial<Pick<Plan, 'version' | 'format' | 'clips' | 'captions' | 'audio'>> & {
     scenes?: Scene[];
     style?: StyleTokens | ThemeName;
+    /** The plan's `cues`, resolved to seconds on the video timeline by the Python side. */
+    cues?: Record<string, number>;
   };

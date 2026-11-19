@@ -7,6 +7,7 @@ voice and watch tools use `{w, s, e}`; `parse_words` accepts both.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -99,6 +100,54 @@ def group_phrases(words: list[dict], max_words: int = PHRASE_MAX_WORDS,
     if cur:
         lines.append(cur)
     return lines
+
+
+_TOKEN_STRIP = re.compile(r"[\W_]+", re.UNICODE)
+
+
+def _token(word: str) -> str:
+    """Same rule as `normalizeToken` in engine/src/text.tsx: lower case, letters and digits only."""
+    return _TOKEN_STRIP.sub("", word.lower())
+
+
+def resolve_cues(cues: Mapping[str, Any], words: Sequence[Mapping[str, Any]] | None) -> tuple[dict[str, float], list[str]]:
+    """Plan cues as seconds on the output timeline, plus errors for cues that cannot be placed.
+
+    A number is kept. A word cue (`word`, `nth`, `offset`; see `plan.WordCue`) is the start of the
+    `nth` place where its words are spoken in a row, plus `offset` (never before 0). `words` are
+    `{w, s, e}` on the output timeline, as `render_video` loads them for the captions.
+    """
+    out: dict[str, float] = {}
+    errors: list[str] = []
+    tokens = [_token(str(w["w"])) for w in words or []]
+    for name, cue in cues.items():
+        if isinstance(cue, (int, float)):
+            out[name] = round(float(cue), 3)
+            continue
+        query = [_token(t.rstrip("*")) + ("*" if t.endswith("*") else "") for t in str(_cue_field(cue, "word")).split()]
+        query = [q for q in query if q.strip("*")]
+        nth = int(_cue_field(cue, "nth"))
+        offset = float(_cue_field(cue, "offset"))
+        if not query:
+            errors.append(f"cues.{name}: {_cue_field(cue, 'word')!r} has no letters or digits to look for")
+            continue
+        starts = [
+            i for i in range(len(tokens) - len(query) + 1)
+            if all(tokens[i + k].startswith(q[:-1]) if q.endswith("*") else tokens[i + k] == q for k, q in enumerate(query))
+        ]
+        if len(starts) < nth:
+            heard = f"it is spoken {len(starts)} time(s)" if starts else "it is not in the words"
+            errors.append(
+                f"cues.{name}: cannot find occurrence {nth} of {_cue_field(cue, 'word')!r} in captions.words ({heard}); "
+                "check the spelling against the voice words file"
+            )
+            continue
+        out[name] = round(max(0.0, float(words[starts[nth - 1]]["s"]) + offset), 3)  # type: ignore[index]
+    return out, errors
+
+
+def _cue_field(cue: Any, name: str) -> Any:
+    return cue.get(name, 1 if name == "nth" else 0.0) if isinstance(cue, Mapping) else getattr(cue, name)
 
 
 def _clip_field(clip: Any, name: str) -> Any:

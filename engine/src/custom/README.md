@@ -22,11 +22,32 @@ If the code does not compile, the render does not start and the compiler errors 
   - `react`
   - `remotion` (`useCurrentFrame`, `useVideoConfig`, `interpolate`, `spring`, `random`, `Img`, `staticFile`, ...)
   - `../style` (`useStyle`, `useLayout`, `fontFor`, `withAlpha`, `resolveMedia`, ...)
+  - `../kit`, the motion kit: ready-made blocks and timing hooks (`Counter`, `Plate`, `SceneTrack`,
+    `useCue`, ...). Catalogue: `../kit/KIT.md`, also returned by `studio_guide(custom_scenes=true)`.
+    `custom/kit.ts` only re-exports `src/kit/`.
   - other files of `components/`, as `./Other`
+  - files of a style library entry, as `./library/<entry>/<File>` (see "Style library" below)
 - No network: no `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, dynamic `import()` or
   `require()`, and no `http(s)://` URLs. Media comes from the plan's files through `resolveMedia()`.
 - Deterministic: frames are rendered in parallel. Use `random('seed')` from `remotion` instead of
   `Math.random()`, and `useCurrentFrame()` instead of `Date.now()`.
+
+## Style library
+
+Scenes that worked can be kept for later videos: `export_package(save_to_library=...)` copies the
+listed components into `<OMNIFRAME_OUTPUT_DIR>/library/<entry>/` (with `card.md` and `poster.jpg`), and
+`studio_guide` lists the entries. A component uses one with a default or named import,
+
+```tsx
+import YachtBoat from './library/yacht-scenes/Boat';
+```
+
+The entry's files keep their own imports (`../style`, `../kit`, `./Sibling`), so they work as saved.
+Only the files that are imported (and what they import) are copied into the render, under
+`custom/job/library/<entry>/`. Entry files follow the same contract as project components; they may
+not import other library entries. An entry name is lowercase letters, digits and `-`; `style` and
+`kit` are reserved. The registry names only project components: a plan scene still points at a file in
+`<project>/components/`, which may be a thin wrapper around a library component.
 
 ## Layout
 
@@ -37,6 +58,9 @@ If the code does not compile, the render does not start and the compiler errors 
 - `useStyle()` gives the plan's tokens: `colors.text`, `colors.accent`, `colors.muted`, ...
   Use `fontFor(style, 'display')` for the font.
 - `useCurrentFrame()` counts from the start of the scene, not of the video.
+- Moments tied to the voice: `plan.cues` (seconds, or `{word, nth, offset}` found in
+  `captions.words`) reach the component through the kit's `useCue(name)` and `useWords()`, in seconds
+  on the scene's clock. Do not copy times into `props`.
 
 ## Example
 

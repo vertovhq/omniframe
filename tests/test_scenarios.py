@@ -312,8 +312,7 @@ def test_footage_edit_with_remapped_captions(monkeypatch: pytest.MonkeyPatch) ->
     seen = watch.run_job({"path": str(talk), "project": "footage-talk", "transcript": True}, _quiet)
     assert seen["duration"] == pytest.approx(TALK_S, abs=0.1) and seen["has_audio"] is True
     assert seen["language"] == "en" and fake.calls[0]["initial_prompt"] == watch.ENGLISH_VERBATIM_PROMPT
-    assert seen["words"] == [[w, s, e] for w, s, e in TALK_WORDS]  # all 32, nothing tidied away
-    assert seen["word_count"] == len(TALK_WORDS)
+    assert seen["word_count"] == len(TALK_WORDS)  # all 32, nothing tidied away; the list is in words_path
     words_file = Path(seen["words_path"])
     assert [(w["w"], w["s"], w["e"]) for w in json.loads(words_file.read_text(encoding="utf-8"))] == TALK_WORDS
     # the plan names the transcript as examples/media/talk_sample.words.json: the same words

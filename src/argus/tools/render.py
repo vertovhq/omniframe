@@ -38,7 +38,7 @@ import subprocess
 import time
 import uuid
 from collections import deque
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +46,7 @@ from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
 
 from .. import __version__, jobs
-from ..captions import clean_word_timings, load_words, remap_words_to_clips
+from ..captions import clean_word_timings, load_words, remap_words_to_clips, resolve_cues
 from ..config import CONFIG
 from ..ffmpeg import FFmpegError, measure_loudness, run_ffmpeg, run_ffmpeg_stderr, stream_info, temp_sibling
 from ..plan import (
@@ -55,12 +55,14 @@ from ..plan import (
     CardScene,
     MediaBackground,
     Plan,
+    WordCue,
     WordsRemap,
     validate_plan,
 )
 from ..project import project_dir, slugify
 from . import media_prep
 from .components import EngineHold, check_components, used_components
+from .library import project_library_dir
 from .watch import format_time
 
 MODES = ("stills", "preview", "final")
@@ -73,6 +75,15 @@ FINAL_CRF = 18
 STILL_JPEG_QUALITY = 92
 LOUDNESS_TP = -1.5             # true-peak ceiling, dB (design §9 step 6)
 LOUDNESS_LRA = 11.0
+# `loudnorm` only applies gain, so a loud transient can still pass the QA ceiling (-1 dBTP).
+# The limiter after it caps the sample peaks at -2 dBFS, leaving about 1 dB for the peaks
+# between samples and the AAC encode. `alimiter` takes a linear limit (0.0625 to 1):
+# https://ffmpeg.org/ffmpeg-filters.html#alimiter
+PEAK_LIMIT_DB = -2.0
+PEAK_LIMIT = round(10 ** (PEAK_LIMIT_DB / 20), 4)  # 0.7943
+# level=disabled: the default auto-levels the output back up to 0 dBFS.
+# latency=true: delay the audio by the lookahead so it stays in sync.
+LIMITER_FILTER = f"alimiter=limit={PEAK_LIMIT}:attack=5:release=50:level=disabled:latency=true"
 AUDIO_BITRATE = "192k"
 COMPARE_MAX_WIDTH = 1600       # side-by-side image: both panels together
 COMPARE_MAX_HEIGHT = 960
@@ -362,11 +373,17 @@ def prepare_render(
         if resolve_asset(value, bases) is None and not (kind == "sfx" and _builtin_sfx(value)):
             errors.append(f"{where}: file not found: {value} (relative paths are looked up in the project folder {project_root})")
 
-    component_errors, component_warnings = check_components(parsed, project_root)
+    component_errors, component_warnings = check_components(parsed, project_root, project_library_dir(project_root))
     errors += component_errors
 
     words, word_errors = _caption_words(parsed, bases)
     errors += word_errors
+
+    cue_seconds: dict[str, float] = {}
+    follows_words = any(isinstance(c, WordCue) for c in parsed.cues.values())
+    if parsed.cues and (words is not None or not follows_words):  # no words: the cause is reported above
+        cue_seconds, cue_errors = resolve_cues(parsed.cues, words)
+        errors += cue_errors
 
     voice_s: float | None = None
     voice = parsed.audio.voice if parsed.audio else None
@@ -430,6 +447,7 @@ def prepare_render(
         "bases": [str(b) for b in bases],
         "plan": resolved.to_dict(),
         "caption_words": words,
+        "cues": cue_seconds,
         "times": clean_times,
         "compare": compare_payload,
         "warnings": _plan_warnings(resolved) + component_warnings,
@@ -552,9 +570,11 @@ def _engine_props(
     *,
     with_audio: bool,
     clip_media: Sequence[media_prep.ClipMedia] | None = None,
+    cues: Mapping[str, float] | None = None,
 ) -> dict:
     """The plan as the engine wants it: every file path points into the public dir, words are inline.
 
+    `cues` are the plan's cues resolved to seconds (`resolve_cues`); the engine gets only those.
     `clip_media` (from `_prepare_clip_media`) swaps a clip's file for its proxy. For a clip
     without `out` it also sets `length`, the seconds the clip lasts (file length minus `in`);
     this field exists only in the engine props, it is not part of the plan.
@@ -576,6 +596,7 @@ def _engine_props(
             scene["media"] = public.add(scene["media"], f"scenes[{i}].media")
     if props.get("captions") is not None:
         props["captions"]["words"] = words or []
+    props["cues"] = dict(cues or {})
     audio = props.pop("audio", None)
     if audio and with_audio:
         if audio.get("voice"):
@@ -756,7 +777,7 @@ def finalize_video(raw: Path, out: Path) -> dict:
                 f"loudnorm=I={target}:TP={LOUDNESS_TP}:LRA={LOUDNESS_LRA}"
                 f":measured_I={measured['input_i']}:measured_TP={measured['input_tp']}"
                 f":measured_LRA={measured['input_lra']}:measured_thresh={measured['input_thresh']}"
-                f":offset={measured['target_offset']}:linear=true"
+                f":offset={measured['target_offset']}:linear=true,{LIMITER_FILTER}"
             )
             run_ffmpeg([
                 "-i", str(raw), "-map", "0:v:0", "-map", "0:a:0", "-c:v", "copy",
@@ -802,7 +823,7 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     clip_media = _prepare_clip_media(plan, bases, root, with_audio=mode != "stills", report=report)
     props = _engine_props(
         payload["plan"], payload.get("caption_words"), public,
-        with_audio=mode != "stills", clip_media=clip_media,
+        with_audio=mode != "stills", clip_media=clip_media, cues=payload.get("cues"),
     )
     spec: dict[str, Any] = {
         "props": props,
@@ -833,7 +854,7 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     # Reserve the engine folder until the bundle is built; custom components are installed and
     # typechecked here. `_run_node` releases the hold (and `acquire` cleans up when it raises).
     report(0.02, "preparing the engine")
-    hold = EngineHold(engine_dir(), root, used_components(plan), work)
+    hold = EngineHold(engine_dir(), root, used_components(plan), work, library_root=project_library_dir(root))
     compile_errors = hold.acquire()
     if compile_errors:
         hold.release()

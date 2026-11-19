@@ -246,3 +246,163 @@ def test_valid_component_renders_in_stills(root: Path) -> None:
     assert bright > 100, f"the component drew almost nothing ({bright} bright pixels)"
     _engine_untouched()
     assert not list((project.project_dir("t") / ".work").glob("render-*"))
+
+
+# ------------------------------------------------------------------ the motion kit (task 20.2)
+
+KIT = ENGINE / "src" / "kit"
+CUE_PROBE = """\
+import {Counter, SceneTrack, Stage} from '../kit';
+
+export default function CuePlayer() {
+  const centre = {alignItems: 'center', justifyContent: 'center'} as const;
+  return (
+    <SceneTrack fade={0.3} scenes={[
+      {at: 0, render: () => <Stage bg="#1030A0" style={centre}><Counter to={50} dur={0.5} size={200} color="#ffffff" /></Stage>},
+      {at: 'swap', render: () => <Stage bg="#C01020" style={centre}><Counter to={9} dur={0.5} size={200} color="#ffffff" /></Stage>},
+    ]} />
+  );
+}
+"""
+
+
+def _kit_example() -> str:
+    text = (KIT / "KIT.md").read_text(encoding="utf-8")
+    start = text.index("```tsx\n") + len("```tsx\n")
+    return text[start:text.index("\n```", start)] + "\n"
+
+
+def test_kit_catalogue_lists_every_export_and_is_short() -> None:
+    import re
+
+    text = (KIT / "KIT.md").read_text(encoding="utf-8")
+    assert len(text) < 5000
+    exported = {
+        name
+        for path in KIT.glob("*.ts*")
+        for name in re.findall(r"^export (?:const|function) (\w+)", path.read_text(encoding="utf-8"), re.M)
+    }
+    assert {"SceneTrack", "useCue", "Counter", "Plate", "Delta", "PollCard", "Checklist", "clamp"} <= exported
+    missing = sorted(n for n in exported if not re.search(rf"\b{n}\b", text))
+    assert not missing, f"KIT.md does not mention: {missing}"
+    assert (ENGINE / "src" / "custom" / "kit.ts").read_text(encoding="utf-8").count("export *") == 1
+
+
+def test_kit_example_is_a_short_component_the_source_check_accepts(root: Path) -> None:
+    example = _kit_example()
+    assert len(example.strip().splitlines()) <= 40
+    _write(root, "Budget", example)
+    assert _check(_plan("Budget"), root) == ([], [])
+
+
+def _mean_rgb(path: str, top_fraction: float = 0.4) -> np.ndarray:
+    with PILImage.open(path) as img:
+        rgb = np.asarray(img.convert("RGB"), dtype=float)
+    return rgb[: int(rgb.shape[0] * top_fraction)].mean(axis=(0, 1))
+
+
+@needs_engine
+def test_scene_track_switches_on_a_cue_found_in_the_voice_words(root: Path) -> None:
+    words = [{"w": w, "s": 0.2 + i, "e": 0.6 + i} for i, w in enumerate(["one", "two", "three", "four", "five", "six"])]
+    (root / "voice.words.json").write_text(json.dumps(words), encoding="utf-8")
+    _write(root, "CuePlayer", CUE_PROBE)
+    plan = _plan(
+        captions={"words": "voice.words.json"},
+        cues={"swap": {"word": "three"}},  # spoken at 2.2 s of the video
+    )
+    plan["scenes"] = [{"kind": "custom", "at": 1.0, "until": 6.0, "component": "CuePlayer"}]  # the scene starts at 1 s
+    plan["duration"] = 6
+    out = render.render_video(plan, "t", mode="stills", times=[2.0, 3.0], wait_s=WAIT)
+    assert isinstance(out, list), out
+    before, after = (_mean_rgb(p) for p in json.loads(out[0])["stills"])
+    assert before[2] > before[0] + 40, f"expected blue before the cue, got {before}"
+    assert after[0] > after[2] + 80, f"expected red after the cue (2.2 s), got {after}"
+    _engine_untouched()
+
+
+@needs_engine
+@pytest.mark.parametrize("fmt, size", [("9:16", (1080, 1920)), ("16:9", (1920, 1080))])
+def test_kit_example_scene_renders_in_both_formats(root: Path, fmt: str, size: tuple[int, int]) -> None:
+    _write(root, "Budget", _kit_example())
+    plan = _plan(cues={"burn": 2.0})
+    plan["scenes"] = [{"kind": "custom", "at": 0, "until": 4, "component": "Budget"}]
+    plan["duration"] = 4
+    out = render.render_video(plan, "t", mode="stills", times=[1.2, 3.2], format=fmt, wait_s=WAIT)
+    assert isinstance(out, list), out
+    stills = json.loads(out[0])["stills"]
+    arrays = []
+    for path in stills:
+        with PILImage.open(path) as img:
+            assert img.size == size
+            arrays.append(np.asarray(img.convert("L"), dtype=float))
+    for gray in arrays:
+        assert gray.std() > 5, "the scene drew almost nothing"
+    assert np.abs(arrays[0] - arrays[1]).mean() > 2, "the scene did not change at the cue"
+    _engine_untouched()
+
+
+# ------------------------------------------------------------------ the style library (task 20.3)
+
+LIB_BADGE = """\
+import {fontFor, useLayout, useStyle} from '../style';
+import Dot from './Dot';
+
+export default function Badge({label = 'OK'}: {label?: string}) {
+  const style = useStyle();
+  const {fs, u} = useLayout();
+  return (
+    <div style={{textAlign: 'center', color: style.colors.text, fontFamily: fontFor(style, 'display').css}}>
+      <Dot size={u(240)} color={style.colors.accent} />
+      <div style={{fontSize: fs(200), fontWeight: 900}}>{label}</div>
+    </div>
+  );
+}
+"""
+LIB_DOT = """\
+export default function Dot({size = 100, color = '#ffffff'}: {size?: number; color?: string}) {
+  return <div style={{width: size, height: size, borderRadius: size, background: color, margin: '0 auto'}} />;
+}
+"""
+USES_BADGE = """\
+import Badge from './library/demo-badges/Badge';
+
+export default function Uses() {
+  return <Badge label="LIB" />;
+}
+"""
+
+
+def _library_entry(root: Path, badge: str = LIB_BADGE) -> Path:
+    """`demo-badges` in the library next to the project (`<output>/library`), files only."""
+    entry = root.parent.parent / "library" / "demo-badges"
+    entry.mkdir(parents=True, exist_ok=True)
+    (entry / "Badge.tsx").write_text(badge, encoding="utf-8")
+    (entry / "Dot.tsx").write_text(LIB_DOT, encoding="utf-8")
+    return entry
+
+
+@needs_engine
+def test_a_component_that_imports_a_library_entry_renders_stills(root: Path) -> None:
+    _library_entry(root)
+    _write(root, "Uses", USES_BADGE)
+    out = render.render_video(_plan("Uses"), "t", mode="stills", times=[1.0], wait_s=WAIT)
+    assert isinstance(out, list), out
+    summary = json.loads(out[0])
+    assert "valid" not in summary and len(summary["stills"]) == 1, summary
+    with PILImage.open(summary["stills"][0]) as img:
+        assert img.size == (1080, 1920)
+        pixels = np.asarray(img.convert("RGB").resize((108, 192)))
+    bright = int((pixels.max(axis=2) > 150).sum())
+    assert bright > 100, f"the library component drew almost nothing ({bright} bright pixels)"
+    _engine_untouched()  # the copied entry files and the re-export files are gone again
+
+
+@needs_engine
+def test_a_compile_error_in_a_library_file_names_the_entry(root: Path) -> None:
+    _library_entry(root, LIB_BADGE.replace("const style = useStyle();", "const style = useStyle();\n  const n: number = 'x';"))
+    _write(root, "Uses", USES_BADGE)
+    out = render.render_video(_plan("Uses"), "t", mode="stills", times=[0.5], wait_s=WAIT)
+    assert isinstance(out, dict) and out.get("valid") is False, out
+    text = "\n".join(out["errors"])
+    assert "library/demo-badges/Badge.tsx(" in text and "TS2322" in text, text
+    _engine_untouched()

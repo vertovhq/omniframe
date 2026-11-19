@@ -78,9 +78,10 @@ ENGLISH_VERBATIM_PROMPT = (
 )
 VERBATIM_PROMPTS = {"ru": RUSSIAN_VERBATIM_PROMPT, "en": ENGLISH_VERBATIM_PROMPT}
 
-# Words are also returned inside the summary, so the model can cut on them without opening
-# a file. Over this many words only `words_path` is given (a talk of about 8 minutes).
-INLINE_WORDS_LIMIT = 1200
+# The result never lists the words or the sentences: it gives the paths of those files. A talk
+# of a few minutes has more words than a tool result can hold (the client cuts at 30,000 characters).
+# `transcript_head` is the start of the text, enough to see what the speaker says.
+TRANSCRIPT_HEAD_CHARS = 300
 
 _PTS_RE = re.compile(r"pts_time:\s*(-?[0-9]+(?:\.[0-9]+)?)")
 _whisper_models: dict[str, object] = {}
@@ -470,6 +471,14 @@ def _transcript_stage(src: Path, cache: Path, language: str | None, duration: fl
     return stage, False
 
 
+def _transcript_head(segments: list[dict]) -> str:
+    """The start of the transcript, cut to `TRANSCRIPT_HEAD_CHARS`: a glance at the text, not the text."""
+    text = " ".join(str(s.get("text", "")).strip() for s in segments).strip()
+    if len(text) <= TRANSCRIPT_HEAD_CHARS:
+        return text
+    return text[:TRANSCRIPT_HEAD_CHARS].rstrip() + "..."
+
+
 def run_job(payload: dict, report: Callable[..., None]) -> dict:
     """Worker side of `watch_video` (called by `argus.jobs` for kind `watch`)."""
     src = Path(payload["path"]).resolve()
@@ -524,8 +533,8 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         "pages_total": pages_total,
         "page": page,
         "words_path": transcript["words_path"] if transcript else None,
+        "segments_path": str(cache / "segments.json") if transcript else None,
         "language": transcript["language"] if transcript else None,
-        "segments": transcript["segments"] if transcript else [],
         "sound_events": analysis["sound_events"],
         "images": images,
         "image_max_side": SHEET_MAX_SIDE,
@@ -533,13 +542,11 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     if transcript:
         spoken = json.loads(Path(transcript["words_path"]).read_text(encoding="utf-8"))
         result["word_count"] = len(spoken)
-        if len(spoken) <= INLINE_WORDS_LIMIT:
-            result["words"] = [[w["w"], w["s"], w["e"]] for w in spoken]  # [word, start, end], as in words.json
-        else:
-            result["words_note"] = (
-                f"{len(spoken)} words are too many to list here; open words_path "
-                "(a list of {w, s, e}) for the word timings"
-            )
+        result["transcript_head"] = _transcript_head(transcript["segments"])
+        result["words_note"] = (
+            "the word timings are in words_path (a list of {w, s, e} in seconds of the file); "
+            "the sentences with timecodes are in segments_path"
+        )
     if transcript_note:
         result["transcript_note"] = transcript_note
     if analysis.get("sound_events_note"):

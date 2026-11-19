@@ -6,6 +6,7 @@ start the real Remotion engine and are skipped when `engine/node_modules` is mis
 
 from __future__ import annotations
 
+import array
 import dataclasses
 import json
 import os
@@ -292,6 +293,19 @@ def test_finalize_normalises_loudness_tags_and_keeps_the_video(tmp_path: Path) -
     # faststart: the moov box comes before the media data
     head = out.read_bytes()
     assert head.find(b"moov") < head.find(b"mdat")
+
+
+def test_limiter_caps_a_full_scale_burst_at_the_limit() -> None:
+    """The limiter filter alone holds a 0.99 burst at or below 0.8 linear (about -2 dBFS)."""
+    proc = subprocess.run(
+        [CONFIG.ffmpeg, "-hide_banner", "-v", "error",
+         "-f", "lavfi", "-i", "aevalsrc=exprs=0.99:s=48000:d=1",
+         "-af", render.LIMITER_FILTER, "-f", "f32le", "-ac", "1", "pipe:1"],
+        capture_output=True, check=True,
+    )
+    samples = array.array("f", proc.stdout)
+    assert len(samples) == 48000
+    assert max(abs(s) for s in samples) <= 0.8
 
 
 def test_finalize_without_audio_only_tags(tmp_path: Path) -> None:

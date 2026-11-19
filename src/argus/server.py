@@ -40,7 +40,7 @@ def _registered_tool_names() -> list[str]:
 
 
 @mcp.tool()
-def studio_guide() -> dict:
+def studio_guide(custom_scenes: bool = False) -> list[str | Image] | dict:
     """Read this at the start of every session: how to work, what is available, what the user prefers.
 
     Returns `guide` (the working method: you are the director and the editor, ARGUS
@@ -49,26 +49,37 @@ def studio_guide() -> dict:
     Veo API, Google Flow session) and `preferences` (the user's saved lasting
     preferences and corrections, newest last; they override your defaults).
     `preferences_truncated` is true when older entries were left out to keep the
-    text short.
+    text short. Call it again with `custom_scenes=true` when you plan custom scenes:
+    the result then also has `motion_kit`, the catalogue of ready-made blocks (counters,
+    plates, pop-ups, polls, text, effects, scene tracks with cues) that custom components
+    import from `'../kit'`.
+    `library` is the user's style library: scenes, characters, plates and caption styles
+    saved from earlier videos. It has `entries` (the count), `index` (one line per entry)
+    and `posters` (the newest entries, at most 8). When it has posters, the result is the
+    JSON text followed by those posters as images, in the order of `library.posters`
+    (512 px): compare them with the reference you are about to make before you write new
+    code. An entry's files are imported by a custom component as
+    `import X from './library/<entry>/<File>'`.
     """
-    return studio.studio_guide(_registered_tool_names())
+    return studio.result_for_model(studio.studio_guide(_registered_tool_names(), custom_scenes=custom_scenes))
 
 
 @mcp.tool()
-def job_status(job_id: str) -> list[str | Image] | dict:
+def job_status(job_id: str, wait_s: float = 0) -> list[str | Image] | dict:
     """Check a long-running operation that returned a `job_id` instead of a result.
 
     Tools that can take longer than about 20 seconds (watching a long video,
     rendering, transcribing) keep working in a background process and return
     `{"job_id", "state": "running", ...}` when they are not done in time. Call this
-    with that `job_id` every 10-20 seconds until `state` is `done` or `error`.
+    with that `job_id` and `wait_s=20` to wait on the server until the job ends (at
+    most 20 seconds per call; the wait stops early when the job is done or failed).
     Returns `state` (queued|running|done|error), `progress` (0..1, or null when
-    unknown), `note`, `elapsed_s`, and then `result` (when done; frames come back as
-    images, each listed with its path) or `error` (the error tail, also when the
-    worker process died). Starting the same operation again while it runs returns
-    the same job.
+    unknown), `eta_s` (a rough estimate, only while running with known progress),
+    `note`, `elapsed_s`, and then `result` (when done; frames come back as images,
+    each listed with its path) or `error` (the error tail, also when the worker
+    process died). Starting the same operation again while it runs returns the same job.
     """
-    return jobs.job_status(job_id)
+    return jobs.job_status(job_id, wait_s)
 
 
 @mcp.tool()
@@ -188,9 +199,10 @@ def voice_options(
     Every voice is short: `id`, `name`, `gender`, `age`, `accent`, `language` and a
     `description` of at most 80 characters. Returns `own_voices` (the ElevenLabs
     account's voices, matching language first), `library_voices` (ElevenLabs Voice
-    Library voices that work through the API on every plan),
-    `library_voices_paid_plan_only` (library voices marked `free_users_allowed=false`:
-    through the API they need a paid plan, so do not pick them without asking),
+    Library voices that the API accepts on the current plan), `library_voices_paid_plan_only`
+    (voices that need a paid plan: library voices marked `free_users_allowed=false`, and on the
+    free plan every library voice and every own voice that is not premade; do not pick them
+    without asking), `plan` (the ElevenLabs tier, or a note when it cannot be read),
     `edge_voices` (free defaults per language), `gemini_voices` (names),
     `providers` (what works right now and why not) and `default_provider`. `limit`
     caps every list (max 50), and the whole answer stays under 6000 characters: when
@@ -226,10 +238,11 @@ def watch_video(
     labelled `mm:ss.s  #shot`) and a JSON summary: `shots` (every cut found over the
     whole file as [start, end] seconds), `frames` (time, file path and shot number of
     each frame, full resolution), `sound_events` (times of sharp sounds with strength
-    0..1), `segments` (spoken text with timecodes), `words` (every spoken word as
-    `[word, start, end]` in seconds of the file, for up to 1200 words) and `words_path`
-    (a words.json file with `{w, s, e}` per word: the file to give a plan as
-    `captions.words.source`). Whisper is asked to keep fillers, stumbles and repeats
+    0..1), `transcript_head` (the start of the spoken text), `segments_path` (a JSON
+    list of sentences `{s, e, text}`) and `words_path` (a JSON list of `{w, s, e}` per
+    word in seconds of the file: read it, or give it to a plan as
+    `captions.words.source`). The words and sentences are never listed in the result,
+    so read the files when you need them. Whisper is asked to keep fillers, stumbles and repeats
     for English and Russian; for other languages it may tidy them away. The transcript
     needs faster-whisper; without it the summary says so in `transcript_note`.
     `project` is a short name for the work (it decides where the cache and files
@@ -287,6 +300,7 @@ def render_video(
     The plan has `format` ("9:16" or "16:9"), optional `fps` and `duration`, `style`
     ("dark", "light" or tokens with colors, fonts, text_scale, safe_area, background,
     grain), `scenes`, `hud`, `captions`, `audio` (voice, music with `duck`, sfx events).
+    Caption words can be drawn in capitals: `captions.style.case` is `"upper"` or `"as_is"` (the default).
     `format` here overrides the plan's. The engine adds no sound effects of its own.
 
     mode "stills" (default): renders only the frames at `times` (seconds, up to 8; default
@@ -306,10 +320,16 @@ def render_video(
 
     Custom scenes: when no built-in scene fits, write a React component into
     `<project>/components/<Name>.tsx` (default export; may import only `react`, `remotion`,
-    `../style` and other files of that folder; no network) and use it as
+    `../style`, `../kit` (the motion kit: ready-made blocks, see `studio_guide(custom_scenes=true)`)
+    other files of that folder and style library files as `./library/<entry>/<File>`, see
+    `studio_guide`; no network) and use it as
     `{"kind": "custom", "at": 2, "component": "<Name>", "props": {...}}`. It is
     typechecked on every render. Compiler errors come back as `{"valid": false, "errors":
     ["components/<Name>.tsx(4,9): error TS...", ...]}` and nothing is rendered.
+    `plan.cues` names moments for custom scenes: `{"burn": {"word": "сгорает"}, "end": 41.2}`.
+    A word cue is where that word is spoken in `captions.words` (optional `nth`, `offset`
+    seconds, `prefix*`), so a new voice moves it; a number is seconds. A component reads a
+    cue with the kit's `useCue('burn')`, so no times are typed into its props.
 
     An invalid plan, a missing file or bad `times` returns `{"valid": false, "errors":
     ["scenes[3].kind: ...", ...]}` with every problem as `path: message`, and nothing is
@@ -354,6 +374,7 @@ def export_package(
     texts: dict,
     cover_times: dict[str, float] | None = None,
     name: str | None = None,
+    save_to_library: dict | None = None,
 ) -> list[str | Image] | dict:
     """Package a finished video for publishing: the final folder with videos, covers and post.md.
 
@@ -375,10 +396,26 @@ def export_package(
     says why. A text over a platform's length limit is listed in `violations` and marked in
     post.md; the files are still written, so shorten the text and export again. On success
     the project's `.work/` folder is removed.
+
+    `save_to_library` keeps what worked for the next video: after a good final, offer the
+    user to save the custom scenes, characters, plates or caption styles to their style
+    library, and pass this only after they agree. It is
+    `{"name": "yacht-scenes", "components": ["Art", "Scenes1"], "what": "...", "fits_when": "...",
+    "props": "...", "replace": false, "poster_time": 12.5}`. `components` are file names in
+    `<project>/components/` (the files they import come along). `what` says what the entry is,
+    `fits_when` when to use it (a reference where it fits, and where it does not); at most 200
+    and 250 characters, they form the entry's line in the index; `props` (optional, 600) lists
+    the props worth changing. `poster_time`
+    (optional, seconds) picks the poster frame from the final, else the cover frame is used.
+    `replace` must be true to overwrite an entry of the same name. The entry goes to
+    `<OMNIFRAME_OUTPUT_DIR>/library/<name>/` with `card.md` and a 512 px `poster.jpg`, and the
+    result has a `library` block; `studio_guide` lists the entries from then on.
     A long video runs in the background: you get `{"job_id", "state": "running"}`; call
     `job_status` until it is done.
     """
-    return export.export_package(project, videos, texts, cover_times=cover_times, name=name)
+    return export.export_package(
+        project, videos, texts, cover_times=cover_times, name=name, save_to_library=save_to_library
+    )
 
 
 @mcp.tool()

@@ -101,3 +101,68 @@ def test_clean_and_group():
     lines = group_phrases([_w("one", 0, 0.3), _w("two.", 0.3, 0.6), _w("three", 0.6, 0.9)])
     assert [[w["word"] for w in ln] for ln in lines] == [["one", "two."], ["three"]]
 
+
+# ------------------------------------------------------------------ cues (task 20.2)
+
+SPOKEN = [
+    {"w": "Сначала", "s": 0.5, "e": 0.9},
+    {"w": "пятнадцать", "s": 1.0, "e": 1.6},
+    {"w": "миллионов,", "s": 1.7, "e": 2.3},
+    {"w": "потом", "s": 2.5, "e": 2.8},
+    {"w": "пятнадцать", "s": 3.0, "e": 3.5},
+    {"w": "рублей.", "s": 3.6, "e": 4.0},
+]
+
+
+def test_cues_keep_numbers_and_find_words_ignoring_case_and_punctuation():
+    from argus.captions import resolve_cues
+
+    out, errors = resolve_cues({"a": 7.5, "b": {"word": "МИЛЛИОНОВ", "nth": 1, "offset": 0.0}}, SPOKEN)
+    assert errors == [] and out == {"a": 7.5, "b": 1.7}
+
+
+def test_cue_takes_the_nth_place_a_phrase_and_a_prefix_and_applies_the_offset():
+    from argus.captions import resolve_cues
+
+    cues = {
+        "second": {"word": "пятнадцать", "nth": 2},
+        "phrase": {"word": "пятнадцать миллионов"},
+        "prefix": {"word": "миллион*", "offset": -0.2},
+        "early": {"word": "сначала", "offset": -5},
+    }
+    out, errors = resolve_cues(cues, SPOKEN)
+    assert errors == []
+    assert out == {"second": 3.0, "phrase": 1.0, "prefix": 1.5, "early": 0.0}  # never before 0
+
+
+def test_cue_that_cannot_be_found_is_an_error_naming_the_cue():
+    from argus.captions import resolve_cues
+
+    out, errors = resolve_cues(
+        {"x": {"word": "пятнадцать", "nth": 3}, "y": {"word": "яхта"}, "z": {"word": "..."}, "ok": 1.0}, SPOKEN
+    )
+    assert out == {"ok": 1.0}
+    assert len(errors) == 3
+    assert errors[0].startswith("cues.x:") and "occurrence 3" in errors[0] and "2 time(s)" in errors[0]
+    assert errors[1].startswith("cues.y:") and "not in the words" in errors[1]
+    assert errors[2].startswith("cues.z:") and "no letters" in errors[2]
+
+
+def test_plan_validates_cues():
+    base = {"format": "9:16", "style": "dark", "captions": {"words": [{"w": "a", "s": 0, "e": 1}]}}
+    plan, errors = validate_plan({**base, "cues": {"burn": {"word": "a"}, "end": 4}})
+    assert errors == [] and set(plan.cues) == {"burn", "end"}
+    assert plan.to_dict()["cues"] == {"burn": {"word": "a", "nth": 1, "offset": 0.0}, "end": 4.0}
+
+    _, errors = validate_plan({**base, "cues": {"1bad": 1}})
+    assert len(errors) == 1 and "1bad" in errors[0]
+    _, errors = validate_plan({**base, "cues": {"neg": -1}})
+    assert len(errors) == 1 and "before the start" in errors[0]
+    _, errors = validate_plan({**base, "cues": {"x": "soon"}})
+    assert errors == ["cues.x: must be seconds on the output timeline, or {word, nth?, offset?} to follow a spoken word"]
+    _, errors = validate_plan({**base, "cues": {"x": {"word": "a", "nht": 2}}})
+    assert len(errors) == 1 and "nht" in errors[0]
+    _, errors = validate_plan({"format": "9:16", "style": "dark", "cues": {"x": {"word": "a"}}})
+    assert len(errors) == 1 and "needs `captions`" in errors[0]
+    plan, errors = validate_plan({"format": "9:16", "style": "dark", "cues": {"x": 2}})  # seconds need no words
+    assert errors == []

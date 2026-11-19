@@ -9,11 +9,14 @@ the knowledge base file that `learn_and_record_memory` appends to.
 from __future__ import annotations
 
 import importlib.util
+import json
 from collections.abc import Iterable
 from importlib import resources
 from pathlib import Path
 
 from ..config import CONFIG, ArgusConfig
+from ..media_out import Image
+from . import library
 from .flow_browser import _profile_dir as _flow_profile_dir
 
 # Upper bound for the preferences text, in characters, so a long file cannot flood the context.
@@ -100,11 +103,25 @@ def providers(cfg: ArgusConfig) -> dict:
     }
 
 
-def studio_guide(tool_names: Iterable[str], config: ArgusConfig | None = None) -> dict:
-    """Guide + capabilities + preferences, as returned by the `studio_guide` tool."""
+def read_kit() -> str:
+    """The motion kit catalogue (`engine/src/kit/KIT.md`), or a note when the engine folder lacks it."""
+    from .render import engine_dir  # imported here: render pulls in the whole renderer
+
+    path = engine_dir() / "src" / "kit" / "KIT.md"
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return f"The motion kit catalogue is missing ({path}). Read the files in engine/src/kit/ instead."
+
+
+def studio_guide(tool_names: Iterable[str], config: ArgusConfig | None = None, *, custom_scenes: bool = False) -> dict:
+    """Guide + capabilities + preferences, as returned by the `studio_guide` tool.
+
+    With `custom_scenes` the result also has `motion_kit`, the catalogue of the kit blocks.
+    """
     cfg = CONFIG if config is None else config
     preferences, truncated = read_preferences(cfg.knowledge_base)
-    return {
+    out = {
         "guide": read_guide(),
         "capabilities": {
             "tools": sorted(tool_names),
@@ -113,3 +130,21 @@ def studio_guide(tool_names: Iterable[str], config: ArgusConfig | None = None) -
         "preferences": preferences,
         "preferences_truncated": truncated,
     }
+    out["library"] = library.overview(library.library_dir(cfg.output_dir))
+    if custom_scenes:
+        out["motion_kit"] = read_kit()
+    return out
+
+
+def result_for_model(result: dict) -> dict | list:
+    """`studio_guide` as a tool return value: `[json, Image, ...]` when the library has posters.
+
+    The posters are the newest entries' `poster.jpg` files (512 px, at most `library.MAX_POSTERS`),
+    in the order of `library.posters`. They are returned as they are: `media_out.prepare_image`
+    would write a `.view.jpg` copy into the entry folder.
+    """
+    posters = result.get("library", {}).get("posters") or []
+    paths = [Path(p["path"]) for p in posters]
+    if not paths or not all(p.is_file() for p in paths):
+        return result
+    return [json.dumps(result, ensure_ascii=False, indent=2, default=str), *[Image(path=p) for p in paths]]

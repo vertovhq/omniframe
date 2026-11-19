@@ -123,6 +123,18 @@ def test_caption_words_forms():
     assert e4[0].startswith("captions.words[0]: e (0.5) is before s (1.0)")
 
 
+def test_caption_case_is_upper_or_as_is():
+    words = [{"w": "hi", "s": 0, "e": 0.4}]
+    plain, e1 = validate_plan(_base(captions={"words": words}))
+    upper, e2 = validate_plan(_base(captions={"words": words, "style": {"case": "upper"}}))
+    as_is, e3 = validate_plan(_base(captions={"words": words, "style": {"case": "as_is"}}))
+    assert e1 == [] and e2 == [] and e3 == []
+    assert plain.captions.style is None  # no style given: the default applies in the engine
+    assert upper.captions.style.case == "upper" and as_is.captions.style.case == "as_is"
+    _, errors = validate_plan(_base(captions={"words": words, "style": {"case": "lower"}}))
+    assert any(e.startswith("captions.style.case:") for e in errors), errors
+
+
 def test_remap_requires_clips():
     words = {"source": "w.json", "remap": "clips"}
     _, errors = validate_plan(_base(captions={"words": words}))

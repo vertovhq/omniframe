@@ -104,6 +104,33 @@ def test_progress_and_note_are_visible_while_running() -> None:
     _wait_for(first["job_id"])
 
 
+def test_clamp_status_wait_caps_and_ignores_bad_values() -> None:
+    assert jobs.clamp_status_wait(None) == 0.0
+    assert jobs.clamp_status_wait(-3) == 0.0
+    assert jobs.clamp_status_wait(float("nan")) == 0.0
+    assert jobs.clamp_status_wait("oops") == 0.0
+    assert jobs.clamp_status_wait(5) == 5.0
+    assert jobs.clamp_status_wait(99) == jobs.MAX_STATUS_WAIT_S == 20.0
+
+
+def test_job_status_waits_until_a_short_job_is_done() -> None:
+    job_id = jobs.start("selftest", {"sleep": 0.5, "result": {"n": 1}}, key="wait-done")
+    started = time.monotonic()
+    snap = jobs.job_status(job_id, wait_s=15)
+    assert snap["state"] == "done" and snap["result"] == {"n": 1}
+    assert time.monotonic() - started < 15  # returned when the job ended, not when the wait ran out
+
+
+def test_job_status_stops_waiting_when_wait_runs_out_and_estimates_the_rest() -> None:
+    job_id = jobs.start("selftest", {"sleep": 6.0, "progress": [[0.5, "half way"]]}, key="wait-out")
+    started = time.monotonic()
+    snap = jobs.job_status(job_id, wait_s=1.0)
+    assert 0.8 <= time.monotonic() - started < 5
+    assert snap["state"] in ("queued", "running")
+    if snap["progress"] is not None:  # progress known: the status carries a rough remaining time
+        assert snap["eta_s"] >= 0
+
+
 def test_error_tail_is_reported() -> None:
     first = jobs.run_or_detach("selftest", {"fail": "kaboom happened"}, key="bad", wait_s=WAIT)
     assert first["state"] == "error"

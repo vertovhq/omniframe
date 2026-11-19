@@ -67,8 +67,22 @@ After their "ok", carry the video to the end on your own.
 
 - Express the style as tokens in `plan.style`: colors, fonts, text scale, background.
   Keep the same tokens across the whole video.
-- When no built-in scene fits, write a small custom component in the project's
-  `components/` folder and use it as a `custom` scene.
+- Reach for the built-in scene kinds first. When none fits, build a `custom` scene from the
+  motion kit blocks (counters, plates, pop-ups, polls, checklists, text, glow, particles,
+  camera, `SceneTrack`): call `studio_guide(custom_scenes=true)` for the catalogue.
+  Write new code only for what neither the scene kinds nor the kit cover, such as a
+  character or a drawing specific to the story.
+- Name the moments a custom scene reacts to in `plan.cues` (a spoken word or seconds)
+  and read them in the component with `useCue`; do not type times into props by hand.
+- Edit the component files you already wrote instead of rewriting them.
+- **Style library.** The `library` block of this guide lists scenes, characters, plates and
+  caption styles that the user saved from earlier videos, with a poster for each. Before you
+  write custom code for a new reference, look at the posters next to the reference's frames
+  and decide for yourself whether an entry fits (read its `card.md` for props and for when
+  it fits). If one does, import its files (`import X from './library/<entry>/<File>'`) from
+  your own component and change the look through props. If nothing fits, write new code and
+  do not bend the video toward an old entry because it exists: a reference in another style
+  gets its own look.
 - Let important things hold still long enough to read them. Give every motion a
   reason: emphasis, transition, reveal.
 - Save strong effects (shakes, flashes, hard zooms) for the strongest moments.
@@ -86,9 +100,10 @@ After their "ok", carry the video to the end on your own.
 
 - Keep the speaker's meaning and voice. Remove stumbles, false starts, repeated takes
   (keep the best take, usually the last) and long pauses.
-- Run `watch_video` once on the recording. It returns `words` (`[word, start, end]` in
-  seconds of the recording, listed for up to 1200 words; for a longer talk open
-  `words_path`, a list of `{w, s, e}`) and `segments` (sentences). For English and
+- Run `watch_video` once on the recording. It returns `words_path`, a list of
+  `{w, s, e}` in seconds of the recording (open it to read the words), and
+  `segments_path` (sentences with timecodes), plus `transcript_head`, the start of the
+  text. The words are never listed in the result. For English and
   Russian the fillers, stumbles and repeats are kept in the words. In other
   languages Whisper may tidy them away, so a stumble can be missing from the words:
   say so to the user.
@@ -116,14 +131,22 @@ After their "ok", carry the video to the end on your own.
 
 ## 8. Review your own work before the user sees it
 
-1. `render_video` with `mode="stills"` at the key moments. With a reference, pass
-   `compare` to get side-by-side images. Fix the plan and repeat until the stills
-   match your intent.
+1. `render_video` with `mode="stills"`: one round of at most 8 frames at the key
+   moments before the preview. With a reference, pass `compare` to get side-by-side
+   images. Fix the plan. Later rounds only for the scenes you changed.
 2. `mode="preview"` when motion or timing needs checking.
 3. `mode="final"`, then `qa_verify_video`. Fix every hard failure. Look at the QA
-   frames yourself and judge the warnings.
+   frames yourself and judge the warnings. Do not watch the final in the chat; rely
+   on QA.
+   While a preview or final renders, wait with `job_status(job_id, wait_s=20)` and write
+   the title, description and hashtags in the meantime.
 4. `export_package` with texts written for each platform and its viewers: a title that
    makes people click honestly, a description, hashtags.
+   After a final the user likes, offer to keep its custom scenes, characters, plates or
+   caption styles in their style library for the next video. Save only after they agree:
+   call `export_package` with `save_to_library` (name, the component names, what it is,
+   when it fits). Never save on your own. If the export is already done, call it again
+   with the same arguments plus `save_to_library`; it rewrites the same files.
 
 Show the user the finished video. When they state something lasting ("always…",
 "never…", "my handle is…"), save it with `learn_and_record_memory`. Do not save

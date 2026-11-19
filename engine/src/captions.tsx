@@ -3,7 +3,7 @@ import type {CSSProperties, FC} from 'react';
 import {AbsoluteFill, Sequence, spring, useCurrentFrame, useVideoConfig} from 'remotion';
 import type {CaptionStyle, Captions, WordTiming} from './types';
 import {DESIGN_SHORT_SIDE, fontFor, useLayout, useStyle} from './style';
-import {fitLines, fitSizeToHeight, normalizeToken, useFontsReady} from './text';
+import {fitLines, fitSizeToHeight, measureTextWidth, normalizeToken, useFontsReady} from './text';
 
 // Same limits as `group_phrases` in src/argus/captions.py: change both together.
 export const PHRASE_MAX_WORDS = 4;
@@ -167,7 +167,12 @@ type CaptionLook = {
   shadow: number;
   plate?: string;
   accentWords: string[];
+  /** `style.case === 'upper'`: words are drawn and measured in capitals. */
+  upper: boolean;
 };
+
+/** The text a word is drawn with: capitals when the style asks for them, otherwise as written. */
+const shownWord = (text: string, upper: boolean): string => (upper ? text.toUpperCase() : text);
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
@@ -187,6 +192,7 @@ function useCaptionLook(captions: Captions): CaptionLook {
     shadow: isFiniteNumber(st.shadow) && st.shadow >= 0 ? st.shadow : DEFAULT_SHADOW,
     plate: st.plate,
     accentWords: captions.accent_words ?? [],
+    upper: st.case === 'upper',
   };
 }
 
@@ -213,7 +219,7 @@ const CaptionLineView: FC<{
   const size = useMemo(() => {
     const base = fs(look.size * DESIGN_SHORT_SIDE);
     const available = Math.max(1, safe.width * 0.96 - plateX * 2 * base);
-    const texts = line.words.map((w) => w.w);
+    const texts = line.words.map((w) => shownWord(w.w, look.upper));
     let s = fitLines(texts, font.css, font.weight, base, available, 0, base * 0.4);
     if (!wordMode) {
       s = fitSizeToHeight(
@@ -229,7 +235,20 @@ const CaptionLineView: FC<{
       );
     }
     return s;
-  }, [fs, look.size, safe.width, plateX, line, font.css, font.weight, wordMode, fontsReady]);
+  }, [fs, look.size, look.upper, safe.width, plateX, line, font.css, font.weight, wordMode, fontsReady]);
+
+  // Phrase mode: the active word grows by ACTIVE_SCALE around its centre. Each word keeps
+  // half of that growth as side margin, so the grown word stays inside its own slot and
+  // the gap to the next word is not covered. Layout does not move when a word becomes active.
+  const growthPx = useMemo(
+    () =>
+      line.words.map((w) =>
+        wordMode
+          ? 0
+          : (measureTextWidth(shownWord(w.w, look.upper), font.css, font.weight, size, 0) * (ACTIVE_SCALE - 1)) / 2
+      ),
+    [line, size, look.upper, font.css, font.weight, wordMode, fontsReady]
+  );
 
   const pop = spring({
     frame,
@@ -262,6 +281,7 @@ const CaptionLineView: FC<{
     const base = accent ? style.colors.accent : state === 'active' ? look.activeColor : look.color;
     const wordStyle: CSSProperties = {
       display: 'inline-block',
+      margin: growthPx[i] > 0 ? `0 ${growthPx[i].toFixed(2)}px` : undefined,
       color: base,
       transform: state === 'active' && !wordMode ? `scale(${ACTIVE_SCALE})` : undefined,
       transformOrigin: 'center bottom',
@@ -275,7 +295,7 @@ const CaptionLineView: FC<{
     }
     return (
       <span key={i} style={wordStyle}>
-        {w.w}
+        {shownWord(w.w, look.upper)}
       </span>
     );
   });

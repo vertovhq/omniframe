@@ -23,7 +23,8 @@ HEADER = "# ARGUS — user preferences"
 def kb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A knowledge base inside tmp_path, wired into both the reader and the writer."""
     path = tmp_path / "KNOWLEDGE_BASE.md"
-    cfg = dataclasses.replace(CONFIG, knowledge_base=path)
+    # output_dir too: the style library lives there, and the real one must not leak into the tests
+    cfg = dataclasses.replace(CONFIG, knowledge_base=path, output_dir=tmp_path / "out")
     monkeypatch.setattr(studio, "CONFIG", cfg)
     monkeypatch.setattr(memory, "CONFIG", cfg)
     monkeypatch.setenv("ARGUS_FLOW_PROFILE", str(tmp_path / "no-flow-profile"))
@@ -110,3 +111,12 @@ def test_recorded_preference_appears_in_the_next_call(kb: Path) -> None:
     second = server.studio_guide()["preferences"]
     assert second.index("Narration language") < second.index("Handle")
     assert second.count(HEADER) == 1  # header is written once, not per entry
+
+
+def test_motion_kit_is_returned_only_for_custom_scenes(kb: Path) -> None:
+    assert "motion_kit" not in server.studio_guide()
+    kit = server.studio_guide(custom_scenes=True)["motion_kit"]
+    assert kit.startswith("# Motion kit") and len(kit) < 5000
+    for name in ("SceneTrack", "useCue", "Counter", "Plate", "Delta", "PollCard", "Checklist", "Particles", "LightCone"):
+        assert name in kit
+    assert "custom_scenes=true" in studio.read_guide()  # the guide tells where the catalogue is
