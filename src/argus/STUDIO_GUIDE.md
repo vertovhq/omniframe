@@ -47,8 +47,10 @@ preferences below this guide override your defaults.
   where…", "Imagine…", "This changes everything", "Let's dive in".
 
 **One checkpoint before spending money.** Show the user the concept, the full script
-with voice direction, the format, and the voice you picked with one line on why.
-After their "ok", carry the video to the end on your own.
+with voice direction, the format, the voice you picked with one line on why, and the
+storyboard: one line per beat with its time, what is on screen and which scene kind or
+kit block draws it. Write no component code before their "ok"; after it, carry the
+video to the end on your own.
 
 ## 4. Voice
 
@@ -72,6 +74,8 @@ After their "ok", carry the video to the end on your own.
   camera, `SceneTrack`): call `studio_guide(custom_scenes=true)` for the catalogue.
   Write new code only for what neither the scene kinds nor the kit cover, such as a
   character or a drawing specific to the story.
+- Read a block's line in the kit catalogue before you use it. Use only the props it
+  lists; do not invent props or durations.
 - Name the moments a custom scene reacts to in `plan.cues` (a spoken word or seconds)
   and read them in the component with `useCue`; do not type times into props by hand.
 - Edit the component files you already wrote instead of rewriting them.

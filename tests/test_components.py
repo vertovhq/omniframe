@@ -341,6 +341,62 @@ def test_kit_example_scene_renders_in_both_formats(root: Path, fmt: str, size: t
     _engine_untouched()
 
 
+NEON = {"bg": ["#05010F", "#2A0A5E"], "ink": "#FFFFFF", "accent": "#00F0FF", "loss": "#FF2E93"}
+FLAT = {"bg": ["#F4F1EA"], "ink": "#1B1B1B", "accent": "#E4572E", "loss": "#1B1B1B",
+        "grid": False, "stars": False, "glow": 0, "font": "body"}
+
+
+@needs_engine
+def test_kit_example_scene_takes_two_unlike_looks_through_props_only(root: Path) -> None:
+    _write(root, "Budget", _kit_example())
+    luma = []
+    for look in (NEON, FLAT):
+        plan = _plan(cues={"burn": 2.0})
+        plan["scenes"] = [{"kind": "custom", "at": 0, "until": 4, "component": "Budget", "props": look}]
+        plan["duration"] = 4
+        out = render.render_video(plan, "t", mode="stills", times=[1.2, 3.2], wait_s=WAIT)
+        assert isinstance(out, list), out
+        stills = json.loads(out[0])["stills"]
+        luma.append([_mean_rgb(p, 1.0).mean() for p in stills])
+        for path in stills:
+            with PILImage.open(path) as img:
+                assert np.asarray(img.convert("L"), dtype=float).std() > 5
+    assert all(v < 90 for v in luma[0]), f"neon look should be dark, got {luma[0]}"
+    assert all(v > 170 for v in luma[1]), f"flat look should be light, got {luma[1]}"
+    _engine_untouched()
+
+
+MEDIA_PROBE = """\
+import {Media, Stage} from '../kit';
+
+export default function Photo({dim = 0}: {dim?: number}) {
+  return <Stage><Media src={PIXEL} dim={dim} dimColor="#000000" /></Stage>;
+}
+"""
+
+
+@needs_engine
+def test_media_background_fills_the_frame_and_dims_it(root: Path) -> None:
+    import base64
+    import io
+
+    buf = io.BytesIO()
+    PILImage.new("RGB", (64, 64), (200, 200, 200)).save(buf, format="PNG")
+    uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    _write(root, "Photo", MEDIA_PROBE.replace("PIXEL", json.dumps(uri)))
+    means = []
+    for dim in (0, 0.5):
+        plan = _plan()
+        plan["scenes"] = [{"kind": "custom", "at": 0, "until": 2, "component": "Photo", "props": {"dim": dim}}]
+        plan["duration"] = 2
+        out = render.render_video(plan, "t", mode="stills", times=[1.0], wait_s=WAIT)
+        assert isinstance(out, list), out
+        means.append(_mean_rgb(json.loads(out[0])["stills"][0], 1.0).mean())
+    assert means[0] > 180, f"the image should fill the frame, got {means}"
+    assert 80 < means[1] < means[0] - 50, f"dim 0.5 should darken the image by about half, got {means}"
+    _engine_untouched()
+
+
 # ------------------------------------------------------------------ the style library (task 20.3)
 
 LIB_BADGE = """\

@@ -5,6 +5,7 @@
 export * from './motion';
 export * from './timing';
 export * from './wrappers';
+export * from './backgrounds';
 export * from './text';
 export * from './effects';
 export * from './info';

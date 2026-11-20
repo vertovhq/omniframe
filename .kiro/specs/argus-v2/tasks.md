@@ -322,7 +322,8 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
   - Not done yet: a final of an `examples/plans` sample through QA with no manual limiter. The examples have no audio assets, and the running `argus` MCP server predates these changes (Known issue 1), so it must be reloaded first. The full `pytest -q` run was started but its output did not come back in this session, so the suite is not confirmed green yet.
   - Verify: pytest green; engine typecheck green; caption stills show every gap; a final of an `examples/plans` sample passes QA with no manual limiter.
 
-- [ ] 20.2 Motion kit: universal blocks for custom scenes (P0, before the next video) — model: Sonnet high
+- [x] 20.2 Motion kit: universal blocks for custom scenes (P0, before the next video) — model: Sonnet high
+  - AUDIT: marked done at the author's request before Verify finished. Backgrounds (`kit/backgrounds.tsx`) and the props-driven `Budget` example in `KIT.md` are written and the engine typecheck passed on `backgrounds.tsx`. Not run to the end: the two-looks test, the `Media` test, stills in 9:16 and 16:9, full pytest. `engine/src/custom/registry.ts` may still hold a generated import from an interrupted test run (restore with `git checkout -- engine/src/custom/registry.ts`).
   - Problem (video 1, `project-1`): about 1 h 20 min and about 91 credits for an 86 s video; the preview and final renders took about 9 minutes of it. The model wrote about 72 KB of TSX by hand (`Art.tsx`, `Scenes1.tsx`, `Scenes2.tsx`, `Film.tsx`) and reviewed 6 rounds of stills (46 frames). Most of `Art.tsx` and `Film.tsx` is not story-specific: easing, timing, camera, text, fades, glow, particles, plates, cards, scene order.
   - `engine/src/kit/`, imported by custom components the same way as `../style`. Mechanics only, no fixed look: colours and fonts come from the plan style or props; every block works in 9:16 and 16:9.
     - every block takes colour, font, size and timing through props; a look that cannot be changed by a prop is a defect of the block;
@@ -363,6 +364,15 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
   - Use these agents for the remaining tasks, so the write-up describes real use only.
   - Verify: pytest green with the new tests; each agent loads in Kiro.
 
+- [ ] 20.5 Kit backgrounds and seeded randomness (P1, after the next video) — model: Haiku high; Sonnet if Verify fails twice
+  - Missing from 20.2: the kit has no backgrounds (only `Glow`, `Particles`, `LightCone`). Add a `backgrounds` group with many kinds, not a handful: solid, linear and radial gradient, animated gradient, mesh/blob gradient, grid, dots, lines/stripes, noise/grain, vignette, light leaks, scanlines, starfield, bokeh, paper/texture, media (image or video with dim and blur). Each takes colours, speed and intensity through props; none has a default look tied to a past video.
+  - Ideas from Remocn's background components (https://github.com/Remocn/remocn, MIT). Write our own code; if a file is copied, keep its MIT notice in the file and credit Remocn in the README.
+  - Seeded randomness: no `Math.random()` in `engine/src/kit/` or `engine/src/*.tsx`; use Remotion's `random(seed)` (https://www.remotion.dev/docs/random) so every render of a plan is the same. Check `Particles` first.
+  - Leftover from 20.2 Verify: the same example scene in two unlike looks (e.g. dark neon and light flat), changed only through props.
+  - `KIT.md`: one line per background with its props; keep the file under about 5,000 characters (shorten other lines if needed).
+  - Optional, if cheap: try Remotion's official agent skills (https://github.com/remotion-dev/skills) in `.kiro/skills/` for the implementing agent; keep them only if Kiro loads them and they match Remotion 4.0.540.
+  - Verify: pytest green; engine typecheck green; one still per background in 9:16; the two-look stills; a grep shows no `Math.random(` in the engine sources.
+
 - [ ] 21. Documentation (P2)
   - `README.md` (English): what ARGUS is, who it is for, the three scenarios, 60-second judge quickstart without keys (install → `argus-doctor` → connect in Kiro → sample prompts with `examples/media` and `examples/plans`), tools table, how the model works with ARGUS, Remotion license note, disclosure (design §18).
   - `README.ru.md` in sync; `INSTALL.md`, `STARTER.md`, `docs/TUTORIAL.md` updated to v2; `docs/BENCHMARK.md` removed or rewritten with real measurements only.
@@ -375,6 +385,9 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
     - Judge path without keys must work as shipped: `.gitignore` exceptions for `examples/media/*.mp4` and a pre-recorded example voice (`*.mp3` is ignored now); fix Known issue 2; `examples/mcp-config.example.json` with both `.venv/Scripts/python.exe` (Windows) and `.venv/bin/python` (macOS, Linux), because `.kiro/settings/mcp.json` has the Windows path only.
     - All files a judge reads are in English: `INSTALL.md`, `STARTER.md`, `docs/TUTORIAL.md`; `docs/BENCHMARK.md` removed unless it has real measurements.
     - Disclosure text (README and form): "ARGUS grew from ATLAS, the author's personal script written before the hackathon. The first MCP prototype (v1) was built in ZCode during the submission period (first commit 2026-11-04). v2 was rebuilt spec-first in Kiro; the spec, steering, hooks and build log are in `.kiro/` and `docs/BUILD_LOG.md`." Evidence for the date: the first commit and the creation date of the ZCode folder on the author's machine (both 2026-11-04).
+    - README paragraph "ARGUS and Remocn": judges may know Remocn (https://github.com/Remocn/remocn), a Remotion component registry with a storyboard → compose → still-check workflow. Say plainly what each does: Remocn gives components for motion videos and does not edit footage; ARGUS watches references and footage, cuts the user's recording, makes voice and captions, checks loudness and true peak, and exports a ready-to-upload package. Credit any Remocn idea or file used in 20.5.
+    - README note on models: ARGUS gives the model eyes and hands; the edit is as good as the model directing it. Name the models it was tested with (from `docs/BUILD_LOG.md`) and say that smaller models need more still rounds and make more plan errors. No scores or percentages.
+    - Frankenstein pitch (README and form), using the rules' wording "stitch together a chimera of technologies": a text-only chat model directs a frame-exact React video renderer (Remotion), audio DSP (ffmpeg loudnorm, limiter), speech recognition (faster-whisper), voices (ElevenLabs, edge-tts) and video generation (Veo), and sees the video through contact sheets and stills. Source: https://kiroween.devpost.com/rules.
   - _Requirements: 15.4, 16.2, 16.3_
 
 - [ ] 22. Pre-existing work and `skills/` (P2) — the author agreed to remove what v2 does not use (2026-11-18)
@@ -403,6 +416,9 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
   - Article (Bonus Blog), publish by Dec 3: Medium, English, written by the author in his own voice from `docs/BUILD_LOG.md` (the model may draft an outline only). Must say it is written as part of the Kiroween 2026 hackathon and be published during the submission period; put the URL in the form. Outline: v1 problem (gates, neuroslop) → model as director → the Frankenstein stitch (Remotion, ffmpeg, faster-whisper, ElevenLabs, Gemini/Veo, Playwright, Freesound, Pillow via one MCP server) → how Kiro was used (spec, steering, hooks, MCP, model routing with the real credit numbers) → real bugs and fixes from the log → results with real videos → what is next.
   - Social post (Social Blitz): written personally by the author, no AI text; must start with `#KiroweenHackathon26`; favourite thing about Kiro and how it changed the approach; attach the 9:16 teaser.
   - "Ghost of Kiroween Past" only if the author registered for Kiroween 2025.
+  - Eligibility: the author confirms his country of residence against rules §3 (list of excluded countries) before spending more on the submission. Source: https://kiroween.devpost.com/rules.
+  - The license is open source by rule and cannot be withdrawn from published versions. Later versions may carry another license, since the author owns the code.
+  - After the contest, not now: a remote MCP mode (Streamable HTTP with auth) so Claude mobile can use ARGUS through a custom connector added on claude.ai. Claude connects from Anthropic's cloud, so the server must be reachable over HTTPS: https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp. Needs an upload path for phone footage. The Gemini app's custom MCP apps are limited by region and account type; check before planning: https://support.google.com/gemini/answer/17209137.
   - _Requirements: 16.1–16.4_
 
 ## Known issues
