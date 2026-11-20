@@ -2,6 +2,8 @@ import {useId} from 'react';
 import type {CSSProperties, ReactNode} from 'react';
 import {AbsoluteFill, Freeze, random, useCurrentFrame, useVideoConfig} from 'remotion';
 import {useLayout, useStyle} from '../style';
+import {ageOf, useAt} from './at';
+import type {At} from './at';
 import {Noise, Scanlines} from './backgrounds';
 import {MotionBlur, RgbSplit, shakeOffset} from './fx';
 import {clamp, eBack, eOut, lerp, seg} from './motion';
@@ -11,21 +13,9 @@ import {useT} from './timing';
 // The energy kit: trailer-style hits and grades. Wrappers (`Shake`, `Snap`, `Stepped`, `Boil`,
 // `Aberration`, `Vhs`, `FreezeStamp`) take the scene's picture as children and fill their parent;
 // overlays (`Flash`, `FilmBurn`, `LensFlare`, `Burst`) go on top of it. `at` is a time in seconds
-// on the scene's clock, usually `useCue('hit')`; most take a list for several hits. `strength` 1 is
-// a normal hit, `dur` is how long it rings out, colours are any CSS colour.
-
-type At = number | number[];
-
-/** Seconds since the latest hit in `at` that is not after `t`, or null before the first one. */
-const ageOf = (t: number, at: At | undefined): number | null => {
-  let age: number | null = null;
-  for (const a of at === undefined ? [] : Array.isArray(at) ? at : [at]) {
-    if (t >= a && (age === null || t - a < age)) {
-      age = t - a;
-    }
-  }
-  return age;
-};
+// on the scene's clock, the name of a plan cue, or a list of both (see `useAt`); most take a list
+// for several hits. `strength` 1 is a normal hit, `dur` is how long it rings out, colours are any
+// CSS colour.
 
 const fillStyle = (extra?: CSSProperties): CSSProperties => ({pointerEvents: 'none', ...extra});
 
@@ -57,7 +47,7 @@ export const Shake = ({
   const t = useT();
   const {fps} = useVideoConfig();
   const {u} = useLayout();
-  const age = ageOf(t, at);
+  const age = ageOf(t, useAt(at));
   const len = dur ?? (kind === 'camera' ? Infinity : 0.5);
   let transform: string | undefined;
   if (age !== null && age < len) {
@@ -160,7 +150,7 @@ export const Snap = ({
 }) => {
   const t = useT();
   const {u} = useLayout();
-  const age = ageOf(t, at);
+  const age = ageOf(t, useAt(at));
   if (age === null) {
     return <AbsoluteFill style={appear ? {visibility: 'hidden'} : undefined}>{children}</AbsoluteFill>;
   }
@@ -190,13 +180,13 @@ export const Burst = ({
   loop = true,
 }: {
   items: ReactNode[];
-  at?: number;
+  at?: At;
   dur?: number;
   rate?: number;
   loop?: boolean;
 }) => {
-  const age = useT() - at;
-  if (age < 0 || age >= dur || items.length === 0) {
+  const age = ageOf(useT(), useAt(at));
+  if (age === null || age >= dur || items.length === 0) {
     return null;
   }
   const raw = Math.floor(age * rate);
@@ -223,7 +213,7 @@ export const Flash = ({
   strength?: number;
   invert?: boolean;
 }) => {
-  const age = ageOf(useT(), at);
+  const age = ageOf(useT(), useAt(at));
   if (age === null || age >= dur + hold) {
     return null;
   }
@@ -247,7 +237,7 @@ export const Aberration = ({
 }) => {
   const t = useT();
   const {u} = useLayout();
-  const age = ageOf(t, at);
+  const age = ageOf(t, useAt(at));
   const k = at === undefined ? 0.35 : age === null || age >= dur ? 0 : (1 - age / dur) ** 2;
   return (
     <RgbSplit amount={u(26) * strength * k} angle={angle}>
@@ -275,7 +265,7 @@ export const FilmBurn = ({
   side?: 'left' | 'right' | 'top' | 'bottom';
   seed?: string;
 }) => {
-  const age = ageOf(useT(), at);
+  const age = ageOf(useT(), useAt(at));
   const {u} = useLayout();
   if (age === null || age >= dur) {
     return null;
@@ -340,7 +330,7 @@ export const LensFlare = ({
   strength?: number;
   ghosts?: number;
 }) => {
-  const age = ageOf(useT(), at);
+  const age = ageOf(useT(), useAt(at));
   const {u} = useLayout();
   if (at !== undefined && (age === null || age >= dur)) {
     return null;
@@ -413,7 +403,7 @@ export const Vhs = ({
  * picture gets a white flash, a slow push-in and `tint` of grey, and `label` is slammed on it like a stamp.
  */
 export const FreezeStamp = ({
-  at,
+  at: atGiven,
   until,
   label,
   color,
@@ -424,7 +414,8 @@ export const FreezeStamp = ({
   tint = 0.35,
   children,
 }: {
-  at: number;
+  /** One moment: seconds or a cue name. */
+  at: number | string;
   until?: number;
   label?: string;
   /** Stamp plate colour. Default: the style's accent. */
@@ -443,6 +434,7 @@ export const FreezeStamp = ({
   const t = useT();
   const {fps} = useVideoConfig();
   const style = useStyle();
+  const at = useAt(atGiven)?.[0] ?? 0;
   const frozen = t >= at && (until === undefined || t < until);
   const age = t - at;
   const land = age - delay;

@@ -123,6 +123,19 @@ def test_caption_words_forms():
     assert e4[0].startswith("captions.words[0]: e (0.5) is before s (1.0)")
 
 
+def test_headline_caption_mode_sits_in_the_middle_unless_the_plan_places_it():
+    words = [{"w": "hi", "s": 0, "e": 0.4}]
+    plan, errors = validate_plan(_base(captions={"words": words, "mode": "headline"}))
+    assert errors == [] and plan.captions.mode == "headline" and plan.captions.position == "center"
+    assert plan.to_dict()["captions"]["position"] == "center"
+    placed, errors = validate_plan(_base(captions={"words": words, "mode": "headline", "position": "upper"}))
+    assert errors == [] and placed.captions.position == "upper"
+    phrase, _ = validate_plan(_base(captions={"words": words, "mode": "phrase"}))
+    assert phrase.captions.position == "lower"  # the other modes keep their low default
+    _, errors = validate_plan(_base(captions={"words": words, "mode": "huge"}))
+    assert any(e.startswith("captions.mode:") for e in errors), errors
+
+
 def test_caption_case_is_upper_or_as_is():
     words = [{"w": "hi", "s": 0, "e": 0.4}]
     plain, e1 = validate_plan(_base(captions={"words": words}))

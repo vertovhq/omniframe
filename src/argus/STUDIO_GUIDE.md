@@ -70,8 +70,10 @@ video to the end on your own.
 - Express the style as tokens in `plan.style`: colors, fonts, text scale, background.
   Keep the same tokens across the whole video.
 - Reach for the built-in scene kinds first. When none fits, build a `custom` scene from the
-  motion kit blocks (counters, plates, pop-ups, polls, checklists, text, glow, particles,
-  camera, `SceneTrack`): call `studio_guide(custom_scenes=true)` for the catalogue.
+  motion kit blocks: call `studio_guide(custom_scenes=true)` for the index (one line per
+  group), then `studio_guide(kit_group="hud")` for each group you need. It returns that
+  group's blocks and props and a contact strip with one rendered frame per block, so you
+  see what a block looks like before you pick it. Open only the groups the scene needs.
   Write new code only for what neither the scene kinds nor the kit cover, such as a
   character or a drawing specific to the story.
 - Read a block's line in the kit catalogue before you use it. Use only the props it
@@ -91,6 +93,23 @@ video to the end on your own.
   reason: emphasis, transition, reveal.
 - Save strong effects (shakes, flashes, hard zooms) for the strongest moments.
 - Keep on-screen text short, readable on a phone, and inside the safe area.
+- **Density.** Look at how much moves on screen in the reference frames and match that
+  density in your own look. Build every scene from three layers: a background (a gradient
+  with a grid, grain or stars, not a flat colour), a main element, and a detail layer
+  (a HUD layer with a timecode, small readouts or a ticker, a burst on a hit). One
+  centred element on an empty background reads as raw. The `hud`, `type`, `bursts`,
+  `depth` and `camera` groups of the kit exist for this; the user's style and the
+  story decide how much of it a scene carries (a calm story may take a corner or two).
+- Choose transitions and bursts by the story's energy and by what the user asked for:
+  a whip, a flash or a glitch for fast beats, a slow dissolve for a calm line. Do not
+  use one transition everywhere and do not put a burst on every cut.
+- `captions.mode: "headline"` sets the spoken words as big kinetic type in the middle
+  of the frame; the words listed in `accent_words` sit in a box of the accent colour.
+  Use it for hooks and punchlines; keep `phrase` for long explanations.
+- **Trailer grammar**, when the user wants a trailer or a hype edit: title slams on the
+  hits, speed ramps (`ramp`) and flash frames between fast cuts, a riser into the
+  biggest hit, then the hit. Our target for the author's videos is at least as dense and
+  as energetic as the reference, ideally more. You judge that on your own stills.
 
 ## 6. Sound
 
@@ -99,6 +118,10 @@ video to the end on your own.
 - Put sound effects only on motivated events, such as a stamp hitting or a card
   sliding in. Vary them. Silence is fine.
 - For music-driven edits run `calculate_beat_grid` and cut on the beats.
+- In a trailer-style edit give every transition and every slam its own sound
+  (`audio.sfx` events on the same moments as the visual hits), build a riser into the
+  biggest hit and leave a beat of silence right before it. Put the music cut on the
+  beat grid.
 
 ## 7. Editing the user's footage
 
@@ -137,7 +160,9 @@ video to the end on your own.
 
 1. `render_video` with `mode="stills"`: one round of at most 8 frames at the key
    moments before the preview. With a reference, pass `compare` to get side-by-side
-   images. Fix the plan. Later rounds only for the scenes you changed.
+   images, and say in the chat what the reference has on screen that your frames do
+   not (a layer, a type treatment, a burst, a camera move). Then add those where the
+   story allows. Fix the plan. Later rounds only for the scenes you changed.
 2. `mode="preview"` when motion or timing needs checking.
 3. `mode="final"`, then `qa_verify_video`. Fix every hard failure. Look at the QA
    frames yourself and judge the warnings. Do not watch the final in the chat; rely

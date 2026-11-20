@@ -286,9 +286,12 @@ export type CaptionStyle = {
 
 export type Captions = {
   words: CaptionWords;
-  /** Default 'phrase'. */
-  mode?: 'word' | 'phrase';
-  /** Default 'lower'. */
+  /**
+   * Default 'phrase'. 'headline': big words in the middle of the frame, slammed in as they are
+   * spoken, `accent_words` boxed in the accent colour.
+   */
+  mode?: 'word' | 'phrase' | 'headline';
+  /** Default 'lower'; the Python side sets 'center' for 'headline' when the plan gives none. */
   position?: 'upper' | 'center' | 'lower';
   style?: CaptionStyle;
   /** Exact words, "prefix*" or "*". */

@@ -23,7 +23,9 @@ If the code does not compile, the render does not start and the compiler errors 
   - `remotion` (`useCurrentFrame`, `useVideoConfig`, `interpolate`, `spring`, `random`, `Img`, `staticFile`, ...)
   - `../style` (`useStyle`, `useLayout`, `fontFor`, `withAlpha`, `resolveMedia`, ...)
   - `../kit`, the motion kit: ready-made blocks and timing hooks (`Counter`, `Plate`, `SceneTrack`,
-    `useCue`, ...). Catalogue: `../kit/KIT.md`, also returned by `studio_guide(custom_scenes=true)`.
+    `useCue`, ...). Catalogue: the index `../kit/KIT.md` (also returned by
+    `studio_guide(custom_scenes=true)`) and one file per group in `../kit/groups/`
+    (`studio_guide(kit_group=...)` adds a contact strip). The files in `previews/` only feed those strips.
     `custom/kit.ts` only re-exports `src/kit/`.
   - other files of `components/`, as `./Other`
   - files of a style library entry, as `./library/<entry>/<File>` (see "Style library" below)

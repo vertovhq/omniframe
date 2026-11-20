@@ -40,7 +40,7 @@ def _registered_tool_names() -> list[str]:
 
 
 @mcp.tool()
-def studio_guide(custom_scenes: bool = False) -> list[str | Image] | dict:
+def studio_guide(custom_scenes: bool = False, kit_group: str | None = None) -> list[str | Image] | dict:
     """Read this at the start of every session: how to work, what is available, what the user prefers.
 
     Returns `guide` (the working method: you are the director and the editor, ARGUS
@@ -50,9 +50,13 @@ def studio_guide(custom_scenes: bool = False) -> list[str | Image] | dict:
     preferences and corrections, newest last; they override your defaults).
     `preferences_truncated` is true when older entries were left out to keep the
     text short. Call it again with `custom_scenes=true` when you plan custom scenes:
-    the result then also has `motion_kit`, the catalogue of ready-made blocks (counters,
-    plates, pop-ups, polls, text, effects, scene tracks with cues) that custom components
-    import from `'../kit'`.
+    the result then also has `motion_kit`, the index of the motion kit (one line per group
+    of ready-made blocks that custom components import from `'../kit'`). Then open only the
+    groups the scene needs with `kit_group="hud"` (also `core`, `backgrounds`, `transitions`,
+    `energy`, `type`, `bursts`, `depth`, `camera`, `info`): that call returns just the group's
+    text (blocks and props) and a contact strip image with one rendered frame per block, so you
+    see what a block looks like before you pick it. The strip is rendered once per kit version;
+    the first call may answer `strip.state: "building"` with a `job_id` for `job_status`.
     `library` is the user's style library: scenes, characters, plates and caption styles
     saved from earlier videos. It has `entries` (the count), `index` (one line per entry)
     and `posters` (the newest entries, at most 8). When it has posters, the result is the
@@ -61,6 +65,8 @@ def studio_guide(custom_scenes: bool = False) -> list[str | Image] | dict:
     code. An entry's files are imported by a custom component as
     `import X from './library/<entry>/<File>'`.
     """
+    if kit_group:
+        return studio.kit_group_for_model(kit_group)
     return studio.result_for_model(studio.studio_guide(_registered_tool_names(), custom_scenes=custom_scenes))
 
 

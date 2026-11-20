@@ -2,6 +2,8 @@ import {useMemo} from 'react';
 import type {CSSProperties, FC} from 'react';
 import {AbsoluteFill, Sequence, spring, useCurrentFrame, useVideoConfig} from 'remotion';
 import type {CaptionStyle, Captions, WordTiming} from './types';
+import {eBack} from './kit/motion';
+import {readableOn} from './kit/text';
 import {DESIGN_SHORT_SIDE, fontFor, useLayout, useStyle} from './style';
 import {fitLines, fitSizeToHeight, measureTextWidth, normalizeToken, useFontsReady} from './text';
 
@@ -23,6 +25,13 @@ const ACTIVE_TAIL_S = 0.15;
 
 const DEFAULT_SIZE_PHRASE = 0.065;
 const DEFAULT_SIZE_WORD = 0.1;
+/** Headline mode: big words in the middle of the frame. */
+const DEFAULT_SIZE_HEADLINE = 0.13;
+const HEADLINE_ROWS = 3;
+/** Degrees of slant of a headline (negative leans right). */
+const HEADLINE_SLANT = -6;
+/** Seconds a headline word takes to slam into place. */
+const HEADLINE_SLAM_S = 0.22;
 const DEFAULT_OUTLINE = 0.006;
 const DEFAULT_SHADOW = 0.004;
 const LINE_HEIGHT = 1.12;
@@ -30,7 +39,7 @@ const MAX_ROWS = 2;
 /** Active word grows by this factor (word mode and phrase mode). */
 const ACTIVE_SCALE = 1.08;
 
-export type CaptionMode = 'word' | 'phrase';
+export type CaptionMode = 'word' | 'phrase' | 'headline';
 
 /** One on-screen caption: a single word (word mode) or a short phrase. Seconds, absolute. */
 export type CaptionLine = {
@@ -178,12 +187,13 @@ const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Num
 
 function useCaptionLook(captions: Captions): CaptionLook {
   const {colors} = useStyle();
-  const mode: CaptionMode = captions.mode === 'word' ? 'word' : 'phrase';
+  const mode: CaptionMode = captions.mode === 'word' ? 'word' : captions.mode === 'headline' ? 'headline' : 'phrase';
   const st: CaptionStyle = captions.style ?? {};
+  const defaultSize = mode === 'word' ? DEFAULT_SIZE_WORD : mode === 'headline' ? DEFAULT_SIZE_HEADLINE : DEFAULT_SIZE_PHRASE;
   return {
     mode,
-    position: captions.position ?? 'lower',
-    size: isFiniteNumber(st.size) && st.size > 0 ? st.size : mode === 'word' ? DEFAULT_SIZE_WORD : DEFAULT_SIZE_PHRASE,
+    position: captions.position ?? (mode === 'headline' ? 'center' : 'lower'),
+    size: isFiniteNumber(st.size) && st.size > 0 ? st.size : defaultSize,
     fontRole: st.font === 'body' ? 'body' : 'display',
     color: st.color ?? colors.text,
     activeColor: st.active_color ?? colors.wordActive,
@@ -350,6 +360,114 @@ const CaptionLineView: FC<{
   );
 };
 
+const HEX6 = /^#[0-9a-f]{6}$/i;
+
+/**
+ * Headline mode: a short line of big, slightly slanted words in the middle of the frame. A word
+ * is hidden until it is spoken, then slams in (from 1.9x, with a small overshoot and a tilt).
+ * Accent words (`accent_words`) sit in a box of the accent colour. Nothing is picked for the
+ * model: a word is boxed only when the plan lists it.
+ */
+const HeadlineLineView: FC<{line: CaptionLine; fromFrame: number; look: CaptionLook}> = ({line, fromFrame, look}) => {
+  const frame = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const style = useStyle();
+  const {fs, safe} = useLayout();
+  const fontsReady = useFontsReady();
+  const font = fontFor(style, look.fontRole);
+  const t = (frame + fromFrame) / fps;
+
+  const size = useMemo(() => {
+    const base = fs(look.size * DESIGN_SHORT_SIDE);
+    const available = Math.max(1, safe.width * 0.82); // room for the boxes' padding and the slant
+    const texts = line.words.map((w) => shownWord(w.w, look.upper));
+    const fit = fitLines(texts, font.css, font.weight, base, available, 0, base * 0.4);
+    return fitSizeToHeight(
+      texts.join(' '),
+      font.css,
+      font.weight,
+      fit,
+      0,
+      available,
+      LINE_HEIGHT,
+      fit * LINE_HEIGHT * HEADLINE_ROWS + 1,
+      base * 0.5
+    );
+  }, [fs, look.size, look.upper, safe.width, line, font.css, font.weight, fontsReady]);
+
+  const stroke = Math.max(0, fs(look.outline * DESIGN_SHORT_SIDE));
+  const shadowPx = Math.max(0, fs(look.shadow * DESIGN_SHORT_SIDE));
+  const plate = style.colors.accent;
+  const onPlate = HEX6.test(plate) ? readableOn(plate) : style.colors.bg;
+  const justify = look.position === 'upper' ? 'flex-start' : look.position === 'center' ? 'center' : 'flex-end';
+
+  const wordNodes = line.words.map((w, i) => {
+    const p = Math.min(1, Math.max(0, (t - w.s) / HEADLINE_SLAM_S));
+    const land = eBack(p);
+    const boxed = matchesAccent(w.w, look.accentWords);
+    const wordStyle: CSSProperties = {
+      display: 'inline-block',
+      opacity: Math.min(1, p * 5),
+      transform: `scale(${(1.9 - 0.9 * land).toFixed(4)}) rotate(${(-5 * (1 - land)).toFixed(3)}deg)`,
+      transformOrigin: '50% 60%',
+      color: boxed ? onPlate : look.color,
+      background: boxed ? plate : undefined,
+      padding: boxed ? '0 0.2em' : undefined,
+      borderRadius: boxed ? '0.14em' : undefined,
+    };
+    return (
+      <span key={i} style={wordStyle}>
+        {shownWord(w.w, look.upper)}
+      </span>
+    );
+  });
+
+  return (
+    <AbsoluteFill style={{pointerEvents: 'none'}}>
+      <div
+        style={{
+          position: 'absolute',
+          left: safe.left,
+          top: safe.top,
+          width: safe.width,
+          height: safe.height,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: justify,
+          alignItems: 'center',
+        }}
+      >
+        <div
+          style={{
+            boxSizing: 'border-box',
+            maxWidth: safe.width,
+            display: 'flex',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            columnGap: '0.22em',
+            rowGap: '0.06em',
+            textAlign: 'center',
+            fontFamily: font.css,
+            fontWeight: font.weight,
+            fontSize: size,
+            lineHeight: LINE_HEIGHT,
+            WebkitTextStroke: stroke > 0 ? `${stroke.toFixed(2)}px ${style.colors.bg}` : undefined,
+            paintOrder: 'stroke fill',
+            textShadow:
+              shadowPx > 0
+                ? `0 ${shadowPx.toFixed(2)}px ${(shadowPx * 2.5).toFixed(2)}px rgba(0, 0, 0, ${style.isDark ? 0.55 : 0.28})`
+                : undefined,
+            transform: `skewX(${HEADLINE_SLANT}deg)`,
+            transformOrigin: '50% 100%',
+          }}
+        >
+          {wordNodes}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 /**
  * Captions from timed words, above the scenes and the HUD. `captions.words` must already be
  * a word list: the Python side loads files and remaps clip transcripts before it renders,
@@ -369,7 +487,11 @@ export const CaptionsLayer: FC<{captions: Captions}> = ({captions}) => {
         const dur = Math.max(1, Math.round(line.end * fps) - from);
         return (
           <Sequence key={i} from={from} durationInFrames={dur} name={`caption-${i}`}>
-            <CaptionLineView line={line} fromFrame={from} look={look} />
+            {look.mode === 'headline' ? (
+              <HeadlineLineView line={line} fromFrame={from} look={look} />
+            ) : (
+              <CaptionLineView line={line} fromFrame={from} look={look} />
+            )}
           </Sequence>
         );
       })}

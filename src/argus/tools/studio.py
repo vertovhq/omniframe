@@ -14,9 +14,10 @@ from collections.abc import Iterable
 from importlib import resources
 from pathlib import Path
 
+from .. import __version__
 from ..config import CONFIG, ArgusConfig
 from ..media_out import Image
-from . import library
+from . import kit_preview, library
 from .flow_browser import _profile_dir as _flow_profile_dir
 
 # Upper bound for the preferences text, in characters, so a long file cannot flood the context.
@@ -104,7 +105,7 @@ def providers(cfg: ArgusConfig) -> dict:
 
 
 def read_kit() -> str:
-    """The motion kit catalogue (`engine/src/kit/KIT.md`), or a note when the engine folder lacks it."""
+    """The motion kit index (`engine/src/kit/KIT.md`: one line per group), or a note when the engine folder lacks it."""
     from .render import engine_dir  # imported here: render pulls in the whole renderer
 
     path = engine_dir() / "src" / "kit" / "KIT.md"
@@ -117,7 +118,8 @@ def read_kit() -> str:
 def studio_guide(tool_names: Iterable[str], config: ArgusConfig | None = None, *, custom_scenes: bool = False) -> dict:
     """Guide + capabilities + preferences, as returned by the `studio_guide` tool.
 
-    With `custom_scenes` the result also has `motion_kit`, the catalogue of the kit blocks.
+    With `custom_scenes` the result also has `motion_kit`, the index of the kit groups
+    (one group's text and strip: `kit_group_result`).
     """
     cfg = CONFIG if config is None else config
     preferences, truncated = read_preferences(cfg.knowledge_base)
@@ -134,6 +136,28 @@ def studio_guide(tool_names: Iterable[str], config: ArgusConfig | None = None, *
     if custom_scenes:
         out["motion_kit"] = read_kit()
     return out
+
+
+def kit_group_result(group: str) -> dict:
+    """One kit group for `studio_guide(kit_group=...)`: its text and its contact strip, not the whole guide.
+
+    `strip` is `{"path", "blocks"}` when the image is cached, or `{"state": "building", "job_id", ...}`
+    while a background job renders it (see `kit_preview.strip_for_guide`). An unknown group gets the list of groups.
+    """
+    names = kit_preview.group_names()
+    head = {"engine": f"ARGUS {__version__}"}
+    if group not in names:
+        return {**head, "error": f"unknown kit group {group!r}", "groups": names}
+    return {**head, "kit_group": group, "text": kit_preview.group_doc(group), "groups": names, **kit_preview.strip_for_guide(group)}
+
+
+def kit_group_for_model(group: str) -> dict | list:
+    """`kit_group_result` as a tool return value: `[json, Image]` when the strip is cached."""
+    result = kit_group_result(group)
+    path = result.get("strip", {}).get("path")
+    if path and Path(path).is_file():
+        return [json.dumps(result, ensure_ascii=False, indent=2), Image(path=Path(path))]
+    return result
 
 
 def result_for_model(result: dict) -> dict | list:

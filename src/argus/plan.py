@@ -370,10 +370,19 @@ class CaptionStyle(_Model):
 
 class Captions(_Model):
     words: CaptionWords
-    mode: Literal["word", "phrase"] = "phrase"
+    # "headline": big kinetic words in the middle of the frame, slammed in as they are spoken,
+    # `accent_words` boxed in the accent colour (engine/src/captions.tsx, HeadlineLineView)
+    mode: Literal["word", "phrase", "headline"] = "phrase"
     position: Literal["upper", "center", "lower"] = "lower"
     style: CaptionStyle | None = None
     accent_words: list[str] = Field(default_factory=list)  # exact, "prefix*" or "*"
+
+    @model_validator(mode="after")
+    def _headline_sits_in_the_middle(self) -> Captions:
+        # a headline belongs in the middle of the frame unless the plan places it somewhere else
+        if self.mode == "headline" and "position" not in self.model_fields_set:
+            self.position = "center"
+        return self
 
     @field_validator("words")
     @classmethod
