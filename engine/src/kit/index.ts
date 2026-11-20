@@ -9,3 +9,6 @@ export * from './backgrounds';
 export * from './text';
 export * from './effects';
 export * from './info';
+export * from './fx';
+export * from './transitions';
+export * from './energy';
