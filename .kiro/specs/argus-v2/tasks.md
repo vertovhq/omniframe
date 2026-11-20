@@ -390,6 +390,8 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
   - Trailer grammar in STUDIO_GUIDE §5 and §6 (text only): risers into hits, a beat of silence before the biggest hit, title slams on hits, speed ramps, flash frames between fast cuts, a sound under every transition and every slam, music cut to the beat grid (`calculate_beat_grid`). The author's target for his videos: at least as dense and energetic as the reference, ideally more. Say it as guidance; the model judges it on its own stills.
   - Self-review on stills: before the preview the model compares its stills with the reference frames side by side (`compare`) and names, in the chat, what the reference has on screen that its own frames do not. It then adds detail layers or effects where the story allows.
   - The tool in the author's reference ("reference-tool") has no public code or docs (searched 2026-11-20; only a Linktree page). Take nothing from it except techniques visible in the reference frames.
+  - Universal, not tuned to one reference: every group must serve unlike genres (tech promo, story, explainer, talking-head overlay, trailer). The `argus-demo` reference is only the case that showed the gap.
+  - Cost: blocks and the catalogue exist so that a dense video costs no more than 30–40 credits for the whole video (less is better). Keep catalogue reads short: the index plus only the groups the model needs.
   - The model chooses every block, transition and effect. No code ranks or picks them.
   - Verify: pytest green; engine typecheck green; one contact strip per group; a 10 s sample scene in two unlike looks with a HUD layer, a headline caption, a burst and two transitions, as stills in 9:16 and 16:9.
 
