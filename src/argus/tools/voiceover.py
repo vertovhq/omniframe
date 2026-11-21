@@ -38,7 +38,7 @@ from .. import __version__, jobs
 from ..config import CONFIG
 from ..ffmpeg import run_ffmpeg, stream_info
 from ..project import project_dir, slugify
-from . import watch
+from . import model_catalog, watch
 
 # ------------------------------------------------------------------ constants
 
@@ -56,6 +56,13 @@ from . import watch
 #   voices to the account; it reports a plain-language error instead.
 ELEVEN_HOST = "https://api.elevenlabs.io"
 ELEVEN_OUTPUT_FORMAT = "mp3_44100_128"  # allowed on every plan; 192 kbps needs Creator+ (same page as above)
+# Models: GET /v1/models (https://elevenlabs.io/docs/api-reference/models/list). The answer has no release date,
+# so the newest text-to-speech model is the one with the highest version in its id (see model_catalog).
+ELEVEN_MODELS_PATH = "/v1/models"
+# Voices: GET /v2/voices pages with `next_page_token` while `has_more` is true; page_size up to 100
+# (https://elevenlabs.io/docs/api-reference/voices/search). Page cap keeps a broken pagination from looping.
+ELEVEN_VOICE_PAGE_SIZE = 100
+ELEVEN_VOICE_MAX_PAGES = 20
 
 # Per-request character limits: https://elevenlabs.io/docs/overview/models ("Character limits").
 # The live value is `maximum_text_length_per_request` in GET /v1/models; this table is the
@@ -359,6 +366,65 @@ def _eleven_char_limit(model: str) -> int:
     return _model_limits.get(model, ELEVEN_DEFAULT_CHAR_LIMIT)
 
 
+def _eleven_tts_models(errors: dict[str, str]) -> list[dict]:
+    """ElevenLabs text-to-speech models the key lists, newest first. A failed list goes into `errors["models"]`."""
+    try:
+        entries = _eleven_json("GET", ELEVEN_MODELS_PATH, timeout=VOICE_LIST_TIMEOUT_S)
+    except Exception as exc:
+        errors["models"] = str(exc)[:300]
+        return []
+    models: list[dict] = []
+    for entry in entries if isinstance(entries, list) else []:
+        if not entry.get("can_do_text_to_speech") or entry.get("requires_alpha_access"):
+            continue
+        model_id = str(entry.get("model_id") or "")
+        if not model_id:
+            continue
+        models.append(_compact({
+            "id": model_id,
+            "name": entry.get("name") or model_id,
+            "use": "text to speech",
+            "max_chars": entry.get("maximum_text_length_per_request") or ELEVEN_CHAR_LIMITS.get(model_id),
+            "languages": _shorten(", ".join(str(lang.get("name", "")) for lang in entry.get("languages") or []), 120),
+        }))
+    ranked = model_catalog.newest_first(models)
+    default = CONFIG.eleven_model or (ranked[0]["id"] if ranked else None)
+    for model in ranked:
+        model["default"] = model["id"] == default
+    return ranked
+
+
+def eleven_model_id() -> str:
+    """The ElevenLabs model for synthesis: ARGUS_ELEVEN_MODEL when set, else the newest text-to-speech model listed."""
+    if CONFIG.eleven_model:
+        return CONFIG.eleven_model
+    errors: dict[str, str] = {}
+    found = _eleven_tts_models(errors)
+    if not found:
+        reason = errors.get("models", "the key lists no text-to-speech model")
+        raise RuntimeError(f"could not pick an ElevenLabs model ({reason}); set ARGUS_ELEVEN_MODEL in .env to a model id")
+    return found[0]["id"]
+
+
+def _eleven_all_voices() -> list[dict]:
+    """Every voice of the account: all pages of GET /v2/voices, own voices and voices added from the Voice Library.
+
+    `include_total_count=false` skips the count, which the API computes at extra cost; `has_more` decides when to stop.
+    Errors propagate to the caller, which reports them in `errors`.
+    """
+    voices: list[dict] = []
+    token: str | None = None
+    for _ in range(ELEVEN_VOICE_MAX_PAGES):
+        data = _eleven_json("GET", "/v2/voices", {
+            "page_size": ELEVEN_VOICE_PAGE_SIZE, "include_total_count": "false", "next_page_token": token,
+        }, timeout=VOICE_LIST_TIMEOUT_S)
+        voices.extend(data.get("voices", []))
+        token = data.get("next_page_token")
+        if not data.get("has_more") or not token:
+            return voices
+    raise RuntimeError(f"ElevenLabs voice list did not end after {ELEVEN_VOICE_MAX_PAGES} pages")
+
+
 # Delivery vocabulary for Eleven v3/v4, from "Prompting Eleven v4" ("Audio tags", "Punctuation", "Pace") in
 # https://elevenlabs.io/docs/overview/capabilities/text-to-speech/best-practices
 # This is material for the model; ARGUS never picks or scores emotions itself.
@@ -418,9 +484,8 @@ def provider_choice() -> dict:
     }
 
 
-def delivery_guide() -> dict:
-    """How to write emotion and pacing for the configured ElevenLabs model (empty without a key)."""
-    model = CONFIG.eleven_model
+def delivery_guide(model: str) -> dict:
+    """How to write emotion and pacing for `model` (an ElevenLabs model id)."""
     guide: dict = {"model": model, "style": delivery_style(model)}
     if model.startswith(ELEVEN_TAG_MODEL_PREFIXES):
         guide["audio_tags"] = list(ELEVEN_VOICE_TAGS)
@@ -474,13 +539,13 @@ class ElevenLabsProvider:
         return "no ElevenLabs key: set ELEVENLABS_API_KEY in .env (https://elevenlabs.io -> API Keys)"
 
     def max_chars(self, model: str | None) -> int:
-        return _eleven_char_limit(model or CONFIG.eleven_model)
+        return _eleven_char_limit(model or eleven_model_id())
 
     def default_voice(self, text: str, settings: dict) -> str:
         return "Brian"
 
     def default_model(self) -> str | None:
-        return CONFIG.eleven_model
+        return eleven_model_id()
 
     def resolve_voice(self, voice: str | None, text: str, settings: dict) -> str:
         """Voice name or id -> voice_id: presets, then a raw id, then an exact name among the account's voices."""
@@ -504,7 +569,7 @@ class ElevenLabsProvider:
                    settings: dict | None, out_audio: Path) -> list[dict] | None:
         settings = dict(settings or {})
         voice_id = self.resolve_voice(voice, text, settings)
-        body: dict = {"text": text, "model_id": model or CONFIG.eleven_model}
+        body: dict = {"text": text, "model_id": model or eleven_model_id()}
         voice_settings = {k: settings[k] for k in _ELEVEN_VOICE_SETTINGS if k in settings}
         if "speaker_boost" in settings and "use_speaker_boost" not in voice_settings:
             voice_settings["use_speaker_boost"] = settings["speaker_boost"]
@@ -603,7 +668,7 @@ class GeminiProvider:
         return CONFIG.default_voice
 
     def default_model(self) -> str | None:
-        return CONFIG.tts_model
+        return model_catalog.tts_model_id()
 
     def _pcm(self, text: str, voice: str, model: str) -> bytes:
         """Raw 24 kHz mono 16-bit PCM from Gemini TTS."""
@@ -632,7 +697,7 @@ class GeminiProvider:
     def synthesize(self, text: str, voice: str | None, model: str | None,
                    settings: dict | None, out_audio: Path) -> list[dict] | None:
         pcm = self._pcm(text, (voice or self.default_voice(text, settings or {})).strip(),
-                        model or CONFIG.tts_model)
+                        model or model_catalog.tts_model_id())
         _pcm_to_wav(pcm, out_audio, GEMINI_PCM_RATE)
         return None  # Gemini TTS has no timestamps
 
@@ -1002,13 +1067,13 @@ def _provider_status() -> dict:
     return {
         "elevenlabs": {
             "available": eleven,
-            "model": CONFIG.eleven_model,
+            "model": CONFIG.eleven_model or "newest text-to-speech model of the key's list (see models)",
             "note": ("word timings from the API; voices: own + Voice Library (free_users_allowed=false voices need a paid plan via API)"
                      if eleven else PROVIDERS["elevenlabs"].unavailable_hint()),
         },
         "gemini": {
             "available": gemini,
-            "model": CONFIG.tts_model,
+            "model": CONFIG.tts_model or "newest text-to-speech model of the key's list (see models)",
             "note": ("opt-in with provider=\"gemini\"; no word timings, captions need faster-whisper"
                      if gemini else PROVIDERS["gemini"].unavailable_hint()),
         },
@@ -1039,21 +1104,17 @@ def _eleven_tier(errors: dict[str, str]) -> str | None:
     return tier
 
 
-def _eleven_models(errors: dict[str, str]) -> list[dict]:
-    """ElevenLabs text-to-speech models with their character limits and how each wants delivery written."""
-    models: list[dict] = []
-    try:
-        for entry in _eleven_json("GET", "/v1/models", timeout=VOICE_LIST_TIMEOUT_S):
-            if entry.get("can_do_text_to_speech") and not entry.get("requires_alpha_access"):
-                mid = str(entry.get("model_id"))
-                models.append({
-                    "id": mid, "name": entry.get("name"),
-                    "max_chars": entry.get("maximum_text_length_per_request") or ELEVEN_CHAR_LIMITS.get(mid),
-                    "delivery": delivery_style(mid),
-                })
-    except Exception as exc:
-        errors["models"] = str(exc)[:300]
-    return models
+def _model_options(errors: dict[str, str], notes: list[str]) -> dict[str, list[dict]]:
+    """Models per provider the keys can use, newest first; `default` marks the id ARGUS uses without a choice."""
+    options: dict[str, list[dict]] = {}
+    if PROVIDERS["elevenlabs"].available():
+        options["elevenlabs"] = _eleven_tts_models(errors)
+    if CONFIG.gemini_api_key:
+        rows = model_catalog.options(errors)
+        options["gemini"] = rows
+        if "gemini_models" not in errors and not any(row["use"] == "video" for row in rows):
+            notes.append(model_catalog.VEO_SHUTDOWN_NOTE)
+    return {provider: rows for provider, rows in options.items() if rows}
 
 
 def voice_options(
@@ -1076,7 +1137,9 @@ def voice_options(
     `plan.note` says so and no voice is marked.
     `edge_voices`, `gemini_voices`: free defaults and Gemini names. Every list is capped at `limit`,
     and the whole answer at VOICE_RESPONSE_MAX_CHARS (the longest lists lose voices first).
-    `details=True` adds `elevenlabs_models` and `delivery` (audio tags and pacing rules), which
+    `models`: per provider, the text-to-speech models (and for Gemini the video models) the keys can use,
+    newest first, with `id`, `name`, `use`, `default`. `default: true` is the model ARGUS uses when none is
+    given. A failed list is in `errors`. `details=True` adds `delivery` (audio tags and pacing rules), which
     leaves room for fewer voices.
     """
     limit = max(1, min(int(limit), MAX_VOICE_LIST))
@@ -1089,7 +1152,6 @@ def voice_options(
     own: list[dict] = []
     library: list[dict] = []
     library_paid: list[dict] = []
-    models: list[dict] = []
     plan: dict | None = None
     refused: list[dict] = []  # own voices the free plan refuses (not premade)
     if PROVIDERS["elevenlabs"].available():
@@ -1100,10 +1162,8 @@ def voice_options(
             "note": "could not read the ElevenLabs plan, so voices that need a paid plan are not marked (see errors.plan)",
         }
         try:
-            data = _eleven_json("GET", "/v2/voices", {"page_size": 100, "include_total_count": "false"},
-                                timeout=VOICE_LIST_TIMEOUT_S)
             ranked: list[tuple[bool, int, dict]] = []
-            for entry in data.get("voices", []):
+            for entry in _eleven_all_voices():
                 voice, searchable, languages = _own_voice(entry)
                 if sex and str(voice.get("gender") or "").lower() != sex:
                     continue
@@ -1125,14 +1185,13 @@ def voice_options(
             # the free plan refuses every Voice Library voice through the API, so all of them go to the paid list
             library_paid = (refused + library + library_paid)[:limit]
             library = []
-        if details:
-            models = _eleven_models(errors)
     else:
         notes.append(PROVIDERS["elevenlabs"].unavailable_hint() + "; edge voices need no key")
 
     if code and code not in EDGE_VOICES:
         notes.append(f"no edge default for {code!r}: any ShortName from `edge-tts --list-voices` works as `voice`")
     gemini = [v for v in AVAILABLE_VOICES if not words or _word_hits(words, v)][:limit]
+    models = _model_options(errors, notes)
     result: dict = {
         "engine": f"ARGUS {__version__}",
         "default_provider": default_provider(),
@@ -1148,13 +1207,14 @@ def voice_options(
         result["library_voices_paid_plan_only"] = {"note": note, "voices": library_paid}
     if plan is not None:
         result["plan"] = plan
+    if models:
+        result["models"] = models
     if PROVIDERS["elevenlabs"].available():
-        if details:
-            result["delivery"] = delivery_guide()
-            if models:
-                result["elevenlabs_models"] = models
-        else:
-            notes.append("call again with details=True for the ElevenLabs models and the delivery rules (audio tags, pacing)")
+        chosen = next((m["id"] for m in models.get("elevenlabs", []) if m.get("default")), None)
+        if not details:
+            notes.append("call again with details=True for the ElevenLabs delivery rules (audio tags, pacing)")
+        elif chosen:
+            result["delivery"] = delivery_guide(chosen)
     if errors:
         result["errors"] = errors
     result["notes"] = notes

@@ -100,9 +100,10 @@ def generate_veo_clip(
 ) -> dict:
     """Generate an authentic Veo video clip (default 1080x1920).
 
-    provider "api" = official Gemini API (stable, paid - Veo has no free API tier);
     provider "flow" = your logged-in Google Flow browser session (free monthly
     credits, run flow_login once first). Default: ARGUS_VEO_PROVIDER or "api".
+    provider "api" is refused for now: Veo 3.1 Preview was shut down in the Gemini
+    API on 2026-10-22, and the error says so. Use "flow" until the Omni route ships.
     Renders take 1-3 minutes. Prompts are sent as-is - no content-policy
     workarounds are applied.
     """
@@ -150,7 +151,7 @@ def synthesize_voiceover(
     tell the user which voice you picked and why, and write the text for the ear in
     the user's language: short sentences, numbers and abbreviations spelled the way
     they are said. The text is sent unchanged, so write the delivery into it. On
-    ElevenLabs `eleven_v3` / `eleven_v4` (v3 is the default) use audio tags such as
+    ElevenLabs the `eleven_v3` / `eleven_v4` family uses audio tags such as
     `[whispers]`, `[excited]`, `[sighs]`, `[laughs]` before the words they colour,
     plus punctuation for rhythm: `...` for a hesitation or a pause, a dash for a
     break, CAPITALS for stress. SSML `<break time="1.0s" />` works only on the
@@ -163,7 +164,9 @@ def synthesize_voiceover(
     "elevenlabs" (default when a key is configured), "edge" (default without keys,
     free) or "gemini" (only when you ask for it). `voice`: a name or id from
     `voice_options` (ElevenLabs preset names Brian, Adam, George, Daniel also
-    work). `model`: an ElevenLabs model id (default from the config). `settings`:
+    work). `model`: an ElevenLabs model id from `voice_options` `models` (when none is
+    given, ARGUS uses the newest text-to-speech model the key lists, or ARGUS_ELEVEN_MODEL).
+    `settings`:
     ElevenLabs `stability`, `similarity_boost`, `style`, `speed` (0.7..1.2),
     `use_speaker_boost`, `language_code`, `seed`; edge `rate` ("+10%"), `pitch`
     ("+2Hz"), `volume`; `language` ("ru") helps word alignment.
@@ -215,13 +218,17 @@ def voice_options(
     it would be longer, the longest lists lose their last voices and `notes` says so,
     so narrow the search with `language`, `gender` and `query` instead of raising `limit`.
     Pass a returned `id` as `voice` to `synthesize_voiceover`.
+    `models` lists the text-to-speech models (ElevenLabs, with character limits;
+    Gemini TTS) and the Gemini video models the keys can use, newest first. Each has
+    `default: true` when it is the one ARGUS uses if the user picks none. Ask the user
+    which model they want, or use the newest when they say "you choose"; a model
+    chosen by the user goes in `model` of `synthesize_voiceover`. Ids are never
+    typed from memory; the list is the source.
     With `details=True` (use it once per project, before you write the narration)
     the answer also holds `delivery`, the audio tags and the pacing rules for the
-    configured ElevenLabs model (plan the emotion of every line yourself: what it
-    feels like, where it breathes, where it stresses, and write it into the text),
-    and `elevenlabs_models` (ids, character limits and how each wants pauses and
-    emotion written: audio tags for v3/v4, SSML breaks for v2). Without `details`
-    neither is returned.
+    default ElevenLabs model (plan the emotion of every line yourself: what it
+    feels like, where it breathes, where it stresses, and write it into the text).
+    Without `details` it is not returned.
     """
     from .tools.voiceover import voice_options as impl
 

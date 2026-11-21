@@ -77,7 +77,8 @@ def providers(cfg: ArgusConfig) -> dict:
     return {
         "elevenlabs": _provider(
             eleven,
-            f"voice, model {cfg.eleven_model}" if eleven else "no key: set ELEVENLABS_API_KEY in .env",
+            f"voice, model {cfg.eleven_model or 'newest text-to-speech model of the key (see voice_options)'}"
+            if eleven else "no key: set ELEVENLABS_API_KEY in .env",
         ),
         "gemini": _provider(
             gemini,
@@ -93,8 +94,8 @@ def providers(cfg: ArgusConfig) -> dict:
             else "not installed: pip install 'argus-studio[asr]'; no transcripts until then",
         ),
         "veo_api": _provider(
-            gemini,
-            f"generate_veo_clip provider=api, model {cfg.veo_model}" if gemini else "needs the Gemini key",
+            False,
+            "Veo 3.1 Preview was shut down in the Gemini API on 2026-10-22; use generate_veo_clip provider=flow",
         ),
         "flow_session": _provider(
             flow,

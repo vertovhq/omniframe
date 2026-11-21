@@ -293,3 +293,10 @@ _To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
 - Verified: `test_render_speed.py`, `test_scenarios.py`, `test_render.py` -> 42 passed in 240.04 s, exit 0; full `pytest -q` -> 414 passed in 750.28 s, exit 0.
 - Not done: Freesound sounds in the library and ducking in audio mode (after the contest); listening and re-voicing (at the demo).
 - Credits: <author fills>
+
+## Task 20.8 — Current models and all voices (2026-11-21, Haiku 5.5)
+- Built: `tools/model_catalog.py` (Gemini TTS and Veo from google-genai `models.list`, newest by the version number in the id); ElevenLabs TTS models from `GET /v1/models` in `voiceover.py`, default is the newest one (now `eleven_v4`), `ARGUS_ELEVEN_MODEL` pins one; `voice_options` returns `models` with `default`; voices from all pages of `GET /v2/voices`; `generate_veo_clip` route `api` refused with the 2026-10-22 shutdown message (Flow route unchanged); `.env.example` model ids empty; `chatSessionId` removed from `tasks.meta.json`.
+- Bugs & fixes: the first full run failed `test_veo_provider_validation` (ImportError) because `veo.py` and `model_catalog.py` were edited while that run was still collecting tests → rerun on the final code, no code change. `test_studio_guide` expected `veo_api` available with a key → test now expects the shutdown note. `test_config` read a pinned `ARGUS_TTS_MODEL` from the user's `.env` → the test clears the model variables first.
+- Kiro: none beyond the spec task text and the steering rules. The shell returned echoed input, so runs wrote to files that were read back.
+- Verified: full `pytest -q` 441 passed, exit 0 (10 min 31 s, on the final code). Live, read-only, with the author's key: `/v2/voices` returns 24 voices over all pages (21 premade, 3 Voice Library copies, 0 personal); models as listed above. Not verified: the count in the author's ElevenLabs app; no real Veo call (the route is refused by design).
+- Credits: <author fills>

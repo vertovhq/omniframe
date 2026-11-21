@@ -15,7 +15,16 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from argus.config import CONFIG  # noqa: E402
-from argus.tools import voiceover  # noqa: E402
+from argus.tools import model_catalog, voiceover  # noqa: E402
+
+# Gemini models as the google-genai list returns them (test data; ids are chosen to exercise the sort)
+GEMINI_LISTED = [
+    {"id": "gemini-3.1-flash-tts-preview", "name": "Gemini 3.1 Flash TTS"},
+    {"id": "gemini-3.8-flash-lite-tts", "name": "Gemini 3.8 Flash-Lite TTS"},
+    {"id": "gemini-3.8-flash", "name": "Gemini 3.8 Flash"},
+    {"id": "gemini-3.8-flash-tts", "name": "Gemini 3.8 Flash TTS"},
+    {"id": "veo-4.0-test-video", "name": "Veo test"},
+]
 
 OWN = {"voices": [
     {"voice_id": "ownVoiceAAAAAAAAAAAA", "name": "Brian", "category": "premade", "description": "deep, resonant narrator",
@@ -72,14 +81,20 @@ class Reply:
 
 
 class FakeApi:
+    """Fake ElevenLabs API. `pages`: a list of voice lists served one page per `next_page_token` ("0", "1", ...)."""
+
     def __init__(self, library: object = LIBRARY, own: object = OWN, fail_library: int | None = None,
-                 tier: str = "creator", plan_error: bool = False) -> None:
+                 tier: str = "creator", plan_error: bool = False, pages: list[list[dict]] | None = None,
+                 models: object = None, fail_models: int | None = None) -> None:
         self.calls: list[tuple[str, dict]] = []
         self.library = library
         self.own = own
         self.fail_library = fail_library
         self.tier = tier
         self.plan_error = plan_error
+        self.pages = pages
+        self.models = MODELS if models is None else models
+        self.fail_models = fail_models
 
     def __call__(self, request, timeout=None):
         parsed = urlparse(request.full_url)
@@ -90,13 +105,24 @@ class FakeApi:
                 raise urllib.error.HTTPError(request.full_url, 500, "no", {}, io.BytesIO(b'{"detail":"down"}'))
             return Reply({"tier": self.tier})
         if parsed.path == "/v2/voices":
+            if self.pages is not None:
+                index = int(query.get("next_page_token", "0"))
+                last = index == len(self.pages) - 1
+                return Reply({
+                    "voices": self.pages[index],
+                    "has_more": not last,
+                    "next_page_token": None if last else str(index + 1),
+                })
             return Reply(self.own)
         if parsed.path == "/v1/shared-voices":
             if self.fail_library:
                 raise urllib.error.HTTPError(request.full_url, self.fail_library, "no", {}, io.BytesIO(b'{"detail":"paid plan"}'))
             return Reply(self.library)
         if parsed.path == "/v1/models":
-            return Reply(MODELS)
+            if self.fail_models:
+                raise urllib.error.HTTPError(request.full_url, self.fail_models, "no", {},
+                                             io.BytesIO(b'{"detail":"invalid api key"}'))
+            return Reply(self.models)
         raise AssertionError(f"unexpected request {request.full_url}")
 
     def paths(self) -> list[str]:
@@ -104,12 +130,29 @@ class FakeApi:
 
 
 def _config(monkeypatch: pytest.MonkeyPatch, **changes) -> None:
+    """Replace the config in both modules that read it. Model ids are empty unless a test sets them."""
+    changes.setdefault("eleven_model", "")
+    changes.setdefault("tts_model", "")
+    changes.setdefault("veo_model", "")
     monkeypatch.setattr(voiceover, "CONFIG", dataclasses.replace(CONFIG, **changes))
+    monkeypatch.setattr(model_catalog, "CONFIG", dataclasses.replace(CONFIG, **changes))
+
+
+@pytest.fixture(autouse=True)
+def gemini_list(monkeypatch: pytest.MonkeyPatch):
+    """No test reaches Google: the Gemini model list is canned. A test may replace it."""
+    listed = {"value": list(GEMINI_LISTED)}
+    monkeypatch.setattr(model_catalog, "gemini_model_list", lambda: list(listed["value"]))
+    return listed
 
 
 def _size(result: dict) -> int:
     """Characters of the answer as the MCP client gets it: JSON with indent 2, no \\u escapes."""
     return len(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _no_elevenlabs_call(*args, **kwargs):
+    raise AssertionError("ElevenLabs must not be called without a key")
 
 
 @pytest.fixture
@@ -168,7 +211,7 @@ def test_providers_follow_the_configured_keys(monkeypatch: pytest.MonkeyPatch, n
     assert "Charon" in voiceover.voice_options()["gemini_voices"]
     _config(monkeypatch, elevenlabs_api_key="", gemini_api_key="g")
     status = voiceover.voice_options()["providers"]
-    assert status["gemini"]["available"] is True and status["gemini"]["model"] == CONFIG.tts_model
+    assert status["gemini"]["available"] is True and "newest text-to-speech" in status["gemini"]["model"]
     assert voiceover.voice_options()["default_provider"] == "edge"  # a Gemini key alone does not change the default
     assert set(status) == {"elevenlabs", "gemini", "edge", "faster_whisper"}
 
@@ -293,29 +336,150 @@ def test_unreadable_plan_is_said_and_no_voice_is_marked(monkeypatch: pytest.Monk
     assert [v["name"] for v in result["own_voices"]] == ["Brian", "Sasha", "Boris"]  # nothing refused
 
 
-def test_models_and_delivery_rules_come_only_with_details(keyed) -> None:
+def test_models_are_listed_newest_first_and_the_default_is_marked(keyed) -> None:
     plain = voiceover.voice_options()
-    assert "elevenlabs_models" not in plain and "delivery" not in plain
-    assert "/v1/models" not in keyed.paths()  # not even requested
+    assert "/v1/models" in keyed.paths()  # the list is read on every call, details or not
+    assert "delivery" not in plain and "elevenlabs_models" not in plain
     assert any("details=True" in note for note in plain["notes"])
 
+    rows = plain["models"]["elevenlabs"]
+    assert [m["id"] for m in rows] == ["eleven_v3", "eleven_multilingual_v2"]  # v3 is the higher version; STS is not TTS
+    assert rows[0] == {"id": "eleven_v3", "name": "Eleven v3", "use": "text to speech", "max_chars": 5000,
+                       "default": True}
+    assert rows[1]["default"] is False
+
+
+def test_details_adds_the_delivery_rules_of_the_default_model(keyed) -> None:
     full = voiceover.voice_options(details=True)
-    assert "/v1/models" in keyed.paths()
     assert "details=True" not in " ".join(full.get("notes", []))
-    models = {m["id"]: m for m in full["elevenlabs_models"]}
-    assert set(models) == {"eleven_v3", "eleven_multilingual_v2"}  # speech-to-speech is not a voice model
-    assert models["eleven_v3"]["max_chars"] == 5000 and "audio tags" in models["eleven_v3"]["delivery"]
-    assert "SSML" in models["eleven_multilingual_v2"]["delivery"]
     assert full["delivery"]["model"] == "eleven_v3" and "[whispers]" in full["delivery"]["audio_tags"]
+    assert "audio tags" in full["delivery"]["style"]
 
 
 def test_delivery_vocabulary_matches_the_model(monkeypatch, keyed) -> None:
     delivery = voiceover.voice_options(details=True)["delivery"]
     assert any("stability" in rule for rule in delivery["rules"])
 
+    # a pinned model (ARGUS_ELEVEN_MODEL) is the default and drives the delivery rules
     _config(monkeypatch, elevenlabs_api_key="sk_test", eleven_model="eleven_multilingual_v2")
-    v2 = voiceover.voice_options(details=True)["delivery"]
+    result = voiceover.voice_options(details=True)
+    assert [m["default"] for m in result["models"]["elevenlabs"]] == [False, True]
+    v2 = result["delivery"]
     assert "audio_tags" not in v2 and "<break" in v2["rules"][0]
+
+
+def test_the_newest_elevenlabs_model_is_picked_from_the_list(monkeypatch, keyed) -> None:
+    assert voiceover.eleven_model_id() == "eleven_v3"
+    keyed.models = [{"model_id": "eleven_v4", "name": "Eleven v4", "can_do_text_to_speech": True},
+                    {"model_id": "eleven_v3", "name": "Eleven v3", "can_do_text_to_speech": True},
+                    {"model_id": "eleven_alpha", "name": "Alpha", "can_do_text_to_speech": True,
+                     "requires_alpha_access": True}]
+    assert voiceover.eleven_model_id() == "eleven_v4"  # a newer version from the list, no code change
+    assert [m["id"] for m in voiceover.voice_options()["models"]["elevenlabs"]] == ["eleven_v4", "eleven_v3"]
+
+
+def test_the_env_variable_pins_the_elevenlabs_model_without_a_list_call(monkeypatch, keyed) -> None:
+    _config(monkeypatch, elevenlabs_api_key="sk_test", eleven_model="pinned_model_x")
+    assert voiceover.eleven_model_id() == "pinned_model_x"
+    assert "/v1/models" not in keyed.paths()
+
+
+def test_a_failed_elevenlabs_model_list_names_the_variable_and_no_old_id(monkeypatch, keyed) -> None:
+    api = FakeApi(fail_models=401)
+    monkeypatch.setattr("urllib.request.urlopen", api)
+
+    with pytest.raises(RuntimeError) as raised:
+        voiceover.eleven_model_id()
+    assert "ARGUS_ELEVEN_MODEL" in str(raised.value) and "HTTP 401" in str(raised.value)
+    assert "eleven_v3" not in str(raised.value)
+
+    result = voiceover.voice_options()
+    assert "elevenlabs" not in result.get("models", {})  # no list, so no model at all
+    assert "HTTP 401" in result["errors"]["models"] and "sk_test" not in json.dumps(result)
+    assert "eleven_v3" not in json.dumps(result.get("models", {}))
+
+
+def test_voices_are_read_from_every_page(monkeypatch, keyed) -> None:
+    pages = [
+        [{"voice_id": "pageOneAAAAAAAAAAA", "name": "First", "category": "premade", "labels": {"gender": "male"}}],
+        [{"voice_id": "pageTwoBBBBBBBBBBB", "name": "Second", "category": "professional", "labels": {"gender": "male"}}],
+        [{"voice_id": "pageThreeCCCCCCCCC", "name": "Third", "category": "cloned", "labels": {"gender": "female"}}],
+    ]
+    api = FakeApi(pages=pages, library={"voices": []})
+    monkeypatch.setattr("urllib.request.urlopen", api)
+
+    result = voiceover.voice_options(limit=50)
+    assert [v["name"] for v in result["own_voices"]] == ["First", "Second", "Third"]
+    voice_calls = [params for path, params in api.calls if path == "/v2/voices"]
+    assert [c.get("next_page_token") for c in voice_calls] == [None, "1", "2"]  # first page has no token
+    assert all(c["include_total_count"] == "false" and c["page_size"] == "100" for c in voice_calls)
+
+
+def test_free_plan_marking_applies_to_voices_on_later_pages(monkeypatch, keyed) -> None:
+    pages = [
+        [{"voice_id": "pageOneAAAAAAAAAAA", "name": "First", "category": "premade", "labels": {"gender": "male"}}],
+        [{"voice_id": "pageTwoBBBBBBBBBBB", "name": "Second", "category": "cloned", "labels": {"gender": "male"}}],
+    ]
+    monkeypatch.setattr("urllib.request.urlopen", FakeApi(pages=pages, tier="free", library={"voices": []}))
+
+    result = voiceover.voice_options(limit=50)
+    assert [v["name"] for v in result["own_voices"]] == ["First"]
+    assert [v["name"] for v in result["library_voices_paid_plan_only"]["voices"]] == ["Second"]
+
+
+def test_a_voice_list_that_never_ends_is_stopped(monkeypatch, keyed) -> None:
+    class Endless(FakeApi):
+        def __call__(self, request, timeout=None):
+            if urlparse(request.full_url).path == "/v2/voices":
+                return Reply({"voices": [], "has_more": True, "next_page_token": "again"})
+            return super().__call__(request, timeout)
+
+    monkeypatch.setattr(voiceover, "ELEVEN_VOICE_MAX_PAGES", 3)
+    monkeypatch.setattr("urllib.request.urlopen", Endless(library={"voices": []}))
+    result = voiceover.voice_options()
+    assert result["own_voices"] == []
+    assert "did not end after 3 pages" in result["errors"]["own_voices"]
+
+
+def test_gemini_models_come_newest_first_with_a_default_for_each_use(monkeypatch, keyed) -> None:
+    _config(monkeypatch, elevenlabs_api_key="", gemini_api_key="g")
+    monkeypatch.setattr("urllib.request.urlopen", _no_elevenlabs_call)
+    result = voiceover.voice_options()
+
+    rows = result["models"]["gemini"]
+    tts = [(m["id"], m["default"]) for m in rows if m["use"] == "text to speech"]
+    # 3.8 before 3.1; the plain flash beats its lite sibling; the preview id loses to the final one
+    assert tts == [("gemini-3.8-flash-tts", True), ("gemini-3.8-flash-lite-tts", False),
+                   ("gemini-3.1-flash-tts-preview", False)]
+    assert [(m["id"], m["default"]) for m in rows if m["use"] == "video"] == [("veo-4.0-test-video", True)]
+    assert "gemini_models" not in result.get("errors", {})
+
+
+def test_no_veo_model_in_the_list_is_said_with_the_shutdown_note(monkeypatch, keyed, gemini_list) -> None:
+    _config(monkeypatch, elevenlabs_api_key="", gemini_api_key="g")
+    gemini_list["value"] = [m for m in GEMINI_LISTED if not m["id"].startswith("veo")]
+    monkeypatch.setattr("urllib.request.urlopen", _no_elevenlabs_call)
+    result = voiceover.voice_options()
+    assert not any(m["use"] == "video" for m in result["models"]["gemini"])
+    assert any("shut down" in note and "2026-10-22" in note for note in result["notes"])
+
+
+def test_a_failed_gemini_list_is_reported_and_no_model_is_guessed(monkeypatch, keyed) -> None:
+    _config(monkeypatch, elevenlabs_api_key="", gemini_api_key="g")
+    monkeypatch.setattr("urllib.request.urlopen", _no_elevenlabs_call)
+
+    def refused():
+        raise RuntimeError("could not list Gemini models: 403 PERMISSION_DENIED")
+
+    monkeypatch.setattr(model_catalog, "gemini_model_list", refused)
+    result = voiceover.voice_options()
+    assert "models" not in result
+    assert "403" in result["errors"]["gemini_models"]
+
+    with pytest.raises(RuntimeError, match="ARGUS_TTS_MODEL"):
+        model_catalog.tts_model_id()
+    with pytest.raises(RuntimeError, match="ARGUS_VEO_MODEL"):
+        model_catalog.veo_model_id()
 
 
 def test_no_key_means_no_elevenlabs_delivery_guide_even_with_details(no_keys) -> None:
@@ -352,7 +516,7 @@ def test_details_come_on_top_of_the_voices_and_the_answer_still_fits(monkeypatch
     full = voiceover.voice_options(limit=50, details=True)
 
     assert _size(full) <= 6000
-    assert "delivery" in full and len(full["elevenlabs_models"]) == 2  # the rules are never the part that is cut
+    assert "delivery" in full and len(full["models"]["elevenlabs"]) == 2  # the rules are never the part that is cut
     assert len(full["own_voices"]) < len(plain["own_voices"])  # the room they take comes out of the voices
     assert any("left out" in note for note in full["notes"])
 

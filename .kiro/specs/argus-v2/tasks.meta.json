@@ -4,65 +4,54 @@
     "2. Remove creative gates (P0)": [
       {
         "executionId": "d49242cd-c3bb-4f86-a95c-6870430545fa",
-        "chatSessionId": "session-removed",
         "timestamp": 1794819009166
       },
       {
         "executionId": "d49242cd-c3bb-4f86-a95c-6870430545fa",
-        "chatSessionId": "session-removed",
         "timestamp": 1794819702114
       }
     ],
     "3. Studio guide and preferences (P0)": [
       {
         "executionId": "2f3bac9d-187a-4cc7-98ed-1ae60c5b81bc",
-        "chatSessionId": "session-removed",
         "timestamp": 1794820035616
       },
       {
         "executionId": "2f3bac9d-187a-4cc7-98ed-1ae60c5b81bc",
-        "chatSessionId": "session-removed",
         "timestamp": 1794820978659
       },
       {
         "executionId": "31b6c627-40bf-4d8b-9098-df2cae794f78",
-        "chatSessionId": "session-removed",
         "timestamp": 1794821066392
       },
       {
         "executionId": "31b6c627-40bf-4d8b-9098-df2cae794f78",
-        "chatSessionId": "session-removed",
         "timestamp": 1794821107002
       }
     ],
     "1. Setup: Kiro MCP connection, dependencies, project folders (P0)": [
       {
         "executionId": "4c42064e-e9c2-4cab-9f61-48cfa6a7baad",
-        "chatSessionId": "session-removed",
         "timestamp": 1794822036900
       },
       {
         "executionId": "e41abb30-4202-4459-b55f-6906a065ed2f",
-        "chatSessionId": "session-removed",
         "timestamp": 1794822404207
       }
     ],
     "6. Voice v2 (P0)": [
       {
         "executionId": "5500f980-bfda-4ab4-879d-d67c5253523d",
-        "chatSessionId": "session-removed",
         "timestamp": 1794827400786
       }
     ],
     "14. Clips track and media prep (P1)": [
       {
         "executionId": "ed600157-3703-413d-bb4d-5a179478f07b",
-        "chatSessionId": "session-removed",
         "timestamp": 1794939191752
       },
       {
         "executionId": "ed600157-3703-413d-bb4d-5a179478f07b",
-        "chatSessionId": "session-removed",
         "timestamp": 1794939205171
       }
     ]

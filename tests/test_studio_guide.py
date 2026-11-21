@@ -61,8 +61,10 @@ def test_providers_follow_config_imports_and_flow_profile(
     monkeypatch.setattr(studio, "_importable", lambda module: module == "edge_tts")
 
     keyed = studio.providers(dataclasses.replace(CONFIG, elevenlabs_api_key="e", gemini_api_key="g"))
-    assert all(keyed[name]["available"] for name in ("elevenlabs", "gemini", "veo_api", "edge", "flow_session"))
+    assert all(keyed[name]["available"] for name in ("elevenlabs", "gemini", "edge", "flow_session"))
     assert not keyed["faster_whisper"]["available"]
+    # the Gemini API route for Veo is shut down (task 20.8); the key alone does not make it available
+    assert not keyed["veo_api"]["available"] and "2026-10-22" in keyed["veo_api"]["note"]
 
     keyless = studio.providers(dataclasses.replace(CONFIG, elevenlabs_api_key="", gemini_api_key=""))
     assert not any(keyless[name]["available"] for name in ("elevenlabs", "gemini", "veo_api"))

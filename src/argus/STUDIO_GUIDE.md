@@ -57,9 +57,14 @@ video to the end on your own.
 - Pick the voice yourself with `voice_options`: language, a gender and age that fit
   the narrator or character, a tone that fits the genre. Tell the user which voice
   and why; they can override.
-- Write the script as a performance. With ElevenLabs v3 use audio tags where the
-  delivery changes (`[whispers]`, `[excited]`, `[sighs]`, `[pause]`) and punctuation or
-  ellipses for timing. One tag per change of delivery is enough.
+- Models: `voice_options` lists the text-to-speech models (ElevenLabs, Gemini) and the
+  video models your keys can use, newest first, each with `default: true` for the one
+  ARGUS uses. Ask the user which one they want, or use the default when they say "you
+  choose". Keep a choice the user wants again with `learn_and_record_memory`.
+- Write the script as a performance. With ElevenLabs v3 and v4 (the audio-tag models)
+  use audio tags where the delivery changes (`[whispers]`, `[excited]`, `[sighs]`,
+  `[pause]`) and punctuation or ellipses for timing. One tag per change of delivery is
+  enough.
 - Write numbers in the spoken text as words in the target language.
 - After synthesis, read the returned word timings: check that pacing matches your
   plan before you build the edit around it.

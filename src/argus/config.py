@@ -68,8 +68,9 @@ class ArgusConfig:
     # optional; only needed for the ElevenLabs voice provider
     elevenlabs_api_key: str = ""
     veo_provider: str = "api"  # "api" (official, paid) | "flow" (browser session, free credits)
-    veo_model: str = "veo-3.1-fast-generate-preview"
-    tts_model: str = "gemini-3.8-flash-tts"  # 2.5-preview TTS retired Nov 17, 2026
+    # Model ids are empty by default: ARGUS takes the newest model the key lists (tools/model_catalog.py).
+    veo_model: str = ""
+    tts_model: str = ""  # Gemini TTS model id
     default_voice: str = "Charon"
     width: int = 1080
     height: int = 1920
@@ -80,7 +81,7 @@ class ArgusConfig:
     ffmpeg: str = "ffmpeg"
     ffprobe: str = "ffprobe"
     whisper_model: str = "small"  # faster-whisper model size, used by watch_video transcripts
-    eleven_model: str = "eleven_v3"  # ElevenLabs TTS model id
+    eleven_model: str = ""  # ElevenLabs TTS model id; empty = newest text-to-speech model the key lists
     render_concurrency: int = 0  # Remotion render workers; 0 = let the renderer pick
     scripts_dir: Path = field(default_factory=lambda: _default_scripts_dir())
 

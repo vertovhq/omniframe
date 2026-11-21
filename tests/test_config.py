@@ -90,11 +90,14 @@ def test_dotenv_values_load_from_repo_root(isolated, monkeypatch):
     assert os.environ[key] == "from-repo"
 
 
-def test_new_fields_have_documented_defaults(isolated):
+def test_new_fields_have_documented_defaults(isolated, monkeypatch):
+    for name in ("ARGUS_ELEVEN_MODEL", "ARGUS_TTS_MODEL", "ARGUS_VEO_MODEL"):
+        monkeypatch.delenv(name, raising=False)  # a pinned id in the user's .env is loaded into os.environ
     cfg = load_config()
 
     assert cfg.whisper_model == "small"
-    assert cfg.eleven_model == "eleven_v3"
+    assert cfg.eleven_model == ""  # empty: the newest model the key lists is used
+    assert cfg.tts_model == "" and cfg.veo_model == ""
     assert cfg.render_concurrency == 0
     assert cfg.scripts_dir == Path.home() / ".argus" / "scripts"
 
