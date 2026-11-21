@@ -140,4 +140,8 @@ See [README.md](README.md).
 
 ## Лицензия
 
-[MIT](LICENSE)
+ARGUS — бесплатный открытый проект под лицензией [AGPL-3.0](LICENSE). Автор: VertovHQ.
+Коммерческая лицензия: напишите VertovHQ.
+
+Рендер использует [Remotion](https://www.remotion.dev) со своей лицензией:
+https://www.remotion.dev/license

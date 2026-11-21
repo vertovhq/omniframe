@@ -139,4 +139,8 @@ captions come from the plan's `captions` block) → `qa_verify_video` → `expor
 
 ## License
 
-[MIT](LICENSE)
+ARGUS is free and open source under [AGPL-3.0](LICENSE). Made by VertovHQ.
+Commercial licensing: contact VertovHQ.
+
+Rendering uses [Remotion](https://www.remotion.dev), which has its own license:
+https://www.remotion.dev/license
