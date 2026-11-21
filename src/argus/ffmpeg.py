@@ -21,9 +21,27 @@ class FFmpegError(RuntimeError):
     """Raised when an ffmpeg/ffprobe invocation fails."""
 
 
+_CREATE_NO_WINDOW = 0x08000000  # documented Win32 value; subprocess exposes it on Windows only
+
+
+def no_window_flag(os_name: str = os.name) -> int:
+    """`creationflags` for a child process: on Windows, no console window opens for it.
+
+    Every `subprocess.run` / `Popen` in ARGUS passes `NO_WINDOW`, so a render or a
+    detached job does not flash console windows. Returns 0 on other systems, where
+    Popen rejects a non-zero creationflags value.
+    """
+    if os_name != "nt":
+        return 0
+    return getattr(subprocess, "CREATE_NO_WINDOW", _CREATE_NO_WINDOW)
+
+
+NO_WINDOW: int = no_window_flag()
+
+
 def _run(cmd: list[str]) -> subprocess.CompletedProcess[bytes]:
     try:
-        proc = subprocess.run(cmd, capture_output=True)
+        proc = subprocess.run(cmd, capture_output=True, creationflags=NO_WINDOW)
     except FileNotFoundError as exc:
         raise FFmpegError(
             f"'{cmd[0]}' not found. Install ffmpeg (https://ffmpeg.org) "

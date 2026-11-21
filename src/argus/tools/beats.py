@@ -21,6 +21,7 @@ import tempfile
 from pathlib import Path
 
 from ..config import CONFIG
+from ..ffmpeg import NO_WINDOW
 from .. import __version__
 
 RATE = 22050  # mono, enough for onset detection
@@ -33,7 +34,7 @@ def _decode_mono(path: Path) -> list[float]:
     proc = subprocess.run(
         [CONFIG.ffmpeg, "-v", "error", "-i", str(path), "-map", "0:a:0",
          "-ar", str(RATE), "-ac", "1", "-f", "f32le", "-acodec", "pcm_f32le", "pipe:1"],
-        capture_output=True, check=True)
+        capture_output=True, check=True, creationflags=NO_WINDOW)
     values = array.array("f")
     values.frombytes(proc.stdout)
     if sys_little():

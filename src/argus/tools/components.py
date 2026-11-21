@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
+from ..ffmpeg import NO_WINDOW
 from ..jobs import pid_alive
 from ..plan import CustomScene, Plan
 
@@ -419,12 +420,11 @@ class EngineHold:
             "compilerOptions": {"typeRoots": [(self.engine / "node_modules" / "@types").as_posix()]},
             "include": [f"{src}/custom/registry.ts", f"{src}/custom/job/**/*"],
         }), encoding="utf-8")
-        creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         try:
             proc = subprocess.run(
                 [node, str(tsc), "--noEmit", "--pretty", "false", "-p", str(config)],
                 cwd=self.engine, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                timeout=TSC_TIMEOUT_S, creationflags=creationflags, stdin=subprocess.DEVNULL,
+                timeout=TSC_TIMEOUT_S, creationflags=NO_WINDOW, stdin=subprocess.DEVNULL,
             )
         except subprocess.TimeoutExpired:
             raise ComponentError(f"the typecheck of the components took longer than {TSC_TIMEOUT_S:.0f} s") from None

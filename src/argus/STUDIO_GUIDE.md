@@ -72,8 +72,15 @@ video to the end on your own.
 
 ## 5. Look and motion
 
+- **Name the look first.** Before you write scenes, say in one chat line the look you take from
+  the reference or the request: palette, fonts, layout, motion. Never ship the engine default
+  style (dark background, violet accent, Inter); a plan that sets no look of its own gets it.
 - Express the style as tokens in `plan.style`: colors, fonts, text scale, background.
   Keep the same tokens across the whole video.
+- The built-in scene kinds (`title`, `card`, `big`, `counter`, `act`, `cta`, `chip`, `words`)
+  and the kit blocks are parts, not a look. Change their layout and motion to fit the
+  reference. Where the kit has nothing that fits, write your own elements in plain React,
+  CSS or SVG (paper, brush, hand-drawn or soft looks).
 - Reach for the built-in scene kinds first. When none fits, build a `custom` scene from the
   motion kit blocks: call `studio_guide(custom_scenes=true)` for the index (one line per
   group), then `studio_guide(kit_group="hud")` for each group you need. It returns that

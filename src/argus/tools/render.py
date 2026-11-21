@@ -54,7 +54,15 @@ from .. import __version__, jobs
 from ..captions import _token as _caption_token
 from ..captions import clean_word_timings, load_words, remap_words_to_clips, resolve_cues
 from ..config import CONFIG
-from ..ffmpeg import FFmpegError, measure_loudness, run_ffmpeg, run_ffmpeg_stderr, stream_info, temp_sibling
+from ..ffmpeg import (
+    NO_WINDOW,
+    FFmpegError,
+    measure_loudness,
+    run_ffmpeg,
+    run_ffmpeg_stderr,
+    stream_info,
+    temp_sibling,
+)
 from ..plan import (
     FORMAT_SIZES,
     TAIL_S,
@@ -63,6 +71,7 @@ from ..plan import (
     Plan,
     WordCue,
     WordsRemap,
+    is_builtin_style,
     validate_plan,
 )
 from ..project import project_dir, slugify
@@ -83,6 +92,11 @@ EMPTY_FRAME_SPREAD = 3         # a still whose channels all lie within this many
 BUNDLE_KEEP_S = 600            # bundles of other engine states older than this are removed
 BUNDLE_DIR = "bundle"          # <project>/cache/bundle/<key>/, one per engine state
 STILLS_WAIT_S = 90.0           # stills usually finish inside one tool call (bundle + a few frames)
+# Information only: a stills or preview answer carries it when the plan uses the built-in look.
+STYLE_NOTE = (
+    "style: engine defaults (dark, #7C5CFA, Inter). Set your own palette, fonts and layout "
+    "from the reference or the user's request."
+)
 PREVIEW_SCALE = 0.5
 PREVIEW_CRF = 28
 FINAL_CRF = 18
@@ -153,7 +167,7 @@ def _ensure_default_sfx() -> Path:
                 continue
             subprocess.run(
                 [CONFIG.ffmpeg, "-hide_banner", "-loglevel", "error", "-y", *args, str(dst)],
-                check=True,
+                check=True, creationflags=NO_WINDOW,
             )
     return cache
 
@@ -732,7 +746,6 @@ def _run_node_script(
     script = engine_dir() / "scripts" / "render.mjs"
     spec_path = work / "spec.json"
     spec_path.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
-    creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     result: dict | None = None
     failure: str | None = None
     tail: deque[str] = deque(maxlen=30)
@@ -740,7 +753,7 @@ def _run_node_script(
         proc = subprocess.Popen(
             [node, str(script), str(spec_path)],
             cwd=engine_dir(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=log,
-            text=True, encoding="utf-8", errors="replace", creationflags=creationflags,
+            text=True, encoding="utf-8", errors="replace", creationflags=NO_WINDOW,
         )
         assert proc.stdout is not None
         for line in proc.stdout:
@@ -1056,6 +1069,13 @@ def _run_audio(payload: dict, plan: Plan, root: Path, report: Callable[..., None
     return result
 
 
+def style_note(mode: str, plan: Plan) -> str | None:
+    """`style_note` for a stills or preview answer whose plan has the built-in look; else None."""
+    if mode in ("stills", "preview") and is_builtin_style(plan.style):
+        return STYLE_NOTE
+    return None
+
+
 def run_job(payload: dict, report: Callable[..., None]) -> dict:
     """Worker side of `render_video` (job kind `render`)."""
     started = time.monotonic()
@@ -1107,6 +1127,8 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     }
     if payload.get("warnings") or sfx_warnings:
         result["warnings"] = [*payload.get("warnings", []), *sfx_warnings]
+    if (note := style_note(mode, plan)) is not None:
+        result["style_note"] = note
     proxies = [
         {"clip": i, "source": str(m.source), "proxy": str(m.path), "why": list(m.reasons)}
         for i, m in enumerate(clip_media) if m.proxied

@@ -30,6 +30,7 @@ import tempfile
 from urllib.parse import unquote, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
+from ..ffmpeg import NO_WINDOW
 
 SITE = "https://freesound.org"
 MANIFEST = "audio-manifest.json"
@@ -233,7 +234,7 @@ def analyze(path):
     path = Path(path).resolve()
     probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
                             "stream=codec_name,sample_rate,channels:format=duration", "-of", "json", str(path)],
-                           capture_output=True, text=True, check=True)
+                           capture_output=True, text=True, check=True, creationflags=NO_WINDOW)
     info = json.loads(probe.stdout)
     stream = info["streams"][0]
     channels = int(stream["channels"])
@@ -246,7 +247,7 @@ def analyze(path):
     with tempfile.TemporaryFile() as errors:
         with subprocess.Popen(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:a:0", "-ar", str(rate),
                                "-f", "f32le", "-acodec", "pcm_f32le", "pipe:1"],
-                              stdout=subprocess.PIPE, stderr=errors) as process:
+                              stdout=subprocess.PIPE, stderr=errors, creationflags=NO_WINDOW) as process:
             while True:
                 raw = process.stdout.read(block_size)
                 if not raw:

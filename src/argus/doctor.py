@@ -27,6 +27,7 @@ from pathlib import Path
 
 from . import __version__
 from .config import ArgusConfig, load_config
+from .ffmpeg import NO_WINDOW
 
 # ids whose failure flips the exit code / report["ok"]; warnings never do
 CRITICAL_IDS = frozenset({"python", "ffmpeg", "ffprobe", "node", "npx", "engine", "numpy", "pillow", "output_dir"})
@@ -54,7 +55,9 @@ def _which(exe: str) -> str | None:
 
 
 def _run(cmd: list[str], timeout: float = 20.0, cwd: str | Path | None = None):
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd)
+    return subprocess.run(
+        cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd, creationflags=NO_WINDOW,
+    )
 
 
 def _check(cid: str, label: str, status: str, detail: str = "", hint: str = "") -> dict:
@@ -192,7 +195,7 @@ def probe_edge(retries: int = 2, timeout: float = 15.0) -> tuple[bool, str]:
             try:
                 p = subprocess.run(
                     [sys.executable, "-c", _EDGE_PROBE, str(out)],
-                    capture_output=True, text=True, timeout=timeout,
+                    capture_output=True, text=True, timeout=timeout, creationflags=NO_WINDOW,
                 )
             except subprocess.TimeoutExpired:
                 last = f"таймаут {timeout:.0f}с"

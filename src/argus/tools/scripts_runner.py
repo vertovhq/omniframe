@@ -24,6 +24,7 @@ from pathlib import Path
 
 from .. import __version__, jobs
 from ..config import CONFIG, REPO_ROOT
+from ..ffmpeg import NO_WINDOW
 from ..project import project_dir
 
 JOB_KIND = "scripts_runner"
@@ -32,7 +33,6 @@ DEFAULT_TIMEOUT_S = 120.0
 MIN_TIMEOUT_S = 1.0
 MAX_TIMEOUT_S = 3600.0          # the job worker itself gives up after 4 hours
 TAIL_CHARS = 1500
-_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # Windows: no console window per script
 
 
 def script_folders() -> list[Path]:
@@ -208,7 +208,7 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
                 proc = subprocess.run(
                     [sys.executable, "-P", str(payload["script"]), str(args_file)],
                     cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err,
-                    timeout=timeout_s, creationflags=_NO_WINDOW,
+                    timeout=timeout_s, creationflags=NO_WINDOW,
                 )
             except subprocess.TimeoutExpired:
                 stderr_text = _read(stderr_file)

@@ -37,6 +37,7 @@ from pathlib import Path
 
 from . import __version__
 from .config import CONFIG
+from .ffmpeg import NO_WINDOW
 
 RETENTION_S = 7 * 24 * 3600      # jobs older than this are deleted at server start
 MAX_RUN_S = 4 * 3600             # a running job older than this counts as stuck
@@ -280,18 +281,16 @@ def _start(kind: str, payload: dict, key: str | None) -> tuple[str, bool]:
             "pid": None, "result": None, "error": None,
         })
 
-        creationflags = 0
         extra: dict = {}
-        if os.name == "nt":
-            creationflags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
-        else:
+        if os.name != "nt":
             extra["start_new_session"] = True
         env = {**os.environ, "OMNIFRAME_OUTPUT_DIR": str(Path(CONFIG.output_dir))}
         with open(job_dir / "log.txt", "wb") as log:
             _PROCS[job_id] = subprocess.Popen(
                 [sys.executable, "-I", "-m", "argus.jobs", str(job_dir)],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log,
-                creationflags=creationflags, env=env, **extra,
+                creationflags=(NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == "nt" else 0,
+                env=env, **extra,
             )
         return job_id, False
 
