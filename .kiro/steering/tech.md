@@ -25,7 +25,7 @@
 - Long runs (pytest, renders): write output and the exit code to files, then poll.
   `& { .venv\Scripts\python.exe -m pytest -q 2>&1 | Out-File -Encoding utf8 "$env:TEMP\argus_pytest.txt"; "exit=$LASTEXITCODE" | Out-File -Encoding utf8 "$env:TEMP\argus_pytest_exit.txt" }`
   Read `argus_pytest_exit.txt` until it exists; then read the tail of `argus_pytest.txt`.
-  For a run longer than a minute start it detached (`Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile','-File',<script>`), so the shell stays free.
+  For a run longer than a minute start it detached (`Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',<script>`), so the shell stays free.
 - Never wait inside the shell (`Start-Sleep` loops): the next commands queue behind the loop and look dead. Poll by reading the exit file again in a later step.
 - Never start a second pytest or render while one runs: they share `engine/` and lock files. Before starting one, check for running ones:
   `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '-m pytest' }`.

@@ -297,8 +297,28 @@ def render_video(
     compare: dict | None = None,
     format: str | None = None,
     name: str = "video",
+    save_sounds: list[dict] | None = None,
 ) -> list[str | Image] | dict:
     """Render a plan with the ARGUS engine. Work in this order: stills first, then preview, then final.
+
+    Sound design (mode "audio"): place sounds before the preview. `audio.sounds` names the
+    sounds of this video: {"hook": {"from": "whoosh", "pitch_end": 300, "length": 0.6}} starts
+    from a starting recipe (whoosh, swish, whip, hit, impact, sub_drop, riser, reverse_swell,
+    braam, stinger, click, tick, ui_blip, glitch, data_chatter, typing, pop, shimmer, heartbeat,
+    static; `studio_guide(kit_group="sfx")` lists them with a sheet image), or is a full sound
+    with `length` and up to 4 `layers`. `audio.sfx` events are {"at": seconds | "cue:<name>" |
+    "cut:<n>", "sound": name, "align": "start" | "peak" | "end", "vary": 0..1, ...} or the old
+    form {"at", "src", "volume"} for a file (`pitch`, `rate`, `pan`, `reverse`, `trim`, `fade`,
+    `gain_db` also work on files). `align: "peak"` puts the sound's peak exactly on its moment.
+    `vary` (default 1 for a named sound) makes each repeat differ; 0 gives exact copies.
+    mode "audio" mixes voice, music and sounds without a browser, in seconds. It returns the
+    timeline image (lanes for voice, music and sounds; scene cuts and cues as lines; every sound
+    labelled with its number) and `sounds`, one row per event with its length, attack, peak,
+    loudness and brightness, plus `warnings`: clipping, two peaks that add up above -1 dBFS, a
+    sound that starts after the video or runs past its end, and a sound louder than the voice
+    while words are spoken. Look at the image and fix what the warnings name. Pass `save_sounds`
+    (mode "audio" only) after the user approved sounds: [{"sound": name, "what": "...",
+    "fits_when": "..."}] saves each recipe to the sound library for the next video.
 
     `plan` is the plan object (or the path of a plan .json file); `project` is the
     work's short name (the same for the whole video). Relative file paths in the plan
@@ -348,6 +368,7 @@ def render_video(
     """
     return render.render_video(
         plan, project, mode=mode, times=times, compare=compare, format=format, name=name,
+        save_sounds=save_sounds,
     )
 
 

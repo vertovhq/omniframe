@@ -285,3 +285,11 @@ _To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
 - Verified: `git ls-files skills` → 0 files; `Test-Path ..\argus-skills` → True; full `pytest` → 368 passed in 685.77 s, exit 0.
 - Left for the author: `launch_argus_mcp.bat` kept (INSTALL.md lines 89 and 96 use it); README.md line 11 still names `~/.zcode/skills`; the disclosure text is in task 21.
 - Credits: <author fills>
+
+## Task 20.5b - Sound design: synthesized sounds, variations, SFX library (2026-11-21, Haiku 5.5)
+- Built: sound events placed on the timeline (`src/argus/tools/sounds.py`), synthesized sounds (`src/argus/tools/synth.py`), tests (`tests/test_sounds.py`); plan, server, studio and `STUDIO_GUIDE.md` updated to match.
+- Bugs & fixes: (1) built-in sounds were not found in `run_job` and `_run_audio` -> both now resolve files through `render._resolve_file`. (2) 404 on `InterDisplay-Black.otf` in a full run, not reproduced on a rerun -> cause: the cached bundle `<project>/cache/bundle/<key>/public/` had no `fonts/` folder while `m/` had its files, and the source of the loss is not known -> before a cached bundle is served, `render._restore_public` links back every file of the job public dir that the bundle lacks and reports the list. Test: `test_reused_bundle_gets_back_the_public_files_it_lost`.
+- Kiro: none.
+- Verified: `test_render_speed.py`, `test_scenarios.py`, `test_render.py` -> 42 passed in 240.04 s, exit 0; full `pytest -q` -> 414 passed in 750.28 s, exit 0.
+- Not done: Freesound sounds in the library and ducking in audio mode (after the contest); listening and re-voicing (at the demo).
+- Credits: <author fills>

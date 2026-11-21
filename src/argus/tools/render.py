@@ -16,6 +16,10 @@ Flow of one call:
 3. Outputs go to `<project>/renders/`; a final render also saves `<project>/plan.json`.
    The work folder is deleted when the job succeeds.
 
+Mode `audio` skips the engine: `_run_audio` places the sounds (`tools/sounds.py`), mixes the
+tracks into `<name>-audio.wav` and draws `<name>-audio-timeline.jpg`. Sound events of the other
+modes are rendered to WAV files in `<project>/cache/sfx/` before the engine runs.
+
 Custom scene components (`tools/components.py`): `prepare_render` checks their source; the job
 reserves the engine folder (lock), installs and typechecks them, and frees the folder as soon
 as the bundle is built. Compile errors come back as `{"valid": false, "errors": [...]}`.
@@ -62,12 +66,14 @@ from ..plan import (
     validate_plan,
 )
 from ..project import project_dir, slugify
-from . import media_prep
+from . import media_prep, sounds
 from .components import EngineHold, check_components, used_components
 from .library import project_library_dir
 from .watch import format_time
 
-MODES = ("stills", "preview", "final")
+MODES = ("stills", "preview", "final", "audio")  # "audio": the sound mix and timeline, no browser (task 20.5b)
+AUDIO_TIMELINE_NAME = "audio-timeline"
+TIMELINE_MAX_SIDE = 1600       # the timeline image keeps its width (the model sees it at this size)
 MAX_STILLS = 12                # frames per call; they come back as one contact sheet, so one image
 DEFAULT_STILLS = 6
 SHEET_MAX_SIDE = 1600          # longest side of the contact sheet (the model sees it at this size)
@@ -210,6 +216,14 @@ def _builtin_sfx(value: str) -> bool:
     return Path(value).name in DEFAULT_SFX
 
 
+def _resolve_file(value: str, bases: Sequence[Path]) -> Path | None:
+    """`resolve_asset`, plus the built-in sound names (`whoosh.mp3`, `pop.mp3`, `hit.wav`) that are synthesized on demand."""
+    found = resolve_asset(value, bases)
+    if found is None and _builtin_sfx(value):
+        found = (_ensure_default_sfx() / Path(value).name).resolve()
+    return found
+
+
 def _asset_refs(plan: Plan) -> list[tuple[str, str, str]]:
     """`(path in the plan, value, kind)` for every file the plan names.
 
@@ -240,7 +254,8 @@ def _asset_refs(plan: Plan) -> list[tuple[str, str, str]]:
         if plan.audio.music:
             refs.append(("audio.music.src", plan.audio.music.src, "audio"))
         for i, event in enumerate(plan.audio.sfx):
-            refs.append((f"audio.sfx[{i}].src", event.src, "sfx"))
+            if event.src is not None:  # a `sound` event names no file
+                refs.append((f"audio.sfx[{i}].src", event.src, "sfx"))
     return refs
 
 
@@ -382,6 +397,7 @@ def prepare_render(
     compare: dict | None,
     format: str | None,
     name: str,
+    save_sounds: Any = None,
 ) -> tuple[dict | None, list[str]]:
     """Validate everything a render needs. Returns `(job payload, [])` or `(None, errors)`.
 
@@ -479,9 +495,17 @@ def prepare_render(
     elif compare is not None and mode != "stills":
         errors.append("compare: only works with mode='stills'")
 
+    clean_saves: list[dict] | None = None
+    if save_sounds is not None:
+        if mode != "audio":
+            errors.append("save_sounds: only works with mode='audio' (save the sounds you approved after listening)")
+        elif parsed is not None and not errors:
+            clean_saves, save_errors = sounds.validate_save_sounds(save_sounds, parsed, project_library_dir(project_root))
+            errors += save_errors
+
     if errors or resolved is None:
         return None, errors
-    return {
+    payload = {
         "mode": mode,
         "name": name_slug,
         "project_root": str(project_root),
@@ -492,7 +516,10 @@ def prepare_render(
         "times": clean_times,
         "compare": compare_payload,
         "warnings": _plan_warnings(resolved, words) + component_warnings,
-    }, []
+    }
+    if clean_saves is not None:
+        payload["save_sounds"] = clean_saves
+    return payload, []
 
 
 def _clip_range_errors(index: int, clip: Any, source_s: float) -> list[str]:
@@ -602,6 +629,18 @@ def _prepare_clip_media(
     return media_prep.prepare_clips(
         sources, root / "cache" / "proxies", fps=plan.fps, report=lambda note: report(0.02, note),
     )
+
+
+def engine_plan_with_sounds(plan: dict, placed: Sequence[sounds.Placed]) -> dict:
+    """A copy of the plan dict whose `audio.sfx` holds the rendered events (numbers and files) for the engine.
+
+    The named `sounds` are dropped: the engine only plays the events.
+    """
+    out = json.loads(json.dumps(plan))
+    audio = out["audio"]
+    audio["sfx"] = sounds.engine_events(placed)
+    audio.pop("sounds", None)
+    return out
 
 
 def _engine_props(
@@ -767,6 +806,24 @@ def _prune_bundles(bundles: Path, keep: Path) -> None:
             shutil.rmtree(old, ignore_errors=True)
 
 
+def _restore_public(bundle: Path, public_src: Path) -> list[str]:
+    """Link every file of the job's public dir that `bundle/public` lacks; returns their relative paths.
+
+    A cached bundle was seen without its `public/fonts` folder (a 404 for the font at render time),
+    so the files are checked again before the bundle is served.
+    """
+    added: list[str] = []
+    for src in sorted(public_src.rglob("*")):
+        if not src.is_file():
+            continue
+        rel = src.relative_to(public_src)
+        dst = bundle / "public" / rel
+        if not dst.exists():
+            _link_or_copy(src, dst)
+            added.append(rel.as_posix())
+    return added
+
+
 def _run_node_bundled(
     spec: dict,
     work: Path,
@@ -786,6 +843,9 @@ def _run_node_bundled(
     final = bundles / key[:16]
     building: Path | None = None
     if (final / "index.html").is_file():
+        added = _restore_public(final, Path(spec["publicDir"]))
+        if added:
+            report(lo, "bundle: restored missing public files: " + ", ".join(added))
         spec["serveUrl"] = str(final)  # the node script skips the bundle step
     else:
         bundles.mkdir(parents=True, exist_ok=True)
@@ -959,6 +1019,43 @@ def _remove_stale(folder: Path, pattern: str) -> None:
         old.unlink(missing_ok=True)
 
 
+def _run_audio(payload: dict, plan: Plan, root: Path, report: Callable[..., None], started: float) -> dict:
+    """`render_video(mode="audio")`: the sound mix, its timeline image and checks. No browser, no bundle."""
+    bases = [Path(b) for b in payload["bases"]]
+    name = str(payload["name"])
+    cues = {k: float(v) for k, v in (payload.get("cues") or {}).items()}
+    report(0.05, "placing the sounds")
+    t_prep = time.monotonic()
+    placed, sfx_warnings = sounds.resolve_events(plan, cues, root / "cache" / "sfx", lambda v: _resolve_file(v, bases))
+    voice = plan.audio.voice if plan.audio else None
+    music = plan.audio.music if plan.audio else None
+    voice_path = resolve_asset(voice.src, bases) if voice is not None else None
+    music_path = resolve_asset(music.src, bases) if music is not None else None
+    renders = root / "renders"
+    renders.mkdir(parents=True, exist_ok=True)
+    report(0.4, "mixing")
+    audio = sounds.audio_render(
+        plan, placed, sfx_warnings, voice_path, music_path, payload.get("caption_words"), cues,
+        renders / f"{name}-audio.wav", renders / f"{name}-{AUDIO_TIMELINE_NAME}.jpg",
+        title=f"{name} · {plan.format} · {plan.duration:g} s",
+    )
+    result: dict[str, Any] = {
+        "mode": "audio",
+        "format": plan.format,
+        "duration": plan.duration,
+        "project": root.name,
+        "images": [{"path": str(renders / f"{name}-{AUDIO_TIMELINE_NAME}.jpg")}],
+        "image_max_side": TIMELINE_MAX_SIDE,
+        **audio,
+    }
+    if payload.get("save_sounds"):
+        report(0.9, "saving the approved sounds")
+        result["saved_sounds"] = sounds.save_sounds(payload["save_sounds"], project_library_dir(root), root.name)
+    result["elapsed_s"] = round(time.monotonic() - started, 1)
+    result["timing"] = {"prepare_s": round(t_prep - started, 3), "total_s": round(time.monotonic() - started, 3)}
+    return result
+
+
 def run_job(payload: dict, report: Callable[..., None]) -> dict:
     """Worker side of `render_video` (job kind `render`)."""
     started = time.monotonic()
@@ -966,6 +1063,8 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     mode = str(payload["mode"])
     name = str(payload["name"])
     root = Path(payload["project_root"])
+    if mode == "audio":
+        return _run_audio(payload, plan, root, report, started)
     fmt = plan.format
     tag = _fmt_tag(fmt)
     renders = root / "renders"
@@ -978,8 +1077,16 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     public = _PublicDir(work / "public", [Path(b) for b in payload["bases"]])
     bases = [Path(b) for b in payload["bases"]]
     clip_media = _prepare_clip_media(plan, bases, root, with_audio=mode != "stills", report=report)
+    # Sound events become WAV files at known times (`sounds.resolve_events`); the engine only plays them.
+    sfx_warnings: list[str] = []
+    engine_plan = payload["plan"]
+    if mode != "stills" and plan.audio is not None:
+        placed, sfx_warnings = sounds.resolve_events(
+            plan, payload.get("cues") or {}, root / "cache" / "sfx", lambda v: _resolve_file(v, bases),
+        )
+        engine_plan = engine_plan_with_sounds(payload["plan"], placed)
     props = _engine_props(
-        payload["plan"], payload.get("caption_words"), public,
+        engine_plan, payload.get("caption_words"), public,
         with_audio=mode != "stills", clip_media=clip_media, cues=payload.get("cues"),
     )
     spec: dict[str, Any] = {
@@ -998,8 +1105,8 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         "duration": plan.duration,
         "project": root.name,
     }
-    if payload.get("warnings"):
-        result["warnings"] = list(payload["warnings"])
+    if payload.get("warnings") or sfx_warnings:
+        result["warnings"] = [*payload.get("warnings", []), *sfx_warnings]
     proxies = [
         {"clip": i, "source": str(m.source), "proxy": str(m.path), "why": list(m.reasons)}
         for i, m in enumerate(clip_media) if m.proxied
@@ -1134,6 +1241,7 @@ def render_video(
     format: str | None = None,
     name: str = "video",
     wait_s: float | None = None,
+    save_sounds: Any = None,
 ) -> dict | list:
     """Tool logic of `render_video`: validate, then run the `render` job.
 
@@ -1141,7 +1249,7 @@ def render_video(
     """
     root = project_dir(project)
     payload, errors = prepare_render(
-        plan, root, mode=mode, times=times, compare=compare, format=format, name=name,
+        plan, root, mode=mode, times=times, compare=compare, format=format, name=name, save_sounds=save_sounds,
     )
     if payload is None:
         return {
@@ -1150,7 +1258,7 @@ def render_video(
             "errors": errors,
             "note": "nothing was rendered; fix the listed problems and call again",
         }
-    if not (engine_dir() / "node_modules").is_dir():
+    if mode != "audio" and not (engine_dir() / "node_modules").is_dir():
         raise RuntimeError(f"The engine is not installed: run `npm install` inside {engine_dir()}.")
     wait = wait_s if wait_s is not None else (STILLS_WAIT_S if mode == "stills" else jobs.DEFAULT_WAIT_S)
     return jobs.run_or_detach("render", payload, wait_s=wait)

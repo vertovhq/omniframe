@@ -408,16 +408,144 @@ class Music(_Model):
     fade_out: float = Field(1.5, ge=0)
 
 
+SOUND_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,39}$")
+ANCHOR_RE = re.compile(r"^(cue:[A-Za-z][A-Za-z0-9_]*|cut:\d+)$")
+ANCHOR_HINT = "seconds, 'cue:<name>' (a cue in `cues`) or 'cut:<n>' (the start of scene n, counted from 0)"
+
+
+class SoundLayer(_Model):
+    """One source of a synthesized sound. Tonal sources need `freq_start`; filters need `cutoff_start`."""
+
+    source: Literal["sine", "saw", "square", "triangle", "white", "pink", "brown"]
+    freq_start: float | None = Field(None, ge=20, le=20000)  # Hz
+    freq_end: float | None = Field(None, ge=20, le=20000)    # Hz; default: freq_start (no sweep)
+    curve: Literal["linear", "exp"] = "linear"
+    amp: float = Field(1.0, ge=0, le=1)
+    attack: float = Field(0.005, ge=0, le=5)                 # seconds to full level
+    decay: float = Field(0.0, ge=0, le=10)                   # exponential time constant, 0 = no decay
+    release: float = Field(0.0, ge=0, le=5)                  # fade-out over the last seconds of the sound
+    start: float = Field(0.0, ge=0, le=10)                   # delay inside the sound, seconds
+    filter: Literal["lowpass", "highpass", "bandpass"] | None = None
+    cutoff_start: float | None = Field(None, ge=20, le=20000)
+    cutoff_end: float | None = Field(None, ge=20, le=20000)  # default: cutoff_start
+    resonance: float = Field(0.7, ge=0.1, le=10)
+    drive: float = Field(0.0, ge=0, le=10)                   # tanh saturation
+    bits: int | None = Field(None, ge=1, le=16)              # bit reduction
+    pan: float = Field(0.0, ge=-1, le=1)
+
+    @model_validator(mode="after")
+    def _needs(self) -> SoundLayer:
+        if self.source not in ("white", "pink", "brown") and self.freq_start is None:
+            raise ValueError(f"a {self.source} layer needs freq_start (its frequency in Hz)")
+        if self.filter is not None and self.cutoff_start is None:
+            raise ValueError(f"a {self.filter} filter needs cutoff_start (Hz)")
+        return self
+
+
+class SoundSpec(_Model):
+    """A named sound. Either `from` a starting recipe with overrides, or a full sound (`length` and `layers`)."""
+
+    from_: str | None = Field(None, alias="from")
+    length: float | None = Field(None, gt=0.02, le=10)
+    layers: list[SoundLayer] | None = Field(None, min_length=1, max_length=4)
+    reverb: float | None = Field(None, ge=0, le=1)           # wet amount of a synthetic tail
+    reverb_decay: float | None = Field(None, ge=0.1, le=5)   # seconds
+    reverse: bool | None = None
+    pitch_start: float | None = Field(None, ge=20, le=20000)  # Hz, every tonal layer
+    pitch_end: float | None = Field(None, ge=20, le=20000)    # Hz, every tonal layer
+    peak_db: float | None = Field(None, ge=-12, le=-1)
+    seed: int | None = Field(None, ge=0, le=2**31 - 1)
+
+    @model_validator(mode="after")
+    def _shape(self) -> SoundSpec:
+        from .tools.synth import STARTING_NAMES
+
+        if self.from_ is not None:
+            if self.from_ not in STARTING_NAMES:
+                raise ValueError(f"unknown starting recipe {self.from_!r} (expected {', '.join(STARTING_NAMES)})")
+        elif self.length is None or self.layers is None:
+            raise ValueError("a full sound needs `length` and `layers`; or start from one with `from`")
+        return self
+
+
 class SfxEvent(_Model):
-    at: float = Field(ge=0)
-    src: str = Field(min_length=1)
+    """One sound placed in the video.
+
+    `at` is seconds, `cue:<name>` (a cue of the plan) or `cut:<n>` (the start of scene n).
+    Exactly one of `src` (a file) and `sound` (a name from `audio.sounds`, or a starting recipe).
+    `align` says which part of the sound sits on `at`: its start, its peak or its end.
+    `vary` is how much each repeat differs (0 = exact copies); it defaults to 1 for a `sound` and
+    to off for a plain file, so an old-form event (`at`, `src`, `volume`) renders as before.
+    """
+
+    at: float | str
+    src: str | None = Field(None, min_length=1)
+    sound: str | None = Field(None, min_length=1)
     volume: float = Field(1.0, ge=0)
+    gain_db: float | None = Field(None, ge=-60, le=0)
+    pitch: float = Field(0.0, ge=-24, le=24)     # semitones; the speed changes with it
+    rate: float = Field(1.0, gt=0.25, le=4)      # speed factor
+    pan: float = Field(0.0, ge=-1, le=1)
+    reverse: bool = False
+    trim: list[float] | None = Field(None, min_length=2, max_length=2)  # [in, out] seconds of the sound
+    fade: float | None = Field(None, ge=0, le=5)  # seconds, both ends
+    align: Literal["start", "peak", "end"] = "start"
+    vary: float | None = Field(None, ge=0, le=1)
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _at(cls, v: Any) -> Any:
+        if isinstance(v, bool):
+            raise ValueError(f"{v!r} is not a time; use {ANCHOR_HINT}")
+        if isinstance(v, (int, float)):
+            if v < 0:
+                raise ValueError(f"{v} is before the start of the video")
+            return float(v)
+        if isinstance(v, str):
+            if ANCHOR_RE.fullmatch(v.strip()):
+                return v.strip()
+            try:
+                seconds = float(v)
+            except ValueError:
+                raise ValueError(f"{v!r} is not a time; use {ANCHOR_HINT}") from None
+            return seconds
+        raise ValueError(f"must be {ANCHOR_HINT}")
+
+    @model_validator(mode="after")
+    def _one_source(self) -> SfxEvent:
+        if (self.src is None) == (self.sound is None):
+            raise ValueError("give exactly one of `src` (a file) and `sound` (a named sound)")
+        if "gain_db" in self.model_fields_set and "volume" in self.model_fields_set:
+            raise ValueError("give `gain_db` or `volume`, not both")
+        if self.trim is not None and not 0 <= self.trim[0] < self.trim[1]:
+            raise ValueError(f"trim must be [in, out] with 0 <= in < out, got {self.trim}")
+        return self
+
+    @property
+    def transforms(self) -> bool:
+        """True when the event changes the file (anything but a plain placement of `src`)."""
+        return bool(
+            self.sound is not None or self.gain_db is not None or self.pitch or self.rate != 1.0
+            or self.pan or self.reverse or self.trim is not None or self.fade or self.align != "start"
+            or self.vary is not None
+        )
 
 
 class Audio(_Model):
     voice: AudioRef | None = None
     music: Music | None = None
+    sounds: dict[str, SoundSpec] = Field(default_factory=dict)  # named sounds the sfx events may use
     sfx: list[SfxEvent] = Field(default_factory=list)
+
+    @field_validator("sounds")
+    @classmethod
+    def _names(cls, v: dict[str, Any]) -> dict[str, Any]:
+        bad = [n for n in v if not SOUND_NAME_RE.fullmatch(n)]
+        if bad:
+            raise ValueError(
+                f"sound names are letters, digits and _, starting with a letter (at most 40): {', '.join(map(repr, bad))}"
+            )
+        return v
 
 
 # --------------------------------------------------------------------------- cues
@@ -597,13 +725,55 @@ def derive_duration(
 
 
 def validate_plan(data: Any) -> tuple[Plan | None, list[str]]:
-    """Validate a plan dict. Returns `(plan, [])` or `(None, ["path: message", ...])`."""
+    """Validate a plan dict. Returns `(plan, [])` or `(None, ["path: message", ...])`.
+
+    The references inside `audio.sfx` (`sound`, `cue:`, `cut:`) are checked on the raw dict, so
+    they are reported together with field errors instead of after them.
+    """
     if not isinstance(data, Mapping):
         return None, [f"plan: must be a JSON object, got {type(data).__name__}"]
+    references = _sfx_reference_errors(data)
     try:
-        return Plan.model_validate(dict(data)), []
+        plan = Plan.model_validate(dict(data))
     except ValidationError as exc:
-        return None, _format_errors(exc, data)
+        return None, list(dict.fromkeys([*_format_errors(exc, data), *references]))
+    return (None, references) if references else (plan, [])
+
+
+def _sfx_reference_errors(data: Mapping[str, Any]) -> list[str]:
+    """`audio.sfx` events that name an unknown sound, cue or scene (`path: message`)."""
+    from .tools.synth import STARTING_NAMES
+
+    audio = data.get("audio")
+    events = audio.get("sfx") if isinstance(audio, Mapping) else None
+    if not isinstance(events, list):
+        return []
+    sounds_map = audio.get("sounds") if isinstance(audio.get("sounds"), Mapping) else {}
+    defined = sorted({*(str(k) for k in sounds_map), *STARTING_NAMES})
+    cues = data.get("cues") if isinstance(data.get("cues"), Mapping) else {}
+    scenes = data.get("scenes") if isinstance(data.get("scenes"), list) else []
+    problems: list[str] = []
+    for i, event in enumerate(events):
+        if not isinstance(event, Mapping):
+            continue
+        sound = event.get("sound")
+        if isinstance(sound, str) and sound not in defined:
+            problems.append(
+                f"audio.sfx[{i}].sound: unknown sound {sound!r} "
+                f"(defined: {', '.join(defined)}; a sound of the plan goes in audio.sounds)"
+            )
+        at = event.get("at")
+        if isinstance(at, str):
+            kind, _, ref = at.strip().partition(":")
+            if kind == "cue" and ref not in cues:
+                names = ", ".join(sorted(str(k) for k in cues)) or "none"
+                problems.append(f"audio.sfx[{i}].at: unknown cue {ref!r} (cues defined: {names})")
+            if kind == "cut" and ref.isdigit() and int(ref) >= len(scenes):
+                problems.append(
+                    f"audio.sfx[{i}].at: scene {ref} does not exist "
+                    f"(the plan has {len(scenes)} scenes, 0..{max(len(scenes) - 1, 0)})"
+                )
+    return problems
 
 
 # Union members are named in pydantic's `loc`; these are the names to drop from the path.

@@ -119,13 +119,22 @@ video to the end on your own.
 
 - Music sets the tone and ducks under speech automatically. Choose it by the mood of
   the story. Use CC0 by default (`search_sfx` with the `cc0` license policy).
-- Put sound effects only on motivated events, such as a stamp hitting or a card
-  sliding in. Vary them. Silence is fine.
+- Design the sounds for this video's look and story, the way you design its colours.
+  Start from a starting recipe (`studio_guide(kit_group="sfx")` lists them with a sheet
+  image) and change its parameters for this story. Do not use one sound for every event.
+- Give each kind of event its own sound: a cut, a slam, a data tick, a UI click, a reveal.
+  Repeats of a sound vary by default (`vary`); `vary: 0` only where copies must match.
+- Put sounds only on motivated events. Silence is fine. Layer a big hit (a sub layer, a
+  transient, a tail) and leave a beat of silence right before it.
+- Place sounds by their moment: `align: "peak"` puts a whoosh's peak on its cut, and
+  `align: "end"` ends a riser on the hit. Use `cue:<name>` for a spoken word and
+  `cut:<n>` for a scene start, not a typed number.
+- Before the preview, render `mode="audio"`. Read the timeline image and the `sounds`
+  table, fix each warning it names (clipping, two peaks adding up above -1 dBFS, a sound
+  after the end, a sound louder than the voice over words), then render the preview.
+- Offer to save the sounds the user liked (`save_sounds` in `render_video(mode="audio")`).
+  Save only after they agree.
 - For music-driven edits run `calculate_beat_grid` and cut on the beats.
-- In a trailer-style edit give every transition and every slam its own sound
-  (`audio.sfx` events on the same moments as the visual hits), build a riser into the
-  biggest hit and leave a beat of silence right before it. Put the music cut on the
-  beat grid.
 
 ## 7. Editing the user's footage
 

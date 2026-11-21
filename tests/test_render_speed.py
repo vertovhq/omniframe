@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -138,6 +139,46 @@ def test_bundle_key_changes_only_with_the_engine_state(tmp_path: Path, monkeypat
     assert changed_code != base
     (public / "m" / "a.mp3").write_bytes(b"12345")
     assert render.bundle_key(public) not in (base, changed_code)
+
+
+def test_reused_bundle_gets_back_the_public_files_it_lost(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A cached bundle without `public/fonts` is repaired from the job's public dir, not served broken."""
+    root = tmp_path / "proj"
+    public = tmp_path / "work" / "public"
+    font = public / "fonts" / "InterDisplay-Black.otf"
+    font.parent.mkdir(parents=True)
+    font.write_bytes(b"OTTO-font-bytes")
+    (public / "m").mkdir()
+    (public / "m" / "clip.mp4").write_bytes(b"clip")
+    key = "ab" * 32
+    calls: list[dict] = []
+    notes: list[str] = []
+
+    def fake_node(spec, work, report, lo, hi, hold):
+        calls.append(dict(spec))
+        if "bundleDir" in spec:  # the first job builds the bundle the way the node script does
+            bundle = Path(spec["bundleDir"])
+            bundle.mkdir(parents=True)
+            (bundle / "index.html").write_text("<html></html>", encoding="utf-8")
+            shutil.copytree(spec["publicDir"], bundle / "public")
+        return {"timing": {}}
+
+    monkeypatch.setattr(render, "_run_node", fake_node)
+    report = lambda progress, note=None, *a, **k: notes.append(str(note))  # noqa: E731
+
+    render._run_node_bundled({"publicDir": str(public)}, tmp_path, report, 0.0, 1.0, None, root, key)
+    cached = root / "cache" / render.BUNDLE_DIR / key[:16]
+    assert (cached / "public" / "fonts" / "InterDisplay-Black.otf").is_file()
+
+    # the bundle loses its fonts folder, then a second render with the same key reuses it
+    shutil.rmtree(cached / "public" / "fonts")
+    render._run_node_bundled({"publicDir": str(public)}, tmp_path, report, 0.0, 1.0, None, root, key)
+
+    assert "serveUrl" in calls[1] and "bundleDir" not in calls[1]  # reused, not rebuilt
+    restored = cached / "public" / "fonts" / "InterDisplay-Black.otf"
+    assert restored.read_bytes() == b"OTTO-font-bytes"
+    assert (cached / "public" / "m" / "clip.mp4").is_file()
+    assert any("restored missing public files" in n and "fonts/InterDisplay-Black.otf" in n for n in notes), notes
 
 
 # ------------------------------------------------------------------ job wiring (fake node step)

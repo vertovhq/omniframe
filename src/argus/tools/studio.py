@@ -17,7 +17,7 @@ from pathlib import Path
 from .. import __version__
 from ..config import CONFIG, ArgusConfig
 from ..media_out import Image
-from . import kit_preview, library
+from . import kit_preview, library, sounds
 from .flow_browser import _profile_dir as _flow_profile_dir
 
 # Upper bound for the preferences text, in characters, so a long file cannot flood the context.
@@ -133,6 +133,9 @@ def studio_guide(tool_names: Iterable[str], config: ArgusConfig | None = None, *
         "preferences_truncated": truncated,
     }
     out["library"] = library.overview(library.library_dir(cfg.output_dir))
+    sfx_lines = sounds.library_lines(library.library_dir(cfg.output_dir))
+    if sfx_lines:
+        out["library"]["sfx"] = sfx_lines  # one line per saved sound; copy its recipe into audio.sounds
     if custom_scenes:
         out["motion_kit"] = read_kit()
     return out
@@ -146,9 +149,27 @@ def kit_group_result(group: str) -> dict:
     """
     names = kit_preview.group_names()
     head = {"engine": f"ARGUS {__version__}"}
+    if group == "sfx":
+        return {**head, **sfx_group(), "groups": [*names, "sfx"]}
     if group not in names:
         return {**head, "error": f"unknown kit group {group!r}", "groups": names}
     return {**head, "kit_group": group, "text": kit_preview.group_doc(group), "groups": names, **kit_preview.strip_for_guide(group)}
+
+
+def sfx_group() -> dict:
+    """`studio_guide(kit_group="sfx")`: the starting sound recipes, one line each, and their sheet image."""
+    return {
+        "kit_group": "sfx",
+        "text": (
+            "Sound recipes. Each line is a starting point: write it into audio.sounds with \"from\" and the "
+            "fields you change (for example {\"from\": \"whoosh\", \"pitch_end\": 300, \"length\": 0.6}), or a full sound "
+            "with length and layers (up to 4 layers: source, pitch sweep, envelope, filter, drive, bits, pan). "
+            "Place it with audio.sfx {at: seconds | \"cue:name\" | \"cut:n\", sound, align: start|peak|end, vary}. "
+            "Check the timeline image of render_video(mode=\"audio\") before the preview."
+        ),
+        "recipes": sounds.starting_lines(),
+        "strip": {"path": str(sounds.ensure_starting_sheet(CONFIG.output_dir))},
+    }
 
 
 def kit_group_for_model(group: str) -> dict | list:
