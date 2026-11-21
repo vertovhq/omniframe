@@ -16,9 +16,6 @@ or with no AI at all — vertical kinetic typography rendered locally by the bun
 Remotion engine from a JSON plan. Plus voiceover with word timings, captions drawn from
 those timings, rendering, QA and export — all as MCP tools your AI assistant can drive.
 
-The monorepo also ships three editing skills («Эпизод», «Мани», «Эссе») that replicate
-personal editing styles from a plan.json — see [`skills/`](skills/README.md) (docs in Russian).
-
 ```
                     ┌─▶ generate_veo_clip (api | flow) ──┐
 prompts ────────┤                                        ├──▶ render_video ──▶ QA ──▶ export_package
@@ -60,7 +57,7 @@ bash install.sh          # or: powershell -ExecutionPolicy Bypass -File install.
 Manual path:
 
 ```bash
-pip install -e ".[dev,pretty,voice]"  # voice = edge-tts (free skills TTS); add flow → pip install -e ".[flow,pretty]"
+pip install -e ".[dev,pretty,voice]"  # voice = edge-tts (free TTS); add flow → pip install -e ".[flow,pretty]"
 playwright install chromium           # only for provider="flow"
 cd engine && npm install --no-audit --no-fund && cd ..   # only for kinetic
 cp .env.example .env                  # Gemini key for api mode / TTS
@@ -139,7 +136,6 @@ captions come from the plan's `captions` block) → `qa_verify_video` → `expor
   UI — selectors live in one place in `src/argus/tools/flow_browser.py`.
 - Captions are drawn by the engine from the plan's `captions` block; there are no `.ass` files.
 - Prompts go to Veo exactly as written — no content-policy workarounds.
-- `skills/` ships without paid-subscription sounds or personal media — add your own.
 
 ## License
 

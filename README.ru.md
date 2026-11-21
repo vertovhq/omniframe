@@ -8,9 +8,6 @@ ARGUS собирает ролики 1080×1920 из чего угодно: кл�
 (Remotion) из JSON-плана. Плюс озвучка с таймингами слов, сабы по этим таймингам,
 рендер, QA и экспорт — всё как MCP-инструменты для ИИ-ассистента.
 
-В монорепу входят три монтажных скилла («Эпизод», «Мани», «Эссе»), которые повторяют
-личные стили монтажа по plan.json — см. [`skills/`](skills/README.md).
-
 ```
                     ┌─▶ generate_veo_clip (api | flow) ──┐
 текст/промпты ──┤                                        ├──▶ render_video ──▶ QA ──▶ export_package
@@ -46,7 +43,7 @@ ARGUS собирает ролики 1080×1920 из чего угодно: кл�
 ```bash
 git clone <url репозитория argus-studio>   # или скачай архив и распакуй
 cd argus-studio
-pip install -e ".[dev,pretty,voice]"  # voice = edge-tts (бесплатная озвучка скиллов); + flow → pip install -e ".[flow,pretty]"
+pip install -e ".[dev,pretty,voice]"  # voice = edge-tts (бесплатная озвучка); + flow → pip install -e ".[flow,pretty]"
 playwright install chromium           # только для provider="flow"
 cd engine && npm install --no-audit --no-fund && cd ..   # только для кинетики
 cp .env.example .env                  # ключ Gemini для api-режима/TTS
@@ -125,7 +122,6 @@ render_video(project="demo", mode="stills", times=[1, 4, 8], plan={
 argus-studio/
 ├── src/argus/          MCP-сервер и инструменты
 ├── engine/             Remotion-движок кинетической графики (npm install)
-├── skills/             три монтажных скилла + tts.py с клоном голоса
 ├── tests/              офлайн-тесты (pytest)
 └── examples/           конфиги MCP, примеры
 ```
@@ -137,7 +133,6 @@ argus-studio/
   селекторы вынесены в одно место в `src/argus/tools/flow_browser.py`.
 - Сабы рисует движок из блока `captions` плана; файлов `.ass` больше нет.
 - Промпты уходят в Veo как есть — никаких обходов правил контента.
-- В `skills/` звуки платных подписок и личные материалы не входят — клади свои (см. skills/README.md).
 
 ## English
 
