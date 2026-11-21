@@ -278,7 +278,7 @@ def test_clip_with_in_and_out_renders_the_right_part_and_duration(root: Path) ->
 
     out = render.render_video(plan, "t", mode="stills", times=[0.2, 1.0, 1.8], wait_s=WAIT)
     summary, images = _images(out)
-    assert len(images) == 3
+    assert len(images) == 1 and len(summary["images"][0]["cells"]) == 3  # one contact sheet
     before, inside, after = (_still(e) for e in summary["stills"])
     cx, cy = before.shape[1] // 2, before.shape[0] // 2
     assert before[cy, cx].max() < 60  # before `at`: only the dark background
@@ -317,7 +317,7 @@ def test_zoom_keyframes_are_visible_in_stills(root: Path) -> None:
     }])
     out = render.render_video(plan, "t", mode="stills", times=[0.05, 1.0, 2.5], wait_s=WAIT)
     summary, images = _images(out)
-    assert len(images) == 3
+    assert len(images) == 1 and len(summary["images"][0]["cells"]) == 3  # one contact sheet
     start, middle, held = (_white_box_width(_still(e)) for e in summary["stills"])
     full = 1920 * 0.2  # the square is 20% of the frame width at scale 1
     assert start == pytest.approx(full, rel=0.06)

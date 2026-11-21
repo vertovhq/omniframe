@@ -15,6 +15,23 @@
 - Environment check: `.venv\Scripts\argus-doctor`
 - Renders are started by the tools themselves (node scripts in `engine/scripts/`).
 
+## Terminal on this machine (Kiro IDE, Windows)
+
+- `execute_pwsh` often returns before the command ends and shows only the echoed
+  command, with exit code -1. The command still runs. Never trust its printed output.
+- Pattern that works: send all output to a file, then read the file with `read_file`.
+  `& { <commands> } 2>&1 | Out-File -Encoding utf8 "$env:TEMP\argus_out.txt"`
+  If the file is missing on the first read, read it once more (the command may still run).
+- Long runs (pytest, renders): write output and the exit code to files, then poll.
+  `& { .venv\Scripts\python.exe -m pytest -q 2>&1 | Out-File -Encoding utf8 "$env:TEMP\argus_pytest.txt"; "exit=$LASTEXITCODE" | Out-File -Encoding utf8 "$env:TEMP\argus_pytest_exit.txt" }`
+  Read `argus_pytest_exit.txt` until it exists; then read the tail of `argus_pytest.txt`.
+  For a run longer than a minute start it detached (`Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile','-File',<script>`), so the shell stays free.
+- Never wait inside the shell (`Start-Sleep` loops): the next commands queue behind the loop and look dead. Poll by reading the exit file again in a later step.
+- Never start a second pytest or render while one runs: they share `engine/` and lock files. Before starting one, check for running ones:
+  `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '-m pytest' }`.
+  A killed run can leave `engine/.render.lock` and a changed `engine/src/custom/registry.ts`; when no run is alive, delete the lock and `git checkout -- engine/src/custom/registry.ts`.
+- Keep temp files in `$env:TEMP`, not in the repo. `*>&1` does not work inside a pipeline; use `2>&1`.
+
 ## Code conventions
 
 - Tool logic lives in `src/argus/tools/<name>.py`. `server.py` only declares

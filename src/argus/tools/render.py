@@ -2,7 +2,8 @@
 
 The model writes a plan (`argus.plan`), looks at stills, then at a half-size preview, then
 renders the final file. The engine is the Remotion project in `engine/`; the node side is
-`engine/scripts/render.mjs` (bundle once per job, then stills or one video file).
+`engine/scripts/render.mjs` (bundle, or reuse the bundle of the same engine state from
+`<project>/cache/bundle/`, then stills or one video file). Each result has `timing` in seconds.
 
 Flow of one call:
 
@@ -46,6 +47,7 @@ from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
 
 from .. import __version__, jobs
+from ..captions import _token as _caption_token
 from ..captions import clean_word_timings, load_words, remap_words_to_clips, resolve_cues
 from ..config import CONFIG
 from ..ffmpeg import FFmpegError, measure_loudness, run_ffmpeg, run_ffmpeg_stderr, stream_info, temp_sibling
@@ -66,8 +68,14 @@ from .library import project_library_dir
 from .watch import format_time
 
 MODES = ("stills", "preview", "final")
-MAX_STILLS = 8                 # images per call; more would flood the model's context
+MAX_STILLS = 12                # frames per call; they come back as one contact sheet, so one image
 DEFAULT_STILLS = 6
+SHEET_MAX_SIDE = 1600          # longest side of the contact sheet (the model sees it at this size)
+SHEET_LABEL_H = 40             # timecode and scene line under each cell
+SHEET_BG = (18, 18, 22)
+EMPTY_FRAME_SPREAD = 3         # a still whose channels all lie within this many levels is one colour
+BUNDLE_KEEP_S = 600            # bundles of other engine states older than this are removed
+BUNDLE_DIR = "bundle"          # <project>/cache/bundle/<key>/, one per engine state
 STILLS_WAIT_S = 90.0           # stills usually finish inside one tool call (bundle + a few frames)
 PREVIEW_SCALE = 0.5
 PREVIEW_CRF = 28
@@ -275,13 +283,46 @@ def _caption_words(plan: Plan, bases: Sequence[Path]) -> tuple[list[dict] | None
     return [{"w": w["word"], "s": round(w["start"], 3), "e": round(w["end"], 3)} for w in words], []
 
 
-def _plan_warnings(plan: Plan) -> list[str]:
-    """Things the plan asks for that this engine version does not draw or apply."""
+def _plan_warnings(plan: Plan, words: list[dict] | None = None) -> list[str]:
+    """Things the plan asks for that this engine version does not draw or apply.
+
+    With the caption `words`, also the accent words that are never spoken: the engine boxes
+    nothing for them. Matching follows the engine (exact, "prefix*" or "*").
+    """
     notes: list[str] = []
     music = plan.audio.music if plan.audio else None
     if music is not None and music.duck < 1 and plan.captions is None:
         notes.append("audio.music.duck has no effect without `captions`: the ducking follows the caption words")
+    if plan.captions is not None and words is not None:
+        spoken = [_caption_token(w["w"]) for w in words]
+        for entry in plan.captions.accent_words:
+            if entry == "*":
+                continue
+            if entry.endswith("*"):
+                prefix = _caption_token(entry[:-1])
+                found = any(t.startswith(prefix) for t in spoken)
+            else:
+                found = _caption_token(entry) in spoken
+            if not found:
+                notes.append(
+                    f"captions.accent_words: {entry!r} is not spoken in captions.words, so no word is boxed for it"
+                )
     return notes
+
+
+def scene_label(plan: Plan, t: float) -> str:
+    """Which plan scenes are on screen at `t`, as `scenes[i]` (a full scene, and an overlay if one covers `t`).
+
+    Same rule as the engine: a full scene lasts until the next full scene starts (or its `until`).
+    """
+    full = [i for i, s in enumerate(plan.scenes) if not s.overlay and s.at <= t]
+    base = max(full, key=lambda i: plan.scenes[i].at) if full else None
+    overlays = [
+        i for i, s in enumerate(plan.scenes)
+        if s.overlay and s.at <= t and (s.until is None or t < s.until)
+    ]
+    parts = ([f"scenes[{base}]"] if base is not None else []) + [f"scenes[{i}] overlay" for i in overlays]
+    return " + ".join(parts) if parts else "no scene"
 
 
 # ------------------------------------------------------------------ request validation
@@ -450,7 +491,7 @@ def prepare_render(
         "cues": cue_seconds,
         "times": clean_times,
         "compare": compare_payload,
-        "warnings": _plan_warnings(resolved) + component_warnings,
+        "warnings": _plan_warnings(resolved, words) + component_warnings,
     }, []
 
 
@@ -612,6 +653,9 @@ def _engine_props(
 # ------------------------------------------------------------------ node
 
 def _concurrency() -> int:
+    # Default: half the CPU threads. Measured on the 4-thread author PC (10 s slice, frames + encode):
+    # 2 workers 41 s and 51 s, 3 workers 48 s and 55 s, 4 workers 50 s. No gain above 2, so the
+    # default stays; ARGUS_RENDER_CONCURRENCY still overrides it.
     return CONFIG.render_concurrency or max(1, (os.cpu_count() or 2) // 2)
 
 
@@ -693,7 +737,119 @@ def _run_node_script(
     return result
 
 
+# ------------------------------------------------------------------ bundle reuse
+
+def bundle_key(public_root: Path) -> str:
+    """Digest of the engine state a bundle is built from: `engine/src` (with the generated custom
+    files), `engine/package.json`, and the job's public dir (names, sizes, modification times).
+
+    Equal digests mean the bundle of an earlier job is the same program and can be served again.
+    Props are not part of the bundle, so a new plan with the same engine state reuses it.
+    """
+    engine = engine_dir()
+    digest = hashlib.sha256(f"argus {__version__}\n".encode("utf-8"))
+    for path in sorted((engine / "src").rglob("*")):
+        if path.is_file():
+            digest.update(path.relative_to(engine).as_posix().encode("utf-8") + b"\0" + path.read_bytes() + b"\0")
+    digest.update((engine / "package.json").read_bytes())
+    for path in sorted(public_root.rglob("*")):
+        if path.is_file():
+            st = path.stat()
+            digest.update(f"{path.relative_to(public_root).as_posix()}\0{st.st_size}\0{st.st_mtime_ns}\0".encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _prune_bundles(bundles: Path, keep: Path) -> None:
+    """Remove bundles of other engine states that have not been touched for `BUNDLE_KEEP_S`."""
+    now = time.time()
+    for old in bundles.iterdir():
+        if old != keep and old.is_dir() and now - old.stat().st_mtime >= BUNDLE_KEEP_S:
+            shutil.rmtree(old, ignore_errors=True)
+
+
+def _run_node_bundled(
+    spec: dict,
+    work: Path,
+    report: Callable[..., None],
+    lo: float,
+    hi: float,
+    hold: EngineHold | None,
+    root: Path,
+    key: str,
+) -> dict:
+    """`_run_node`, but the bundle is taken from `<project>/cache/bundle/<key>/` when it is there.
+
+    A new bundle is built in a temporary folder and renamed into place after the node script
+    succeeds, so a failed render never leaves a half bundle behind.
+    """
+    bundles = root / "cache" / BUNDLE_DIR
+    final = bundles / key[:16]
+    building: Path | None = None
+    if (final / "index.html").is_file():
+        spec["serveUrl"] = str(final)  # the node script skips the bundle step
+    else:
+        bundles.mkdir(parents=True, exist_ok=True)
+        building = bundles / f"{key[:16]}.tmp-{uuid.uuid4().hex[:6]}"
+        spec["bundleDir"] = str(building)
+    try:
+        result = _run_node(spec, work, report, lo, hi, hold)
+        if building is not None:
+            try:
+                os.replace(building, final)
+            except OSError:
+                pass  # a parallel job stored the same engine state first
+            _prune_bundles(bundles, final)
+        return result
+    finally:
+        if building is not None and building.exists():
+            shutil.rmtree(building, ignore_errors=True)
+
+
 # ------------------------------------------------------------------ stills
+
+def one_colour(path: Path) -> tuple[int, int, int] | None:
+    """The mean colour of a still that is one colour all over (an empty frame), else None."""
+    with PILImage.open(path) as img:
+        bands = img.convert("RGB").getextrema()
+    if all(hi - lo <= EMPTY_FRAME_SPREAD for lo, hi in bands):
+        return tuple((lo + hi) // 2 for lo, hi in bands)  # type: ignore[return-value]
+    return None
+
+
+def sheet_grid(n: int, ratio: float) -> tuple[int, int, int, int]:
+    """Grid for `n` pictures of width/height `ratio`: (cols, rows, cell_w, cell_h).
+
+    The sheet's longest side stays within `SHEET_MAX_SIDE`, labels included.
+    """
+    cols = math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+    cell_w = int(min(SHEET_MAX_SIDE / cols, ratio * (SHEET_MAX_SIDE - rows * SHEET_LABEL_H) / rows))
+    return cols, rows, cell_w, round(cell_w / ratio)
+
+
+def build_contact_sheet(cells: Sequence[tuple[Path, str]], out: Path) -> Path:
+    """One JPEG: every picture in a grid, reading order, each with its label under it.
+
+    The pictures of one call share a size; the first one sets the grid.
+    """
+    with PILImage.open(cells[0][0]) as first:
+        ratio = first.width / first.height
+    cols, rows, cw, ch = sheet_grid(len(cells), ratio)
+    sheet = PILImage.new("RGB", (cols * cw, rows * (ch + SHEET_LABEL_H)), SHEET_BG)
+    draw = ImageDraw.Draw(sheet)
+    size = max(12, min(22, cw // 17))
+    font = _label_font(size)
+    for i, (picture, label) in enumerate(cells):
+        x, y = (i % cols) * cw, (i // cols) * (ch + SHEET_LABEL_H)
+        with PILImage.open(picture) as img:
+            sheet.paste(img.convert("RGB").resize((cw, ch), PILImage.Resampling.LANCZOS), (x, y))
+        while len(label) > 4 and draw.textlength(label, font=font) > cw - 16:
+            label = label[:-2] + "…"
+        draw.text((x + 8, y + ch + SHEET_LABEL_H // 2), label, fill=(235, 235, 240), font=font, anchor="lm")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(out, format="JPEG", quality=90)
+    return out
+
 
 def compose_side_by_side(
     reference: Path,
@@ -817,6 +973,7 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     work = root / ".work" / f"render-{time.strftime('%H%M%S')}-{uuid.uuid4().hex[:6]}"
     work.mkdir(parents=True)
 
+    timing: dict[str, Any] = {}
     report(0.01, "preparing files")
     public = _PublicDir(work / "public", [Path(b) for b in payload["bases"]])
     bases = [Path(b) for b in payload["bases"]]
@@ -828,7 +985,6 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     spec: dict[str, Any] = {
         "props": props,
         "publicDir": str(public.root),
-        "bundleDir": str(work / "bundle"),
         "browser": _find_browser(),
         "concurrency": _concurrency(),
     }
@@ -865,7 +1021,15 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
             "note": "the custom components do not compile; nothing was rendered. Fix the listed "
                     "problems in <project>/components and call again",
         }
+    # The engine state (engine/src with the generated custom files, and the public files) decides
+    # whether a bundle from an earlier job can be reused. Computed while the engine lock is held.
+    try:
+        bundle_key_value = bundle_key(public.root)
+    except Exception:
+        hold.release()  # `_run_node` would release it; without a node step nothing else does
+        raise
 
+    timing["prepare_s"] = round(time.monotonic() - started, 3)
     if mode == "stills":
         times: list[float] = payload["times"]
         compare = payload.get("compare")
@@ -873,26 +1037,55 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         _remove_stale(renders, f"{name}-compare-{tag}-*")
         files = [renders / f"{name}-stills-{tag}-{i + 1:02d}-t{t:.2f}s.jpg" for i, t in enumerate(times)]
         spec.update(mode="stills", times=times, outputs=[str(f) for f in files], quality=STILL_JPEG_QUALITY)
-        _run_node(spec, work, report, 0.03, 0.9 if compare else 0.97, hold)
+        node = _run_node_bundled(spec, work, report, 0.03, 0.9 if compare else 0.97, hold, root, bundle_key_value)
+        timing.update(node.get("timing") or {})
+        for i, f in enumerate(files):
+            colour = one_colour(f)
+            if colour is not None:
+                result.setdefault("warnings", []).append(
+                    f"stills[{i}] at {times[i]:.2f} s is one colour (#{colour[0]:02X}{colour[1]:02X}{colour[2]:02X}), "
+                    f"so it is an empty frame; fine only if the plan wants a blank moment ({scene_label(plan, times[i])})"
+                )
+        report(0.92, "building the images")
+        t_sheet = time.monotonic()
         entries: list[dict] = []
-        if compare:
-            report(0.92, "building the side-by-side images")
-            for i, (t, ref_t) in enumerate(zip(times, compare["times"])):
+        for i, t in enumerate(times):
+            entry: dict[str, Any] = {"t": t, "scene": scene_label(plan, t)}
+            if compare:
+                ref_t = compare["times"][i]
                 ref_frame = work / f"reference-{i + 1:02d}.jpg"
                 _extract_reference_frame(compare["video"], ref_t, ref_frame)
                 out = renders / f"{name}-compare-{tag}-{i + 1:02d}-t{t:.2f}s.jpg"
                 compose_side_by_side(
                     ref_frame, files[i], out, f"REFERENCE {format_time(ref_t)}", f"RENDER {format_time(t)}",
                 )
-                entries.append({"t": t, "reference_t": ref_t, "path": str(out)})
-            result["image_max_side"] = COMPARE_MAX_WIDTH
+                entry.update(reference_t=ref_t, path=str(out))
+            else:
+                entry["path"] = str(files[i])
+            entries.append(entry)
+        if len(entries) >= 2:
+            # One image for the model: every frame in a grid, each cell labelled with its time and scenes.
+            sheet = renders / f"{name}-{'compare' if compare else 'stills'}-{tag}-sheet.jpg"
+            build_contact_sheet(
+                [(Path(e["path"]), f"t {e['t']:.2f} s | {e['scene']}") for e in entries], sheet,
+            )
+            result["images"] = [{"path": str(sheet), "cells": entries}]
+            result["image_max_side"] = SHEET_MAX_SIDE
         else:
-            entries = [{"t": t, "path": str(f)} for t, f in zip(times, files)]
-        result["images"] = entries
+            result["images"] = entries
+            if compare:
+                result["image_max_side"] = COMPARE_MAX_WIDTH
+        timing["sheet_s"] = round(time.monotonic() - t_sheet, 3)
         result["stills"] = [str(f) for f in files]
         result["note"] = (
+            "one image: a contact sheet, each cell shows its time and the scenes on screen; "
+            "reference on the left of each cell, render on the right"
+            if compare and len(entries) >= 2 else
             "images are side by side: reference on the left, render on the right"
-            if compare else "stills of the render; the full-size files are listed in `stills`"
+            if compare else
+            "one image: a contact sheet, each cell shows its time and the scenes on screen; "
+            "full-size frames are listed in `stills`" if len(entries) >= 2 else
+            "stills of the render; the full-size files are listed in `stills`"
         )
     else:
         out = renders / f"{name}-{mode}-{tag}.mp4"
@@ -902,12 +1095,14 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
             mode="media", output=str(raw), scale=PREVIEW_SCALE if preview else 1,
             crf=PREVIEW_CRF if preview else FINAL_CRF,
         )
-        _run_node(spec, work, report, 0.03, 0.9, hold)
+        timing.update(_run_node_bundled(spec, work, report, 0.03, 0.9, hold, root, bundle_key_value).get("timing") or {})
         report(0.92, "finishing the file")
         if preview:
             os.replace(raw, out)
         else:
+            t_fin = time.monotonic()
             result.update(finalize_video(raw, out))
+            timing["finalize_s"] = round(time.monotonic() - t_fin, 3)
             plan_path = root / "plan.json"
             plan_path.write_text(json.dumps(payload["plan"], ensure_ascii=False, indent=2), encoding="utf-8")
             result["plan_path"] = str(plan_path)
@@ -923,6 +1118,8 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
 
     shutil.rmtree(work, ignore_errors=True)
     result["elapsed_s"] = round(time.monotonic() - started, 1)
+    timing["total_s"] = round(time.monotonic() - started, 3)
+    result["timing"] = timing
     return result
 
 

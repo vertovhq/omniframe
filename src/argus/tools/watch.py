@@ -65,7 +65,7 @@ CACHE_VERSION = 1             # bump when the cached files change meaning
 FRAMES_VERSION = 2            # bump when select_frames or the frame sheets change; checked only for frames.<N>.json
 
 # Verbatim prompt: Whisper otherwise "tidies" Russian speech and drops stumbles and
-# repeats, which the editing flow needs to see. Same prompt as the montazh skills.
+# repeats, which the editing flow needs to see.
 RUSSIAN_VERBATIM_PROMPT = (
     "Ну, э-э, я я хотел, хотел сказать, что что это, это ми- миллион. "
     "Можно, можно ли стать... И при, и при таких условиях."

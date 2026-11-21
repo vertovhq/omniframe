@@ -73,14 +73,18 @@ video to the end on your own.
   motion kit blocks: call `studio_guide(custom_scenes=true)` for the index (one line per
   group), then `studio_guide(kit_group="hud")` for each group you need. It returns that
   group's blocks and props and a contact strip with one rendered frame per block, so you
-  see what a block looks like before you pick it. Open only the groups the scene needs.
+  see what a block looks like before you pick it. Open only the groups the scene needs, once per session.
   Write new code only for what neither the scene kinds nor the kit cover, such as a
   character or a drawing specific to the story.
 - Read a block's line in the kit catalogue before you use it. Use only the props it
   lists; do not invent props or durations.
 - Name the moments a custom scene reacts to in `plan.cues` (a spoken word or seconds)
   and read them in the component with `useCue`; do not type times into props by hand.
-- Edit the component files you already wrote instead of rewriting them.
+- Write one small component per scene, never one component for the whole video, so a fix
+  touches one small file. Edit the files you already wrote with small replacements. Do not
+  rewrite a file, and do not read back a file you have just written.
+- Keep images as files in the project and point to them by path. Never paste image data
+  into code: it costs characters on every turn and makes the file hard to edit.
 - **Style library.** The `library` block of this guide lists scenes, characters, plates and
   caption styles that the user saved from earlier videos, with a poster for each. Before you
   write custom code for a new reference, look at the posters next to the reference's frames
@@ -158,11 +162,19 @@ video to the end on your own.
 
 ## 8. Review your own work before the user sees it
 
-1. `render_video` with `mode="stills"`: one round of at most 8 frames at the key
-   moments before the preview. With a reference, pass `compare` to get side-by-side
-   images, and say in the chat what the reference has on screen that your frames do
-   not (a layer, a type treatment, a burst, a camera move). Then add those where the
-   story allows. Fix the plan. Later rounds only for the scenes you changed.
+Order: plan, then one stills sheet of the whole video, then fix only the scenes with
+problems, then stills of those scenes only, then a preview, then the final once.
+
+1. `render_video` with `mode="stills"`: one round of up to 12 frames at the key moments
+   before the preview. The round comes back as one contact sheet: every frame in a grid,
+   each cell labelled with its time and the scenes on screen. Look at that sheet first and
+   open a single frame only when the sheet does not show what you need. With a reference,
+   pass `compare`: each cell then shows the reference on the left and the render on the
+   right. Say in the chat what the reference has on screen that your frames do not (a
+   layer, a type treatment, a burst, a camera move), then add those where the story
+   allows. Fix the plan. Read the `warnings` of each round: a one-colour frame is an empty
+   frame, and an accent word that is never spoken is not boxed. Later rounds only for the
+   scenes you changed, with `times` at those scenes.
 2. `mode="preview"` when motion or timing needs checking.
 3. `mode="final"`, then `qa_verify_video`. Fix every hard failure. Look at the QA
    frames yourself and judge the warnings. Do not watch the final in the chat; rely

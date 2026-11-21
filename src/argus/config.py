@@ -65,7 +65,7 @@ class ArgusConfig:
     """Immutable runtime settings resolved once at server start."""
 
     gemini_api_key: str = ""
-    # optional; only needed for voice clones via skills tts.py --provider elevenlabs
+    # optional; only needed for the ElevenLabs voice provider
     elevenlabs_api_key: str = ""
     veo_provider: str = "api"  # "api" (official, paid) | "flow" (browser session, free credits)
     veo_model: str = "veo-3.1-fast-generate-preview"

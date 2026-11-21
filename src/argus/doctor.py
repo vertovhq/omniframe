@@ -264,7 +264,7 @@ def check_gemini_key(cfg: ArgusConfig) -> dict:
 
 
 def check_elevenlabs_key(cfg: ArgusConfig) -> dict:
-    # опциональный: нужен только для клонов голоса в скиллах (tts.py --provider elevenlabs)
+    # опциональный: нужен только для голоса ElevenLabs
     if cfg.elevenlabs_api_key:
         return _check("elevenlabs_key", "ключ ElevenLabs", "ok", "есть (клоны голоса доступны)")
     return _check(

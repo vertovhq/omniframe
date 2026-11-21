@@ -531,6 +531,8 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     }
     if library_out is not None:
         result["library"] = library_out
+    # What the project's renders cost so far (seconds, from the kept render jobs' `timing`).
+    result["render_timing"] = jobs.project_render_totals(root)
     return result
 
 

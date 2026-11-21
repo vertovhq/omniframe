@@ -309,18 +309,21 @@ def render_video(
     Caption words can be drawn in capitals: `captions.style.case` is `"upper"` or `"as_is"` (the default).
     `format` here overrides the plan's. The engine adds no sound effects of its own.
 
-    mode "stills" (default): renders only the frames at `times` (seconds, up to 8; default
-    6 spread over the video) and returns them as images with a `path` each. Use this
-    again and again while you settle the look; it takes seconds. With `compare`
-    = {"video": reference path, "times": [reference seconds]} (same length as
-    `times`) every image is side by side: reference on the left, your render on the
-    right, both labelled with their time.
+    mode "stills" (default): renders only the frames at `times` (seconds, up to 12; default
+    6 spread over the video). Two or more frames come back as one contact sheet image: each
+    cell shows its time and the scenes on screen, and the full-size files are listed in
+    `stills`. A single frame comes back as one image. Use this again and again while you
+    settle the look; it takes seconds. With `compare` = {"video": reference path, "times":
+    [reference seconds]} (same length as `times`) every cell is side by side: reference on
+    the left, your render on the right, both labelled with their time.
     mode "preview": the whole video at half resolution, fast to check motion and timing.
     mode "final": full resolution, then loudness normalised (-14 LUFS), faststart and a
     metadata tag; also saves the plan as `<project>/plan.json`. Run `qa_verify_video`
     on the result.
     Previews and finals take longer than a tool call may wait: you get
-    `{"job_id", "state": "running"}`; call `job_status` until it is done. Files go to
+    `{"job_id", "state": "running"}`; call `job_status` until it is done. Every result
+    has `timing` in seconds (prepare_s, bundle_s, 0 when a bundle of the same engine state
+    is reused, browser_s, frames_encode_s, mux_s, finalize_s, total_s). Files go to
     `<project>/renders/<name>-<mode>-<format>.mp4` (stills: `.jpg`); `name` defaults to
     "video".
 
@@ -340,7 +343,8 @@ def render_video(
     An invalid plan, a missing file or bad `times` returns `{"valid": false, "errors":
     ["scenes[3].kind: ...", ...]}` with every problem as `path: message`, and nothing is
     rendered. `warnings` in the result list what the plan asked for that the engine does
-    not draw or apply yet, and risky code in custom components.
+    not draw or apply yet, accent words that no caption word matches, one-colour frames
+    in a stills round (empty frames), and risky code in custom components.
     """
     return render.render_video(
         plan, project, mode=mode, times=times, compare=compare, format=format, name=name,

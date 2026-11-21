@@ -72,15 +72,17 @@ def _write_json(path: Path, data: dict) -> None:
     """Atomic write; Windows can refuse a replace while a reader holds the file, so retry."""
     tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
-    for attempt in range(12):
+    # A scanner (Windows Defender) or a poll of status.json can hold the new file for a second or more.
+    # Up to about 18 s in total, because a lost final status turns a finished render into an error.
+    for attempt in range(40):
         try:
             os.replace(tmp, path)
             return
         except PermissionError:
-            if attempt == 11:
+            if attempt == 39:
                 tmp.unlink(missing_ok=True)
                 raise
-            time.sleep(0.02 * (attempt + 1))
+            time.sleep(min(0.05 * (attempt + 1), 0.5))
 
 
 def _read_json(path: Path) -> dict | None:
@@ -422,6 +424,35 @@ def run_or_detach(
         + (" (an identical job was already running)" if reused else "")
     )
     return {k: snap[k] for k in ("engine", "job_id", "kind", "state", "progress", "note", "elapsed_s")}
+
+
+def project_render_totals(project_root: Path) -> dict:
+    """Sum of the `timing` of the finished `render` jobs of one project, in seconds.
+
+    Counts the job folders still kept (7 days). `jobs` is the number of renders summed.
+    """
+    totals: dict = {"jobs": 0}
+    root = jobs_root()
+    if not root.is_dir():
+        return totals
+    for job_dir in root.iterdir():
+        if not (job_dir.is_dir() and _ID_RE.fullmatch(job_dir.name)):
+            continue
+        live = _live_state(job_dir.name)
+        if live is None:
+            continue
+        job, status = live
+        payload = job.get("payload") or {}
+        if job.get("kind") != "render" or status.get("state") != "done":
+            continue
+        if Path(str(payload.get("project_root", ""))) != Path(project_root):
+            continue
+        timing = (status.get("result") or {}).get("timing") or {}
+        totals["jobs"] += 1
+        for key, value in timing.items():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                totals[key] = round(totals.get(key, 0.0) + value, 3)
+    return totals
 
 
 def cleanup_old_jobs(max_age_s: float = RETENTION_S, now: float | None = None) -> int:

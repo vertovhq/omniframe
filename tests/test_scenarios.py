@@ -264,11 +264,12 @@ def test_reference_to_tiktok(tmp_path: Path) -> None:
         plan, "tiktok-ref", mode="stills", times=times,
         compare={"video": str(ref), "times": times}, wait_s=WAIT,
     ))
-    assert [entry["t"] for entry in stills["images"]] == times
-    assert [entry["reference_t"] for entry in stills["images"]] == times
-    assert len(pairs) == len(times)
-    for entry in stills["images"]:
-        with PILImage.open(entry["path"]) as picture:  # reference and render side by side, not stacked
+    cells = stills["images"][0]["cells"]  # one contact sheet, one cell per time
+    assert [c["t"] for c in cells] == times
+    assert [c["reference_t"] for c in cells] == times
+    assert len(pairs) == 1
+    for cell in cells:
+        with PILImage.open(cell["path"]) as picture:  # reference and render side by side, not stacked
             assert picture.format == "JPEG" and picture.width > picture.height * 0.9
 
     # the final video: 1080x1920, loudness normalised, and it passes QA
@@ -345,7 +346,7 @@ def test_footage_edit_with_remapped_captions(monkeypatch: pytest.MonkeyPatch) ->
     stills, shown = _summary_and_images(render.render_video(
         plan, "footage-talk", mode="stills", times=times, wait_s=WAIT,
     ))
-    assert [entry["t"] for entry in stills["images"]] == times and len(shown) == len(times)
+    assert [c["t"] for c in stills["images"][0]["cells"]] == times and len(shown) == 1  # one contact sheet
 
     # the final video: 1920x1080, as long as the kept ranges (+-1 frame), with sound, and it passes QA
     final = render.render_video(plan, "footage-talk", mode="final", name="footage", wait_s=WAIT)

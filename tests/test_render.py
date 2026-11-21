@@ -358,12 +358,13 @@ def test_stills_in_both_formats_return_images(fmt: str, size: tuple[int, int]) -
     plan = _plan(format=fmt, captions={"words": [{"w": "ARGUS", "s": 0.2, "e": 0.9}], "mode": "word"})
     out = render.render_video(plan, "t", mode="stills", times=[0.4, 1.5], wait_s=WAIT)
     summary, images = _images(out)
-    assert len(images) == 2, summary
-    assert [e["t"] for e in summary["images"]] == [0.4, 1.5]
+    assert len(images) == 1, summary  # one contact sheet for the whole call
+    assert [c["t"] for c in summary["images"][0]["cells"]] == [0.4, 1.5]
     assert (summary["width"], summary["height"]) == size
     for entry in summary["stills"]:
         with PILImage.open(entry) as img:
             assert img.size == size
+    assert set(summary["timing"]) >= {"prepare_s", "bundle_s", "browser_s", "stills_s", "sheet_s", "total_s"}
     # the work folder is gone after a successful job
     assert not list((project.project_dir("t") / ".work").glob("render-*"))
 
@@ -376,9 +377,26 @@ def test_stills_with_compare_are_side_by_side(tmp_path: Path) -> None:
         compare={"video": str(ref), "times": [1.0, 3.0]}, wait_s=WAIT,
     )
     summary, images = _images(out)
-    assert len(images) == 2 and all(e["reference_t"] in (1.0, 3.0) for e in summary["images"])
+    cells = summary["images"][0]["cells"]
+    assert len(images) == 1 and [c["reference_t"] for c in cells] == [1.0, 3.0]
     with PILImage.open(summary["images"][0]["path"]) as img:
-        assert img.width > img.height * 0.9  # two portrait panels next to each other
+        assert img.width > img.height  # the two cells side by side, each a pair of portrait panels
+
+
+@needs_engine
+def test_second_stills_call_reuses_the_bundle_and_one_frame_stays_one_image() -> None:
+    first = render.render_video(_plan(), "t", mode="stills", times=[0.5], wait_s=WAIT)
+    assert isinstance(first, list) and len(first) == 2, first  # json + one image
+    summary = json.loads(first[0])
+    assert summary["stills"][0].endswith("video-stills-9x16-01-t0.50s.jpg")
+    assert "video-stills-9x16-01-t0.50s" in summary["images"][0]["path"]  # its model view copy
+    assert summary["timing"]["bundle_reused"] is False
+
+    second = render.render_video(_plan(), "t", mode="stills", times=[0.5, 1.5], wait_s=WAIT)
+    summary2, images2 = _images(second)
+    assert len(images2) == 1 and len(summary2["images"][0]["cells"]) == 2
+    assert summary2["timing"]["bundle_reused"] is True
+    assert summary2["timing"]["bundle_s"] == 0
 
 
 @needs_engine
@@ -391,6 +409,7 @@ def test_final_render_of_three_seconds_passes_qa() -> None:
     assert video.name == "clip-final-9x16.mp4" and video.parent.name == "renders"
     assert (out["output_width"], out["output_height"]) == (1080, 1920)
     assert abs(out["output_duration"] - 3.0) < 0.2
+    assert set(out["timing"]) >= {"prepare_s", "bundle_s", "browser_s", "frames_encode_s", "mux_s", "finalize_s", "total_s"}
     assert (project.project_dir("t") / "plan.json").is_file()
     report = qa.verify_video(video)
     assert report["passed"], (report["hard_failures"], report["checks"])
@@ -403,3 +422,4 @@ def test_preview_is_half_size() -> None:
     assert isinstance(out, dict) and "output" in out, out
     assert (out["output_width"], out["output_height"]) == (540, 960)
     assert out["output"].endswith("video-preview-9x16.mp4")
+    assert "frames_encode_s" in out["timing"] and "finalize_s" not in out["timing"]

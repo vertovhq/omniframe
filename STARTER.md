@@ -16,7 +16,6 @@
 3. **Голос — выбери варику (ассистент спросит или предложи сам):**
    - edge (БЕСПЛАТНО, без ключей, дефолт): ru-RU-DmitryNeural (муж), ru-RU-SvetlanaNeural (жен)
    - Gemini TTS (нужен ключ в .env, 30 голосов): Charon (глубокий муж, дефолт), Puck, Kore, Fenrir, Leda, Aoede и др. — synthesize_voiceover
-   - Клон ТВОЕГО голоса: ElevenLabs (платный тариф) или XTTS локально офлайн
    `synthesize_voiceover` отдаёт аудио и words.json с таймингами слов — сцены и сабы строятся по ним.
 4. Сабы: блок `captions` в плане `render_video` (words.json из голоса или транскрипта, акцент на 1-3 ключевых слова).
 5. Сборка: `render_video` (сначала stills, потом preview, потом final) → qa_verify_video — все чеки зелёные, иначе чини → export_package.

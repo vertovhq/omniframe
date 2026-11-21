@@ -266,3 +266,22 @@ _To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
 - Verified: `tsc --noEmit -p engine` → exit 0; quick tests → 55 passed, 18 deselected in 10.6 s; full `pytest -q` → 354 passed in 606 s (exit 0); contact strips built for all ten groups (8–17 s each), `energy`, `transitions` and `hud` strips viewed; neon look of the sample scene in 9:16, five stills viewed (HUD layer, headline caption, speed lines and glow burst on the cue, whip and glitch transitions).
 - Not done: the second look and the 16:9 stills were not viewed (the test suite renders both and checks size and brightness only); the other seven strips were not viewed; in the sample the slam text and the headline caption share the middle of the frame and overlap; `Aberration` and `glitch` show a coloured band at the left edge in stills, not judged; STUDIO_GUIDE text (§5, §6) not re-read in this pass.
 - Credits: <author fills>
+## Task 20.7a — Cheaper and faster videos (2026-11-21, Haiku 5.5)
+- Baseline before any speed change (10 s slice of `argus-trailer-en`, copied to project `argus-timing-slice` with `duration` 10, final 9:16, `ARGUS_RENDER_CONCURRENCY` unset = 2 workers, wall 113.0 s, job 109.3 s): prepare 5.7 s, bundle 15.7 s, browser 1.2 s, frames + encode 79.1 s (300 frames), mux 0.1 s, loudness 3.4 s.
+- Measured with a timing field added to render results (node side: bundle, browser, frames + encode, mux; Python side: prepare, finalize, total). No behaviour change in this step.
+- Built: `timing` in every render result. Bundle reuse from `<project>/cache/bundle/<key>` (key = engine/src, package.json, the job's public files). A stills round of 2+ frames returns one contact sheet (up to 12 cells, each labelled with time and `scenes[i]`), full frames stay listed. Warnings for one-colour frames and accent words never spoken. `export_package` adds `render_timing`. Guide §5 and §8 and the `render_video` docstring updated.
+- Measured, 10 s slice, final 9:16: baseline 109.3 s total (bundle 15.7 s). After, bundle reused: 48.1 s (bundle 0 s). Second stills call: bundle 3.2 s to 0 s. Frames + encode with identical settings ranged 41 to 74 s (2 workers: 51, 41, 74; 3: 48, 55; 4: 50). The frame stage is not shown to be faster. Preset: `fast` 45.3 s and 10.2 MB against `medium` 41.0 s and 9.5 MB; `veryfast` 41.4 s. Default stays `medium`, 2 workers.
+- Bugs: Windows refused `status.json` replace while a reader or scanner held it, so a finished render was marked error (retry window 1.3 s, now about 18 s). Test fake node left the engine lock, so the next test waited 300 s (fake now releases it). Lock leaked if the bundle key failed (now released).
+- Not done: stills scene subset (a still draws only the scenes on its frame; the bundle was the cost). Guide edited in `src/argus/STUDIO_GUIDE.md` only.
+- Kiro: `control_pwsh_process` for the long runs; multi-step chains often ended early, so single commands were used.
+- Verified: full `pytest` 368 passed (first full run 362 passed, 6 failed on the old per-frame shape and one run killed by me; all fixed and rerun 6 passed); `tsc --noEmit -p engine` exit 0; trailer stills sheet of 6 cells viewed, labels and frames legible.
+- Left behind: `argus-trailer-en/renders/sheet-check-*` and a 38 MB `cache/bundle`; scratch project `argus-timing-slice` and timing files in `OMNIFRAME_OUTPUT/timing/`.
+- Credits: <author fills>
+
+## Task 22 — Pre-existing work and skills/ (2026-11-21, Haiku 5.5)
+- Built: `skills/` (72 tracked files) copied to `../argus-skills` and removed from this repo in `540ba82`; its lines removed from `.gitignore`; README.md, README.ru.md and STARTER.md no longer name the skills folder (per the commit message).
+- Bugs & fixes: none.
+- Kiro: none.
+- Verified: `git ls-files skills` → 0 files; `Test-Path ..\argus-skills` → True; full `pytest` → 368 passed in 685.77 s, exit 0.
+- Left for the author: `launch_argus_mcp.bat` kept (INSTALL.md lines 89 and 96 use it); README.md line 11 still names `~/.zcode/skills`; the disclosure text is in task 21.
+- Credits: <author fills>
