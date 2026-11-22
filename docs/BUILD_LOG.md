@@ -336,3 +336,8 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Kiro: steering `tech.md` (long runs detached, output to files, read back with `read_file`); no hook or MCP result.
 - Verified: `tests/test_components.py` 31 passed; full `pytest -q -rf` 523 passed, exit 0 (13 min 41 s); engine `tsc --noEmit -p engine` exit 0. Not verified: the octopus run (Verify step 2: credits and minutes before and after, `economy` totals from `export_package`).
 - Credits: <author fills>
+
+## Task 20.7b — Scene language `layers` (dropped, code on branch `layers-wip`)
+- Built: scene kind `layers` (`plan.py`, `layers.py`, `engine/src/layers.tsx`), guide section 11 (2,979 characters), commit `7f45153` on `layers-wip`; main branch has none of it. Dropped by the author on 2026-11-22: stills looked crude and the plan was longer than TSX.
+- Measured on `octopus-layers` (Swim + Blood): plan 11,256 characters against 7,829 in `Swim.tsx` + `Blood.tsx`; the 6 stills were rendered next to the old video and in a second look.
+- Verified: `test_layers`, guide and tool-surface tests 50 passed; engine `tsc --noEmit` exit 0. Not verified: the full `pytest` run (its result was never read).

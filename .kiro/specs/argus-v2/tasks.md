@@ -429,7 +429,8 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
   - Verify: pytest green; engine typecheck green; the `timing` table before and after on the 10 s slice of `argus-trailer-en`, with the chosen concurrency and encode settings; one stills sheet image from the trailer.
   - Notes (2026-11-21): verify done. Full `pytest` 368 passed; `tsc --noEmit -p engine` exit 0. The timing table and the trailer sheet are in `docs/BUILD_LOG.md`. Frame time varied 41 to 74 s at the same settings, so no speed-up in the frame stage is claimed; bundle reuse removes 3 to 16 s per call. Worker count stays at 2 and the x264 preset stays `medium`, because neither showed a gain. Stills scene subset not done (see BUILD_LOG).
 
-- [ ] 20.7b Scene language `layers` and layout check (P1 contest scope after 20.10, before the freeze; the rest after the contest) — model: Sonnet high
+- [ ] 20.7b Scene language `layers` and layout check (P1 contest scope after 20.10, before the freeze; the rest after the contest) — model: Sonnet high — dropped
+  - Dropped on 2026-11-22 by the author: stills looked crude and the plan was longer than TSX (11,256 vs 7,829 characters). Code kept on branch layers-wip.
   - Contest scope (author, 2026-11-22: "layers is the key to economy"). Build only this part now; the rest of this task waits until after the contest. Measured 2026-11-22: the model wrote about 58 KB of TSX for `kiroween-demo` (65 s) and about 20 KB for `octopus-hearts` (15 s), each written on Sonnet and carried in the chat history.
     - Layer types `rect`, `ellipse`, `path`, `text`, `image`, `video`, `kit`. Not now: `group`, masks, blend modes.
     - Common fields and text fields as in the full scope below.
