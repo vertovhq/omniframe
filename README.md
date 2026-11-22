@@ -1,112 +1,143 @@
 # ARGUS
 
-**An MCP studio for vertical video: two content paths — AI generation and pure graphics.**
+An MCP video studio for vertical video (TikTok, YouTube Shorts, YouTube). The AI model in your
+client directs the edit. ARGUS gives it eyes, ears and hands: it watches and listens to footage,
+makes voiceovers, renders, checks the technical quality and packages the upload.
 
-> ⚠️ Install only from the official repository. The Flow provider uses **your own single
-> Google account session** — it never shares cookies and never farms accounts; multi-account
-> credit farming gets accounts banned.
+Made by VertovHQ. Built with Kiro for Kiroween 2026. Repository: https://github.com/vertovhq/argus
 
-| Works with |
-|---|
-| Any MCP client: **ZCode**, Claude Desktop / Claude Code, Cursor, Codex, OpenCode, Gemini CLI — skills install to `~/.zcode/skills/` or `~/.claude/skills/` |
+Русская версия: [README.ru.md](README.ru.md).
 
-ARGUS assembles 1080×1920 clips from anything: Veo 3.1 clips via the official Gemini API
-or via your own Google Flow browser session (free monthly credits, no manual cookies),
-or with no AI at all — vertical kinetic typography rendered locally by the bundled
-Remotion engine from a JSON plan. Plus voiceover with word timings, captions drawn from
-those timings, rendering, QA and export — all as MCP tools your AI assistant can drive.
+## What ARGUS does
 
-```
-                    ┌─▶ generate_veo_clip (api | flow) ──┐
-prompts ────────┤                                        ├──▶ render_video ──▶ QA ──▶ export_package
-script ─────────┴─▶ graphics scenes in the plan ─────────┘      ▲   (9:16 / 16:9, −14 LUFS)
-voice ──▶ synthesize_voiceover (audio + word timings) ──────────┘
-```
+The model makes every creative decision. ARGUS never scores or grades a story, a style or
+originality. It returns material the model can perceive (pictures, timecodes, transcripts, sound
+events) and runs deterministic checks for technical faults only: size, frame rate, loudness,
+peaks, black gaps and audio length.
 
-## Tools
+ARGUS covers three scenarios:
 
-| Tool | What it does | Offline |
-|---|---|---|
-| `studio_guide` | Working method, available tools and providers, and the user's saved preferences. Called first in every session | ✅ |
-| `watch_video` | Shots, contact sheets, transcript words and sound events of a video, as images and timecodes | ✅ |
-| `get_frames` | Exact frames of a video as images (optionally cropped) | ✅ |
-| `voice_options` | Voices and providers available now | ✅ |
-| `synthesize_voiceover` | Voice audio plus word timings (edge-tts, Gemini, ElevenLabs), mastered to −14 LUFS | edge-tts needs network |
-| `generate_veo_clip` | Veo 3.1 clip. `provider="api"` — official API (paid; Veo has no free API tier); `provider="flow"` — your flow.google session (free credits, one-time `flow_login`) | — |
-| `flow_login` | One-time Flow login wizard: opens a window, you log in, the session profile is saved. No cookie files. One own account — credit farming gets accounts banned | — |
-| `render_video` | Plan → stills, preview or final in 9:16 / 16:9: graphics scenes, footage clips, captions, music and sound effects from the plan | ✅ |
-| `job_status` | State and result of a long operation that returned a `job_id` | ✅ |
-| `qa_verify_video` | Technical checks (size, fps, loudness, peaks, black gaps, A/V length) plus frames to look at | ✅ |
-| `export_package` | Final folder: videos, covers, `post.md` | ✅ |
-| `calculate_beat_grid` | Tempo and beat grid of a music track | ✅ |
-| `search_sfx`, `download_sfx` | Freesound CC0 sound effects | — |
-| `run_script` | Runs your own Python scripts from `scripts/` | ✅ |
-| `learn_and_record_memory` | Saves a lasting user preference; `studio_guide` returns it in later sessions | ✅ |
-| `doctor` | One-command environment self-check (`argus-doctor` CLI or MCP): python / ffmpeg / Node / engine / numpy / Pillow / optional faster-whisper, edge-tts, playwright, keys / output dir — ✓/✗/⚠ table with an exact install command under every ✗ | ✅ |
+1. **Reference to new video.** Give it a reference clip. The model watches it and makes a
+   continuation, an analog, or your own idea in the same style.
+2. **Your footage to edited video.** Cut stumbles, repeats and long pauses from your recording.
+   Add captions, zooms, graphics, sound effects and music.
+3. **Idea to video from scratch.** Kinetic graphics from a JSON plan, Veo AI clips, or both.
+
+Every scenario ends with the same output: a 9:16 and/or 16:9 file ready to upload, a cover image,
+and a `post.md` with title, description and hashtags. Publishing stays manual. ARGUS calls no
+platform APIs.
+
+## How ARGUS differs from video-shotcraft and OpenFilm
+
+[video-shotcraft](https://github.com/Vincentwei1021/video-shotcraft) (Apache 2.0) is an agent skill
+for Claude Code and Codex. It turns a product's screenshots and copy into a promo, drawn with
+Remotion. [OpenFilm](https://github.com/openfilm/openfilm) turns a coding agent into a film maker:
+a film is a folder of HTML pages, and it has its own desktop editor. ARGUS is an MCP server, so any
+MCP client can drive it, Kiro included. It starts from a reference video and makes a continuation
+of it. It also edits your own recording, then checks the result (frame size, loudness, true peak,
+black gaps, audio length) and exports the upload package. Its sound effects are synthesized in code
+(whoosh, pop, hit) and can be mixed with CC0 sounds from Freesound. One finished 9:16 video costs
+N credits and takes M min. These numbers will be filled in after the demo.
+
+## Quickstart without keys
+
+Without any API key you get kinetic graphics, the free edge-tts voices, video watching and framing,
+QA and export. Veo clips need a Flow login or an API key (see [Honest notes](#honest-notes)).
+
+1. Install (see [Install](#install)).
+2. Run `argus-doctor`. It prints a table: ✓ ready, ✗ missing with the install command, ⚠ optional.
+3. Connect your MCP client (see [Connect your client](#connect-your-client)) and reload its MCP servers.
+4. Ask in the chat, in this order (files are in [`examples/media/`](examples/media/README.md)):
+   - `Call studio_guide and follow its working order.`
+   - `Watch examples/media/man-with-camera-fragment.mp4 with watch_video, then get_frames at 2 and 6 seconds. Describe what you see.`
+   - `Read examples/media/sample-voiceover.txt and voice it with synthesize_voiceover, project demo.`
+   - `Render stills of examples/plans/graphics_9x16.json in project demo at 1, 4 and 8 seconds. Show me the frames.`
+
+   Then ask for the preview, the final render, `qa_verify_video` and `export_package`. The plan
+   reads `audio/voice.words.json` from the project folder, so the voice step must use the same project
+   name as the render.
+
+   For production-quality voice, add your ElevenLabs API key to .env (ELEVENLABS_API_KEY). Without a key ARGUS falls back to a free voice so the example still runs.
 
 ## Install
 
-Requirements: Python 3.11+, ffmpeg on PATH. Node.js 18+ for the kinetic engine.
+Requirements: Python 3.11+, ffmpeg on PATH, Node.js 18+ (for the Remotion engine). Windows, macOS
+and Linux.
 
 ```bash
-git clone <your argus-studio repo url>     # or download and unpack an archive
-cd argus-studio
-bash install.sh          # or: powershell -ExecutionPolicy Bypass -File install.ps1
+git clone https://github.com/vertovhq/argus.git
+cd argus
+python -m venv .venv
+# Windows (PowerShell): .venv\Scripts\Activate.ps1      macOS/Linux: source .venv/bin/activate
+bash install.sh     # Windows: powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-Manual path:
+The install script installs the Python package, the edge-tts voice, the Node packages of the engine
+and a `.env` copy of `.env.example`. It also tries to install Chromium for the optional Flow route.
+Run it inside the activated venv. Step by step: [INSTALL.md](INSTALL.md).
 
-```bash
-pip install -e ".[dev,pretty,voice]"  # voice = edge-tts (free TTS); add flow → pip install -e ".[flow,pretty]"
-playwright install chromium           # only for provider="flow"
-cd engine && npm install --no-audit --no-fund && cd ..   # only for kinetic
-cp .env.example .env                  # Gemini key for api mode / TTS
-```
+## Connect your client
 
-Benchmark vs the biggest agent-harness repos and the roadmap: [docs/BENCHMARK.md](docs/BENCHMARK.md).
-
-## Connect your assistant
+Kiro reads `.kiro/settings/mcp.json` in the workspace, or `~/.kiro/settings/mcp.json` for every
+workspace:
 
 ```json
 {
   "mcpServers": {
     "argus": {
-      "command": "argus-studio",
-      "env": { "ARGUS_GEMINI_API_KEY": "your-key", "ARGUS_VEO_PROVIDER": "api" }
+      "command": ".venv/Scripts/python.exe",
+      "args": ["-m", "argus"],
+      "env": { "OMNIFRAME_OUTPUT_DIR": "./output" }
     }
   }
 }
 ```
 
-More variants in [`examples/mcp-config.example.json`](examples/mcp-config.example.json).
-Full docs in Russian: [README.ru.md](README.ru.md).
+On macOS and Linux, use `.venv/bin/python`. In the user-level file, use the absolute path to the
+venv's Python. Keep API keys in `.env`, not in this file. More variants:
+[`examples/mcp-config.example.json`](examples/mcp-config.example.json).
 
-## Both content paths
+Any other MCP client works the same way: start `python -m argus` from the venv, or the
+`argus-studio` command after install.
 
-**Through Veo** — cinematic generated footage:
+## Tools
 
-```text
-generate_veo_clip(prompt="night city, neon, rain", output_path="out/c1.mp4")
-generate_veo_clip(prompt="...", output_path="out/c2.mp4", provider="flow")  # free Flow credits
-```
+| Tool | What it does | Keys |
+|---|---|---|
+| `studio_guide` | Working order, available tools and providers, and the user's saved preferences. Call it first in each session | none |
+| `watch_video` | Shots, contact sheets, transcript words (faster-whisper, optional) and sound events of a video, as pictures and timecodes | none |
+| `get_frames` | Exact frames of a video as pictures, optionally cropped | none |
+| `voice_options` | Voices, models and providers available now | optional |
+| `synthesize_voiceover` | Voice audio and word timings (`{w, s, e}`), mastered to -14 LUFS. Providers: edge (free), ElevenLabs, Gemini | none (edge); keys improve quality |
+| `generate_veo_clip` | Veo 3.1 clip through your Flow session (`provider="flow"`). The API route is refused (see Honest notes) | Flow login |
+| `flow_login` | One-time Flow login: opens a browser window, you sign in, the profile is saved | Google account |
+| `render_video` | Plan to stills, preview or final in 9:16 or 16:9: graphics, footage clips, captions, music, sound effects | none |
+| `job_status` | State and result of a long job that returned a `job_id` | none |
+| `qa_verify_video` | Technical checks (size, fps, loudness, true peak, black gaps, audio length) and frames to look at | none |
+| `export_package` | Final folder with the videos, covers and `post.md`. Refuses when QA has a hard failure | none |
+| `calculate_beat_grid` | Tempo and beat grid of a music track | none |
+| `search_sfx`, `download_sfx` | Freesound sound effects (CC0 by default). They read public Freesound pages | none |
+| `run_script` | Runs your own Python scripts from the scripts folder | none |
+| `learn_and_record_memory` | Saves a lasting user preference; `studio_guide` returns it in later sessions | none |
+| `doctor` | Environment check: Python, ffmpeg, Node, engine, numpy, Pillow, optional extras, keys, output folder | none |
 
-**Through graphics** (no AI, local, free):
+## Plan example
 
-```text
-render_video(project="demo", mode="stills", times=[1, 4, 8], plan={
+A plan is a JSON description of the scenes. This one is checked by the plan model in `src/argus/plan.py`:
+
+```json
+{
   "version": 2,
   "format": "9:16",
   "style": "dark",
-  "hud": {                                   # overlay drawn over all scenes
-    "at": 0.5, "until": 5.5,                 # plate lifetime, seconds
+  "hud": {
+    "at": 0.5, "until": 5.5,
     "rows": [
       {"label": "DUE IN", "value": "365 DAYS"},
       {"label": "WORKERS", "value": "0/100"}
     ],
-    "pos": "top",                            # top | bottom
-    "accent_changes": [                      # value swap + accent highlight
-      {"at": 3.0, "row": 1, "value": "20/100"}
-    ]
+    "pos": "top",
+    "accent_changes": [{"at": 3.0, "row": 1, "value": "20/100"}]
   },
   "scenes": [
     {"at": 0.0, "kind": "words", "text": "stop scrolling this right now"},
@@ -115,32 +146,77 @@ render_video(project="demo", mode="stills", times=[1, 4, 8], plan={
     {"at": 6.5, "kind": "cta", "text": "grab it free", "handle": "@you"}
   ],
   "audio": {"voice": {"src": "audio/voice.mp3"}}
-})
+}
 ```
 
-Look at the stills, then render `mode="preview"` and `mode="final"`. More plans are in
+`hud` is a plan-level overlay, not a scene: a dark plate with monospace values that stays over all
+scenes during its interval. `accent_changes` swaps a row's value and highlights it. More plans are in
 [`examples/plans/`](examples/plans).
 
-`hud` is a plan-level game-UI overlay (not a scene): a semi-transparent dark plate
-with monospace values that lives over all scenes inside its interval without
-touching them. On `accent_changes` the row's value swaps and gets the accent
-highlight (progress "0/100" → "20/100").
-
-Then the same either way: `synthesize_voiceover` → `render_video` (stills, preview, final;
-captions come from the plan's `captions` block) → `qa_verify_video` → `export_package`.
+The working order for every plan: `synthesize_voiceover` when the video has a voiceover, then
+`render_video` in `stills` mode (the model looks at each frame), then `preview`, then `final`, then
+`qa_verify_video`, then `export_package`.
 
 ## Honest notes
 
-- Veo via API is paid (~$0.40/s quality, ~$0.10–0.12/s Fast); there is no free API tier.
-  The free path is `provider="flow"` with your own flow.google credits; it depends on their
-  UI — selectors live in one place in `src/argus/tools/flow_browser.py`.
-- Captions are drawn by the engine from the plan's `captions` block; there are no `.ass` files.
-- Prompts go to Veo exactly as written — no content-policy workarounds.
+- **Veo API is shut down.** Google shut Veo 3.1 Preview down in the Gemini API on 2026-10-22
+  (https://aistudio.google.com/docs/video). `generate_veo_clip` with `provider="api"` returns that
+  message and makes no call.
+- **Flow is opt-in and fragile.** `provider="flow"` drives your own flow.google session with
+  Playwright. It needs one `flow_login`, uses one account per person, and depends on Google's
+  interface. The selectors are in `src/argus/tools/flow_browser.py`.
+- **Captions come from the plan.** The engine draws them from the plan's `captions` block. ARGUS
+  writes no `.ass` files.
+- **Prompts go to Veo as written.** ARGUS does not rewrite them to get around content rules.
+- **Free ElevenLabs plans** may not reach library voices through the API. `voice_options` says so
+  when that happens.
+
+## How the model works with ARGUS
+
+- The model calls `studio_guide` first. It returns the working order, the tools and providers
+  available, and the user's saved preferences.
+- Long work (renders, Veo, QA of long files) returns a `job_id`. The model polls `job_status`.
+- The build used Claude Opus 5.5 for planning and audits, Claude Sonnet 5.5 for the core tasks, and
+  Claude Haiku 5.5 for smaller tasks, all inside Kiro. The edit is only as good as the direction the
+  model gives ARGUS, so each step ends with pictures the user can check.
+
+## How it was built with Kiro
+
+- **Spec.** `.kiro/specs/argus-v2/` holds the requirements, the design and the task list. Each task
+  names the design sections to read, the files to touch and its verify steps.
+- **Steering.** `.kiro/steering/product.md`, `tech.md` and `engine.md` set the product rules (no
+  creative gates), the code conventions (tools return pictures through `tool_result`, long work runs
+  as jobs) and the engine rules.
+- **Hooks.** `.kiro/hooks/` runs the engine typecheck on every save of an engine source file. It also
+  runs the test suite when a spec task is marked done.
+- **MCP.** `.kiro/settings/mcp.json` registers ARGUS in Kiro. After a reload, the chat calls its tools.
+- **Build log.** [`docs/BUILD_LOG.md`](docs/BUILD_LOG.md) has an entry per task: the model used, what
+  was built, the bugs and their fixes, and what was verified.
+
+## Disclosure
+
+ARGUS grew from ATLAS, the author's personal script written before the hackathon. The first MCP
+prototype (v1) was built in ZCode during the submission period (first commit 2026-11-04). v2 was
+rebuilt spec-first in Kiro; the spec, steering, hooks and build log are in `.kiro/` and
+`docs/BUILD_LOG.md`.
+
+## Category: Frankenstein
+
+The Kiroween rules ask for a project that will "stitch together a chimera of technologies into one
+app" (https://kiroween.devpost.com/rules). ARGUS does that. A chat model directs a frame-exact React
+renderer (Remotion), ffmpeg audio and video processing, speech recognition (faster-whisper), voices
+(edge-tts, ElevenLabs, Gemini), video generation (Veo through Flow) and Freesound sounds. The model
+sees the video through contact sheets and stills.
+
+## Third-party code and assets
+
+Code, fonts and media from other projects, with their licenses, are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The main ones are video-shotcraft (Apache 2.0) and
+Remotion (its own license).
 
 ## License
 
-ARGUS is free and open source under [AGPL-3.0](LICENSE). Made by VertovHQ.
-Commercial licensing: contact VertovHQ.
+Copyright (C) 2026 vertovhq
 
-Rendering uses [Remotion](https://www.remotion.dev), which has its own license:
-https://www.remotion.dev/license
+ARGUS is free and open source under the [AGPL-3.0-or-later](LICENSE). Made by VertovHQ.
+Commercial licensing: contact VertovHQ.

@@ -1,128 +1,144 @@
-# Установка ARGUS Studio: ноль → первый ролик
+# Install ARGUS: from zero to the first video
 
-~30 минут. Два способа на выбор:
+About 30 minutes, most of it downloads. If a step fails, copy the exact error text. Do not use
+`--force` or delete folders to fix it.
 
-- **Способ А (рекомендуемый): устанавливает твой ИИ.** Ты говоришь ему
-  «установи по этому файлу», он сам гоняет терминал и конфиги. Твоё участие:
-  вставить ключи, перезапустить редактор, говорить «ок».
-- **Способ Б: руками по шагам** — если хочешь понять, из чего состоит студия.
+Supported: Windows, macOS and Linux. The commands below show Windows PowerShell first, then
+macOS and Linux.
 
-На любом шаге: ошибка → копируешь её точный текст. Сам ничего не чини и не
-переустанавливай: «лечилки» (--force, удаление, снос папок) делают хуже.
+## 1. Requirements
 
-Требования: Windows (macOS/Linux — те же шаги, пути другие), терминал,
-доступ в интернет, ключи от сервисов (шаг «Ключи»).
+| Tool | Why | Check |
+|---|---|---|
+| Python 3.11 or newer | ARGUS server | `python --version` |
+| ffmpeg on PATH | probing, cutting, loudness, frames | `ffmpeg -version` |
+| Node.js 18 or newer | Remotion render engine (kinetic graphics) | `node --version` |
+| Internet | voices (edge-tts), Veo (Flow), Freesound | — |
 
----
+ffmpeg on Windows: download a build from https://www.gyan.dev/ffmpeg/builds/ (the "essentials"
+zip), unpack it to `C:\ffmpeg`, and add `C:\ffmpeg\bin` to PATH. Open a new terminal afterwards so
+PATH applies.
 
-## Способ А: устанавливает твой ИИ
+## 2. Get the code and create a virtual environment
 
-1. Скопируй папку `argus-studio` на машину, например в `C:\argus-studio`
-   (после установки не переименовывай и не переноси).
-2. Скопируй своему ИИ-агенту (в Antigravity / Cursor / Claude Code / другом
-   MCP-клиенте с доступом к терминалу):
-   > Прочитай файл C:\argus-studio\INSTALL.md и выполни установку по нему:
-   > шаги «Зависимости», «Установка», «Ключи», «Подключение». Каждый шаг —
-   > проверка результата мне. Ключи я вставлю сам, когда попрошешь — в чат
-   > их не пиши. Ошибки — точным текстом мне, не чини сам.
-3. ИИ попросит ключи — вставь их В ФАЙЛ `.env` (не в чат!), как описано в
-   разделе «Ключи» ниже.
-4. Перезапусти редактор целиком (MCP-сервер стартует вместе с ним).
-5. В чате: «вызови doctor» → отчёт `"ok": true` = готово. Далее раздел
-   «Первый ролик».
-
-## Способ Б: руками по шагам
-
-### 1. Зависимости
-
-- **Python 3.11+**: https://www.python.org/downloads/ — при установке
-  поставь галку **Add Python to PATH**.
-- **ffmpeg**: https://www.gyan.dev/ffmpeg/builds/ → `ffmpeg-release-essentials.zip`
-  → распакуй в `C:\ffmpeg` → добавь `C:\ffmpeg\bin` в PATH (Win → «Переменные
-  среды» → Path → Создать).
-- **Node.js 18+** (нужен для Remotion-рендера): https://nodejs.org — LTS.
-- Проверка (НОВОЕ окно терминала — PATH применяется к новым окнам):
-  ```bash
-  python --version && ffmpeg -version && node --version
-  ```
-
-### 2. Папка студии
-
-Скопируй `argus-studio` в `C:\argus-studio`. Не переименовывай после установки.
-
-### 3. Установка
-
-Из папки студии:
-```bash
+```powershell
+git clone https://github.com/vertovhq/argus.git
+cd argus
 python -m venv .venv
-.venv\Scripts\pip install -e .
-.venv\Scripts\pip install numpy
+.venv\Scripts\Activate.ps1          # macOS/Linux: source .venv/bin/activate
 ```
-pip ругается → копируй ошибку целиком тому, кто дал папку. Не запускай
-`--force`-«лечилки».
 
-### 4. Ключи
+## 3. Install
 
-1. **Gemini** (обязательно): https://aistudio.google.com/apikey → Create → копируй.
-2. **ElevenLabs** (голос Brian; советую): https://elevenlabs.io → API Keys →
-   Create. Настоящий ключ начинается с `sk_` и показывается ОДИН РАЗ — сразу
-   копируй. Длинная hex-строка без sk_ — это ID, API его отвергнет
-   (`api_key_id_used_as_api_key`).
-3. Копия `.env.example` → переименуй в `.env` → заполни:
-   ```
-   ARGUS_GEMINI_API_KEY=AIza...
-   ELEVENLABS_API_KEY=sk_...
-   OMNIFRAME_OUTPUT_DIR=<OUTPUT_DIR>
-   ```
-   Ключи живут в `.env`, не в чате и не в коде.
+With the venv activated, from the repository folder:
 
-### 5. Подключение к своему редактору
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1     # macOS/Linux: bash install.sh
+```
 
-Студия — обычный MCP-сервер (stdio). Работает с любым MCP-клиентом:
-Antigravity, Cursor, Claude Code, ZCode и другими. В настройках MCP своего
-редактора добавь сервер (путь — СВОЯ папка студии):
+The script does four things:
+
+1. `pip install -e ".[dev,pretty,voice]"`: the ARGUS package, tests, `rich` output and the free
+   edge-tts voice.
+2. Tries to install Chromium through Playwright for the optional Flow route. A failure here is safe to
+   ignore; Flow is optional.
+3. `npm install` in `engine/`: the Remotion engine.
+4. Copies `.env.example` to `.env` if there is no `.env` yet.
+
+If you prefer manual steps, run the same commands yourself:
+
+```powershell
+pip install -e ".[dev,pretty,voice]"
+cd engine; npm install --no-audit --no-fund; cd ..
+copy .env.example .env
+```
+
+Optional extras: `pip install -e ".[asr]"` adds faster-whisper for transcripts in `watch_video`
+(the model downloads on first use). `pip install -e ".[flow]"` adds Playwright for the Flow route.
+
+## 4. Keys (optional)
+
+Everything in the quickstart works without keys. Add keys when you want better voices or Veo.
+Edit `.env` in the repository folder. Never paste keys into a chat.
+
+| Variable | Get it at | Used for |
+|---|---|---|
+| `ARGUS_GEMINI_API_KEY` | https://aistudio.google.com/apikey | Gemini voices, the model list |
+| `ELEVENLABS_API_KEY` | https://elevenlabs.io (API Keys) | ElevenLabs voices |
+
+ElevenLabs keys start with `sk_`. The key is shown once, when you create it. A long hex string
+without `sk_` is a key ID, and the API rejects it with `api_key_id_used_as_api_key`.
+
+Veo: the Gemini API shut Veo 3.1 Preview down on 2026-10-22, so `provider="api"` is refused. For Veo
+clips, use the Flow route: set `ARGUS_VEO_PROVIDER=flow` in `.env`, then run `flow_login` once from the
+chat and sign in with your own Google account. The Flow route is experimental.
+
+Other settings are documented in `.env.example`. `OMNIFRAME_OUTPUT_DIR` sets where projects are written.
+
+## 5. Connect your MCP client
+
+Kiro: create or edit `.kiro/settings/mcp.json` in the workspace (or `~/.kiro/settings/mcp.json` for
+every workspace):
 
 ```json
 {
   "mcpServers": {
     "argus": {
-      "command": "C:/argus-studio/launch_argus_mcp.bat",
-      "args": []
+      "command": ".venv/Scripts/python.exe",
+      "args": ["-m", "argus"],
+      "env": { "OMNIFRAME_OUTPUT_DIR": "./output" }
     }
   }
 }
 ```
 
-Лаунчер `launch_argus_mcp.bat` идёт в комплекте: сам стартует сервер из
-правильной папки, чтобы `.env` подхватился. В редакторах с UI-магазином MCP
-(Antigravity: Settings → MCP → Manage) можно добавить те же поля через UI.
-macOS/Linux: вместо .bat укажи `python -m argus` с cwd = папка студии.
+macOS and Linux: change the command to `.venv/bin/python`. In the user-level file, use the absolute
+path to the venv's Python. The relative path resolves from the workspace root.
 
-**Полностью перезапусти редактор** — MCP-сервер стартует вместе с ним.
+Save the file, then open the MCP Server view in Kiro and reload `argus`. Without a reload, the new
+tools do not appear.
 
----
+Other MCP clients: point the command at the venv Python with arguments `-m argus`, or at the
+`argus-studio` command when the venv is on PATH.
 
-## Первый ролик (проверка, что всё живое)
+More examples: [`examples/mcp-config.example.json`](examples/mcp-config.example.json).
 
-Скопируй в чат своего ИИ — тема и референс твои:
+## 6. Check the installation
 
-> Сделай вертикальный ролик формата «объект за копейки»: референс стиля —
-> <путь к видео.mp4>, тема — <твоя тема>. Голос — Brian. Сценарий и
-> стоп-кадры ключевых сцен покажи мне ДО сборки. Что-то падает — докладывай
-> точным текстом, не чини.
+In a terminal, with the venv activated:
 
-Дальше конвейер сам: разбор референса → сценарий через затвор качества →
-твоё «ок» → озвучка → кадры → сборка → QA. Твоё участие: смотреть чекпоинты
-и говорить «ок» или «что не так».
+```powershell
+argus-doctor
+```
 
----
+It prints a table. ✓ means the item works, ✗ means it is missing (the line says what to install), and
+⚠ means an optional part is not installed. The check is ready when the required items (Python,
+ffmpeg, Node, the engine) show ✓.
 
-## Если что-то пошло не так
+In the Kiro chat, ask for `doctor`. It returns the same report as JSON.
 
-| Симптом | Причина |
+## 7. The first video
+
+In the Kiro chat:
+
+1. `Call studio_guide and follow its working order.`
+2. `Watch examples/media/man-with-camera-fragment.mp4 with watch_video, then get_frames at 2 and 6 seconds. Describe what you see.`
+3. `Read examples/media/sample-voiceover.txt and voice it with synthesize_voiceover, project demo.`
+4. `Render stills of examples/plans/graphics_9x16.json in project demo at 1, 4 and 8 seconds. Show me the frames.`
+5. When the stills look right: `Render a preview, then the final of the same plan.`
+6. `Run qa_verify_video on the final file.` Then `export_package` for the upload folder.
+
+For production-quality voice, add your ElevenLabs API key to .env (ELEVENLABS_API_KEY). Without a key ARGUS falls back to a free voice so the example still runs.
+
+Files go to `<OMNIFRAME_OUTPUT_DIR>/projects/demo/`. Long jobs return a `job_id`; ask for `job_status` to check them.
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
 |---|---|
-| `api_key_id_used_as_api_key` | вставлен ID вместо ключа — ключ начинается с sk_ |
-| doctor: ffmpeg/node не найдены | PATH не применился — открой НОВОЕ окно терминала |
-| `Tool execution timed out` | не ошибка: сборка идёт в фоне, статус в `.status.json` рядом с итогом |
-| Тулз нет в списке | редактор не перезапущен после конфига |
-| Рендер «не как хотел» | правится чекпоинтами: говори ЧТО не так на stills, ДО сборки |
+| `api_key_id_used_as_api_key` | You pasted a key ID. The ElevenLabs key starts with `sk_`. |
+| `argus-doctor` reports ffmpeg or Node missing | PATH did not update. Open a new terminal. |
+| `provider api` error mentioning 2026-10-22 | Veo API is shut down. Use `provider="flow"`. |
+| New tools are not in the chat | The MCP server was not reloaded after the config change. |
+| Tool call timed out | Not an error in most cases. Long work runs in the background; check `job_status`. |
+| Render does not match what you wanted | Check the stills first and say what is wrong before the final render. |

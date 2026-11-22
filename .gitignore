@@ -24,6 +24,8 @@ output/
 *.wav
 *.mp3
 *.ass
+# judge sample video (examples/media); the sample voice is generated, not stored
+!examples/media/*.mp4
 KNOWLEDGE_BASE.md
 KNOWLEDGE_BASE.old.md
 

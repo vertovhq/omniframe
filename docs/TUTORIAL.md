@@ -1,64 +1,65 @@
-# Тутор: как это выглядит вживую (пошагово)
+# Tutorial: one video from start to upload
 
-Одноразовая подготовка (уже сделана на этой машине):
+This walkthrough makes one vertical video with ARGUS in the Kiro chat. It uses the graphics path,
+which needs no AI keys. Install first: [INSTALL.md](../INSTALL.md).
 
-| Шаг | Действие | Один раз? |
-|---|---|---|
-| 0 | Перезапустить ZCode (подхватятся скиллы + MCP) | да |
-| 1 | В новом чате набрать `/video тема ролика` | каждый ролик |
+Each step names the tool, what to check, and what you decide. The model proposes; you approve at the
+checkpoints.
 
-## Сцена 1: сценарий
+## Step 1. Check the setup
 
-Ты пишешь: `/video почему 90% новичков бросают монтаж на второй неделе`
+Ask: `Call studio_guide and follow its working order.`
 
-Ассистент отвечает сценарием: хук (1.5 сек) → обещание → 3–5 битов → CTA, и спрашивает «утверждаешь?».
-**Ты:** «го» (или правишь). ~1 минута.
+`studio_guide` returns the tools, the providers that work on this machine, and your saved
+preferences. If a provider is missing, it says what to install.
 
-## Сцена 2: путь контента
+## Step 2. Write the script
 
-Ассистент предлагает выбор:
-- **Графика** (бесплатно, без ключей): кинетика — слова, тайтлы, карточки, счётчики, плашки, финалка. Звук (воуши/удары) и музыкальная подложка — сам.
-- **Veo-кадры** (нужен `flow_login` один раз или API-ключ): кинематографичный видеоряд + та же кинетика сверху.
-- **Микс**.
+Ask: `Write a 20-second script about why most beginners stop editing after the second week. Hook in the first 1.5 seconds, three beats, a call to action.`
 
-**Ты:** «графика». ~10 сек.
+Read it, then approve or ask for changes. Nothing is voiced or rendered before you approve.
 
-## Сцена 3: голос
+## Step 3. Choose the picture
 
-Ассистент озвучивает сценарий (edge Dmitry — бесплатно) и раскладывает тайминги.
-Хочешь свой голос — раз записываешь сэмпл 1–2 мин, потом клон через ElevenLabs.
+For graphics, the model writes a plan: scenes such as `words`, `title`, `counter` and `cta`, with
+times in seconds. For AI clips, it calls `generate_veo_clip`, which needs the Flow route
+(see INSTALL.md). A mix of both is allowed.
 
-## Сцена 4: рендер
+Ask for the picture choice with a reason, then approve it.
 
-`render_video` сначала отдаёт кадры (stills) для проверки, потом preview, потом final; долгий рендер идёт в фоне, ход видно через `job_status`.
+## Step 4. Voice
 
-## Сцена 5: сабы + QA + экспорт
+Ask: `Use voice_options to list voices, pick one for this script, and tell me why.`
 
-Сабы — блок `captions` в плане (белые, 1–3 слова акцентом) рендерятся вместе с видео → `qa_verify_video` → `export_package`.
-Ассистент отдаёт: папку `final/` с видео, обложкой и `post.md` + отчёт «почему так».
-QA зелёный = формат/громкость/длины дорожек в порядке, можно лить в ТТ.
+Then: `Voice the script with synthesize_voiceover, project tutorial.` Without keys, the voice is edge
+(free). The result is `audio/voice.mp3` and `audio/voice.words.json` in the project folder, with a
+word list that has start and end times. Check that the duration matches the script's length.
 
-**Итог: от идеи до готового ТТ-ролика — 5–15 минут диалога, ноль кнопок в монтажке.**
+## Step 5. Stills first
 
-## Монтаж твоего сырья (стиль «Эпизод»)
+Ask: `Render stills of the plan at 1, 4 and 8 seconds, project tutorial, mode stills.`
 
-Кидаешь в чат сырой ролик с iPhone: «смонтируй как мои эпизоды» → ассистент
-расшифровывает, режет дубли и повторы, строит план (показывает с объяснением),
-рендерит 60 fps с LUT, плашкой и сабами, гоняет проверки. Тут минут 20–40 на
-ролик вместо часов руками.
+The model looks at each picture. Check the text: nothing cut off at the edges, captions readable,
+accent words where you expect them. Say what to change, and repeat this step until the frames look
+right. Stills are cheap, so fix problems here rather than in the final render.
 
-## Копирование чужого стиля
+## Step 6. Preview, then final
 
-Кидаешь референс: «хочу как у этого чела» → разбор (тайминги/шрифты/цвета/приёмы) →
-монтаж через ближайший скилл или сборка нового стилевого скилла.
+Ask: `Render a preview, then the final render, 9:16.`
 
-## Честный вердикт: шлак или норм?
+Long renders return a `job_id`. Ask for `job_status` until the state is `done`.
 
-| | Оценка |
-|---|---|
-| Интерфейс «разговор вместо программы» | норм — быстрее любого GUI-монтажёра на типовых роликах |
-| Установка на твоей машине | сделана; на другом ПК — `install.sh` одной командой |
-| Без ключей | графика + edge-голос + сабы + рендер + QA + экспорт работают; Veo — только после ключа/flow_login |
-| Flow-логин | ручной один раз, потом сам; сессия иногда протухает — перелогин |
-| Кинетика | типографика/карточки, не фотореал — фотореал это Veo |
-| Это не RAR-архив | git-репо с тестами, CI, установщиком и доками; скиллы зарегистрированы в ZCode, а не лежат распакованными |
+## Step 7. Check
+
+Ask: `Run qa_verify_video on the final file.`
+
+The result lists the technical checks and attaches frames. A hard failure (for example a true peak
+above the limit or a black gap longer than one second in the middle) stops the export. A warning
+(for example a short black gap or a platform length limit) is shown, and you decide what to do with it.
+
+## Step 8. Export
+
+Ask: `Run export_package for tutorial.`
+
+The upload folder holds the video, the covers and `post.md` with the title, description and
+hashtags. Publishing is manual: ARGUS does not call any platform API.

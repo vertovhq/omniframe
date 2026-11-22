@@ -30,6 +30,7 @@ import tempfile
 from urllib.parse import unquote, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
+from .. import __version__
 from ..ffmpeg import NO_WINDOW
 
 SITE = "https://freesound.org"
@@ -86,7 +87,7 @@ class Document(HTMLParser):
 
 
 def request(url):
-    req = Request(url, headers={"User-Agent": "video-shotcraft/1.0 (Freesound SFX sourcing)"})
+    req = Request(url, headers={"User-Agent": f"ARGUS/{__version__} (Freesound SFX sourcing)"})
     with urlopen(req, timeout=30) as response:
         data = response.read(MAX_BYTES + 1)
         if len(data) > MAX_BYTES:

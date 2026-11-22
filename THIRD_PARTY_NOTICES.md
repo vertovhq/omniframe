@@ -1,0 +1,46 @@
+# Third-party notices
+
+This file lists code, libraries and media that ARGUS uses, copies or adapts, and the license that
+applies to each. The ARGUS license itself is in [LICENSE](LICENSE).
+
+## video-shotcraft (Apache License 2.0)
+
+- Project: https://github.com/vincentwei1021/video-shotcraft
+- License text: [licenses/video-shotcraft-LICENSE](licenses/video-shotcraft-LICENSE). It is the
+  upstream `LICENSE` file from the `main` branch, copied byte for byte.
+- NOTICE file: video-shotcraft has no NOTICE file in its repository (checked on the `main` branch),
+  so there is no NOTICE text to carry over.
+- Use in ARGUS:
+  - `src/argus/tools/sfx.py` is ported from the video-shotcraft Freesound sourcing code.
+  - `src/argus/tools/beats.py` uses the beat-grid method of video-shotcraft.
+  - ARGUS changed both files. The changes are in this repository's git history.
+
+## Remotion (its own license)
+
+- Project: https://www.remotion.dev. ARGUS uses the `remotion` and `@remotion/*` packages, pinned to
+  4.0.540 in `engine/package.json`.
+- Remotion is not open source under a standard license. Its license is at
+  https://www.remotion.dev/license. Its free license covers individuals and companies of up to three
+  people. Larger organizations need a Remotion company license.
+- Remotion packages are installed from npm by `install.sh`, `install.ps1` or `npm install` in
+  `engine/`. ARGUS does not copy Remotion source code.
+
+## Inter (SIL Open Font License 1.1)
+
+- Files: `engine/public/fonts/InterDisplay-*.otf`, used by the render engine.
+
+## Sample media in `examples/media/`
+
+- `man-with-camera-fragment.mp4`: a short fragment of *Man with a Movie Camera* (Dziga Vertov, 1929).
+  The film is in the public domain in the United States. The fragment has no sound track.
+- The sample voiceover is not stored in the repository. Running the example makes it with ARGUS
+  (`synthesize_voiceover`). Without an ElevenLabs key, that uses Microsoft's Edge read-aloud voices,
+  which remain subject to Microsoft's terms for that service.
+
+## Downloaded at run time, not bundled
+
+- Freesound sound effects (`search_sfx`, `download_sfx`). CC0 sounds need no attribution. CC-BY
+  sounds need attribution, which `download_sfx` writes to `FREESOUND-CREDITS.md` in the project.
+- Python packages (`mcp`, `google-genai`, `numpy`, `Pillow`, `edge-tts`, `faster-whisper`, `playwright`)
+  and their licenses, as listed in `pyproject.toml`.
+- ffmpeg and ffprobe, which ARGUS calls as external programs.
