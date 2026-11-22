@@ -40,50 +40,32 @@ def _registered_tool_names() -> list[str]:
 
 
 @mcp.tool()
-def studio_guide(custom_scenes: bool = False, kit_group: str | None = None) -> list[str | Image] | dict:
-    """Read this at the start of every session: how to work, what is available, what the user prefers.
+def studio_guide(custom_scenes: bool = False, kit_group: str | None = None, full: bool = False) -> list[str | Image] | dict:
+    """Read this at the start of every session: the working method, the tools and providers, the user's preferences.
 
-    Returns `guide` (the working method: you are the director and the editor, ARGUS
-    tools are your eyes, ears and hands), `capabilities` (the registered tools and
-    which providers work right now: ElevenLabs, Gemini, edge-tts, faster-whisper,
-    Veo API, Google Flow session) and `preferences` (the user's saved lasting
-    preferences and corrections, newest last; they override your defaults).
-    `preferences_truncated` is true when older entries were left out to keep the
-    text short. Call it again with `custom_scenes=true` when you plan custom scenes:
-    the result then also has `motion_kit`, the index of the motion kit (one line per group
-    of ready-made blocks that custom components import from `'../kit'`). Then open only the
-    groups the scene needs with `kit_group="hud"` (also `core`, `backgrounds`, `transitions`,
-    `energy`, `type`, `bursts`, `depth`, `camera`, `info`): that call returns just the group's
-    text (blocks and props) and a contact strip image with one rendered frame per block, so you
-    see what a block looks like before you pick it. The strip is rendered once per kit version;
-    the first call may answer `strip.state: "building"` with a `job_id` for `job_status`.
-    `library` is the user's style library: scenes, characters, plates and caption styles
-    saved from earlier videos. It has `entries` (the count), `index` (one line per entry)
-    and `posters` (the newest entries, at most 8). When it has posters, the result is the
-    JSON text followed by those posters as images, in the order of `library.posters`
-    (512 px): compare them with the reference you are about to make before you write new
-    code. An entry's files are imported by a custom component as
-    `import X from './library/<entry>/<File>'`.
+    Returns `guide` (how to work: you direct, ARGUS tools are your eyes, ears and hands),
+    `capabilities` (tools and providers that work now) and `preferences` (the user's saved
+    corrections; they override your defaults). With `custom_scenes=true` it also returns
+    `motion_kit`, the index of kit groups; open one group with `kit_group="hud"` (or `core`,
+    `backgrounds`, `transitions`, `energy`, `type`, `bursts`, `depth`, `camera`, `info`) to get its
+    blocks and a strip image. `library` lists saved scenes and posters (512 px) to compare with a reference.
+    A repeated read with the same content returns one line: `full=true` gives the text again.
     """
     if kit_group:
-        return studio.kit_group_for_model(kit_group)
-    return studio.result_for_model(studio.studio_guide(_registered_tool_names(), custom_scenes=custom_scenes))
+        return studio.kit_group_for_model(kit_group, full=full)
+    guide = studio.studio_guide(_registered_tool_names(), custom_scenes=custom_scenes)
+    return studio.result_for_model(studio.once("guide" + (":kit" if custom_scenes else ""), guide, full))
 
 
 @mcp.tool()
 def job_status(job_id: str, wait_s: float = 0) -> list[str | Image] | dict:
-    """Check a long-running operation that returned a `job_id` instead of a result.
+    """Check a long-running operation that returned a `job_id`.
 
-    Tools that can take longer than about 20 seconds (watching a long video,
-    rendering, transcribing) keep working in a background process and return
-    `{"job_id", "state": "running", ...}` when they are not done in time. Call this
-    with that `job_id` and `wait_s=20` to wait on the server until the job ends (at
-    most 20 seconds per call; the wait stops early when the job is done or failed).
-    Returns `state` (queued|running|done|error), `progress` (0..1, or null when
-    unknown), `eta_s` (a rough estimate, only while running with known progress),
-    `note`, `elapsed_s`, and then `result` (when done; frames come back as images,
-    each listed with its path) or `error` (the error tail, also when the worker
-    process died). Starting the same operation again while it runs returns the same job.
+    Call it with that `job_id`. `wait_s` (up to 20) waits on the server until the job ends, so
+    polling costs fewer calls. Returns `summary` (one sentence: what is happening, what is left),
+    `state` (queued, running, done or error), `progress` (0..1 or null), `eta_s` (rough, while
+    running), `note`, and then `result` when done (pictures come back as images) or `error` when
+    it failed, with the fix in the text. Starting the same operation again while it runs returns the same job.
     """
     return jobs.job_status(job_id, wait_s)
 
@@ -145,39 +127,25 @@ def synthesize_voiceover(
     name: str = "voice",
     settings: dict | None = None,
 ) -> dict:
-    """Speak `text` and save a mastered voiceover plus word timings for captions.
+    """Speak `text` and save a mastered voiceover with word timings for captions.
 
-    You direct the performance. Choose the voice yourself (see `voice_options`),
-    tell the user which voice you picked and why, and write the text for the ear in
-    the user's language: short sentences, numbers and abbreviations spelled the way
-    they are said. The text is sent unchanged, so write the delivery into it. On
-    ElevenLabs the `eleven_v3` / `eleven_v4` family uses audio tags such as
-    `[whispers]`, `[excited]`, `[sighs]`, `[laughs]` before the words they colour,
-    plus punctuation for rhythm: `...` for a hesitation or a pause, a dash for a
-    break, CAPITALS for stress. SSML `<break time="1.0s" />` works only on the
-    older v2 family (`eleven_multilingual_v2`, flash); v3/v4 do not understand it.
-    edge voices (free) cannot act out tags: they are removed before speaking.
-    Gemini voices follow bracketed tags too.
+    You direct the performance: choose the voice (see `voice_options`), tell the user which voice
+    and why, and write the text for the ear in the user's language. The text is sent unchanged, so
+    put the delivery into it: on ElevenLabs v3/v4 use audio tags such as `[whispers]` or `[excited]`
+    before the words they colour, plus `...` for a pause, a dash for a break and CAPITALS for stress.
+    SSML breaks work only on the older v2 models. edge voices cannot act tags out: they are removed.
 
-    `project` is the work's short name (use the same one for the whole video); the
-    files go to `<project>/audio/<name>.mp3` and `<name>.words.json`. `provider`:
-    "elevenlabs" (default when a key is configured), "edge" (default without keys,
-    free) or "gemini" (only when you ask for it). `voice`: a name or id from
-    `voice_options` (ElevenLabs preset names Brian, Adam, George, Daniel also
-    work). `model`: an ElevenLabs model id from `voice_options` `models` (when none is
-    given, ARGUS uses the newest text-to-speech model the key lists, or ARGUS_ELEVEN_MODEL).
-    `settings`:
-    ElevenLabs `stability`, `similarity_boost`, `style`, `speed` (0.7..1.2),
-    `use_speaker_boost`, `language_code`, `seed`; edge `rate` ("+10%"), `pitch`
-    ("+2Hz"), `volume`; `language` ("ru") helps word alignment.
+    `project` is the video's short name (the same for the whole video); files go to
+    `<project>/audio/<name>.mp3` and `<name>.words.json`. `provider`: "elevenlabs" (default with a
+    key), "edge" (default without a key) or "gemini" (only when asked). `voice`: a name or id from
+    `voice_options`. `model`: an id from `voice_options` `models`. `settings` holds provider
+    options (`stability`, `speed`, `language_code`; edge `rate`, `pitch`); `language` helps alignment.
 
-    Returns `audio`, `words_path` (a JSON list of `{w, s, e}` in seconds, tags
-    removed; use it for captions and for cutting on the voice), `duration`,
-    `provider`, `voice`, `model` and `words_source`: "provider" (ElevenLabs or edge
-    timings), "faster-whisper" (aligned from the audio) or "none" (no timings:
-    `captions_note` says what to install). Long text is split on paragraphs and
-    joined, with timings offset correctly. Texts that take longer than ~20 s run in
-    the background: you get `{"job_id", "state": "running"}`; call `job_status`.
+    Returns `summary`, `audio`, `project_folder`, `words_path` (`{w, s, e}` in seconds, tags removed),
+    `duration`, `provider`, `voice`, `model`, `words_source` ("provider", "faster-whisper" or "none";
+    `captions_note` says what to install) and `project_note` when the project already holds another
+    video's plan or renders. A 429 from ElevenLabs is retried; the summary then says how long to wait.
+    Long texts run in the background: call `job_status`.
     """
     from .tools.voiceover import synthesize_voiceover as impl
 
@@ -192,43 +160,23 @@ def voice_options(
     limit: int = 10,
     details: bool = False,
 ) -> dict:
-    """Find voices for a narrator or character, and see which voice providers work now.
+    """Find voices for a narrator or character, and see which providers work now.
 
-    Call it before the first voiceover of a project. Its `provider_choice` says which
-    providers work (ElevenLabs, edge, Gemini, and a local Voice Studio once it is
-    installed), which one is `recommended` (ElevenLabs whenever its key is set) and
-    whether to ask: when `ask_user` is true, ask the user which provider they want
-    (one line per option, in their language), keep the answer for the whole project
-    and do not switch mid-project; with a single working provider just use it. Within
-    the chosen provider you pick the voice, not the user: filter by `language` ("ru",
-    "en", "Russian"), `gender` ("male" / "female") and a free-text `query` (words such
-    as "deep narrator calm"; a voice matches when ANY word occurs, in any case, in its
-    name, description, accent, age, gender, use case or language), then choose what
-    fits the genre and tell the user your choice.
-    Every voice is short: `id`, `name`, `gender`, `age`, `accent`, `language` and a
-    `description` of at most 80 characters. Returns `own_voices` (the ElevenLabs
-    account's voices, matching language first), `library_voices` (ElevenLabs Voice
-    Library voices that the API accepts on the current plan), `library_voices_paid_plan_only`
-    (voices that need a paid plan: library voices marked `free_users_allowed=false`, and on the
-    free plan every library voice and every own voice that is not premade; do not pick them
-    without asking), `plan` (the ElevenLabs tier, or a note when it cannot be read),
-    `edge_voices` (free defaults per language), `gemini_voices` (names),
-    `providers` (what works right now and why not) and `default_provider`. `limit`
-    caps every list (max 50), and the whole answer stays under 9000 characters: when
-    it would be longer, the longest lists lose their last voices and `notes` says so,
-    so narrow the search with `language`, `gender` and `query` instead of raising `limit`.
+    Call it before the first voiceover of a project. `provider_choice` says which providers work,
+    which one is `recommended` (ElevenLabs when its key is set) and whether to `ask_user`: then ask the
+    user once, in their language, and keep the answer for the project. Filter by `language` ("ru", "en"),
+    `gender` ("male" or "female") and `query` (words; a voice matches when ANY word occurs in its name,
+    description, accent, age or labels). Every voice is short: `id`, `name`, `gender`, `age`, `accent`,
+    `language`, `description` (80 characters).
+
+    Lists: `own_voices` (the account's voices), `library_voices`, `library_voices_paid_plan_only` (do not
+    pick these without asking; on the free plan every library voice and every non-premade own voice is
+    here), `edge_voices`, `gemini_voices`. `plan` is the ElevenLabs tier, `models` the usable models
+    (newest first, `default: true` marks the one ARGUS uses), `providers` what works and why not,
+    `errors` the cause of any failed list (HTTP code, missing key permission). An empty list comes with a
+    `notes` line that says why. Each list is capped at `limit` (max 50); the answer stays under 9000
+    characters. `details=True` adds `delivery` (audio tags and pacing rules) and leaves room for fewer voices.
     Pass a returned `id` as `voice` to `synthesize_voiceover`.
-    `models` lists the text-to-speech models (ElevenLabs, with character limits;
-    Gemini TTS) and the Gemini video models the keys can use, newest first. Each has
-    `default: true` when it is the one ARGUS uses if the user picks none. Ask the user
-    which model they want, or use the newest when they say "you choose"; a model
-    chosen by the user goes in `model` of `synthesize_voiceover`. Ids are never
-    typed from memory; the list is the source.
-    With `details=True` (use it once per project, before you write the narration)
-    the answer also holds `delivery`, the audio tags and the pacing rules for the
-    default ElevenLabs model (plan the emotion of every line yourself: what it
-    feels like, where it breathes, where it stresses, and write it into the text).
-    Without `details` it is not returned.
     """
     from .tools.voiceover import voice_options as impl
 
@@ -247,27 +195,16 @@ def watch_video(
     """Watch a local video (a reference, or the user's footage) and get what a viewer would notice.
 
     Use it on every reference and on every recording you will edit, one call per
-    file. It returns contact sheets as images (up to 6 frames each, every tile
-    labelled `mm:ss.s  #shot`) and a JSON summary: `shots` (every cut found over the
-    whole file as [start, end] seconds), `frames` (time, file path and shot number of
-    each frame, full resolution), `sound_events` (times of sharp sounds with strength
-    0..1), `transcript_head` (the start of the spoken text), `segments_path` (a JSON
-    list of sentences `{s, e, text}`) and `words_path` (a JSON list of `{w, s, e}` per
-    word in seconds of the file: read it, or give it to a plan as
-    `captions.words.source`). The words and sentences are never listed in the result,
-    so read the files when you need them. Whisper is asked to keep fillers, stumbles and repeats
-    for English and Russian; for other languages it may tidy them away. The transcript
-    needs faster-whisper; without it the summary says so in `transcript_note`.
-    `project` is a short name for the work (it decides where the cache and files
-    live; use the same name for the whole video). `max_frames` is the frame budget
-    (default 24, up to 120): shot starts first, an extra frame in long shots, evenly
-    spread when there are more shots than frames. Each call returns 2 contact sheets;
-    `pages_total` tells how many pages exist, pass `page=2`, `3`... for the rest.
-    `language` is a code like "en" or "ru" (default: detected). The same file is not
-    analysed twice: a repeated call returns the cached result (`cache_hit`). Long
-    files run in the background: you get `{"job_id", "state": "running"}` and then
-    call `job_status(job_id)` until it is done. To read an exact moment closely
-    (text, HUD values, colours, the frames around a cut) use `get_frames`.
+    file. The default is one contact sheet of 12 frames (labelled `mm:ss.s  #shot`), not one
+    image per frame. Use the JSON first: `shots` (cuts as [start, end] seconds), `sound_events`,
+    `transcript_head`, `segments_path` (sentences `{s, e, text}`) and `words_path` (`{w, s, e}` per
+    word, in seconds: read the file or give it to a plan as `captions.words.source`). Words and
+    sentences are never listed inline. Then call `get_frames` for the exact moments that matter.
+    `max_frames` (default 12, up to 120) sets the budget; `page=2` gives the next sheets when
+    `pages_total` says there are more. `project` names the work and its cache. Fillers and repeats
+    are kept for English and Russian speech. The transcript needs faster-whisper (`transcript_note`
+    says when it is missing). A repeated call on the same file returns the cache (`cache_hit`).
+    Long files run in the background: call `job_status(job_id)` until it is done.
     """
     return watch.watch_video(
         path, project, max_frames=max_frames, transcript=transcript, language=language, page=page,
@@ -305,77 +242,37 @@ def render_video(
     format: str | None = None,
     name: str = "video",
     save_sounds: list[dict] | None = None,
+    then: list[str] | None = None,
 ) -> list[str | Image] | dict:
-    """Render a plan with the ARGUS engine. Work in this order: stills first, then preview, then final.
+    """Render a plan with the ARGUS engine. Order: stills, then preview, then final.
 
-    Sound design (mode "audio"): place sounds before the preview. `audio.sounds` names the
-    sounds of this video: {"hook": {"from": "whoosh", "pitch_end": 300, "length": 0.6}} starts
-    from a starting recipe (whoosh, swish, whip, hit, impact, sub_drop, riser, reverse_swell,
-    braam, stinger, click, tick, ui_blip, glitch, data_chatter, typing, pop, shimmer, heartbeat,
-    static; `studio_guide(kit_group="sfx")` lists them with a sheet image), or is a full sound
-    with `length` and up to 4 `layers`. `audio.sfx` events are {"at": seconds | "cue:<name>" |
-    "cut:<n>", "sound": name, "align": "start" | "peak" | "end", "vary": 0..1, ...} or the old
-    form {"at", "src", "volume"} for a file (`pitch`, `rate`, `pan`, `reverse`, `trim`, `fade`,
-    `gain_db` also work on files). `align: "peak"` puts the sound's peak exactly on its moment.
-    `vary` (default 1 for a named sound) makes each repeat differ; 0 gives exact copies.
-    mode "audio" mixes voice, music and sounds without a browser, in seconds. It returns the
-    timeline image (lanes for voice, music and sounds; scene cuts and cues as lines; every sound
-    labelled with its number) and `sounds`, one row per event with its length, attack, peak,
-    loudness and brightness, plus `warnings`: clipping, two peaks that add up above -1 dBFS, a
-    sound that starts after the video or runs past its end, and a sound louder than the voice
-    while words are spoken. Look at the image and fix what the warnings name. Pass `save_sounds`
-    (mode "audio" only) after the user approved sounds: [{"sound": name, "what": "...",
-    "fits_when": "..."}] saves each recipe to the sound library for the next video.
+    mode "stills" (default) renders the frames at `times` (seconds, up to 12; default 6 spread
+    over the video) as one contact sheet, or one image for a single frame. It takes seconds: use
+    it to settle the look. `compare` = {"video": reference path, "times": [seconds]} (same length
+    as `times`) puts each reference frame left of its render. Unchanged frames are not sent again.
+    mode "preview" renders the whole video at half size. mode "final" renders full size, then
+    normalises loudness (-14 LUFS), and saves `<project>/plan.json`. `then: ["qa"]` on a final runs
+    the technical QA in the same job. Fast mode: when the user says "no checks", skip the stills
+    and render the preview directly; the user watches it.
+    mode "audio" mixes the sounds without a browser and returns the timeline image and `warnings`;
+    look at it before the preview. `save_sounds` saves approved sounds to the library.
 
-    `plan` is the plan object (or the path of a plan .json file); `project` is the
-    work's short name (the same for the whole video). Relative file paths in the plan
-    (fonts, images, audio, words files) are looked up in the project folder first.
-    The plan has `format` ("9:16" or "16:9"), optional `fps` and `duration`, `style`
-    ("dark", "light" or tokens with colors, fonts, text_scale, safe_area, background,
-    grain), `scenes`, `hud`, `captions`, `audio` (voice, music with `duck`, sfx events).
-    Caption words can be drawn in capitals: `captions.style.case` is `"upper"` or `"as_is"` (the default).
-    `format` here overrides the plan's. The engine adds no sound effects of its own.
-
-    mode "stills" (default): renders only the frames at `times` (seconds, up to 12; default
-    6 spread over the video). Two or more frames come back as one contact sheet image: each
-    cell shows its time and the scenes on screen, and the full-size files are listed in
-    `stills`. A single frame comes back as one image. Use this again and again while you
-    settle the look; it takes seconds. With `compare` = {"video": reference path, "times":
-    [reference seconds]} (same length as `times`) every cell is side by side: reference on
-    the left, your render on the right, both labelled with their time.
-    mode "preview": the whole video at half resolution, fast to check motion and timing.
-    mode "final": full resolution, then loudness normalised (-14 LUFS), faststart and a
-    metadata tag; also saves the plan as `<project>/plan.json`. Run `qa_verify_video`
-    on the result.
-    Previews and finals take longer than a tool call may wait: you get
-    `{"job_id", "state": "running"}`; call `job_status` until it is done. Every result
-    has `timing` in seconds (prepare_s, bundle_s, 0 when a bundle of the same engine state
-    is reused, browser_s, frames_encode_s, mux_s, finalize_s, total_s). Files go to
-    `<project>/renders/<name>-<mode>-<format>.mp4` (stills: `.jpg`); `name` defaults to
-    "video".
-
-    Custom scenes: when no built-in scene fits, write a React component into
-    `<project>/components/<Name>.tsx` (default export; may import only `react`, `remotion`,
-    `../style`, `../kit` (the motion kit: ready-made blocks, see `studio_guide(custom_scenes=true)`)
-    other files of that folder and style library files as `./library/<entry>/<File>`, see
-    `studio_guide`; no network) and use it as
-    `{"kind": "custom", "at": 2, "component": "<Name>", "props": {...}}`. It is
-    typechecked on every render. Compiler errors come back as `{"valid": false, "errors":
-    ["components/<Name>.tsx(4,9): error TS...", ...]}` and nothing is rendered.
-    `plan.cues` names moments for custom scenes: `{"burn": {"word": "сгорает"}, "end": 41.2}`.
-    A word cue is where that word is spoken in `captions.words` (optional `nth`, `offset`
-    seconds, `prefix*`), so a new voice moves it; a number is seconds. A component reads a
-    cue with the kit's `useCue('burn')`, so no times are typed into its props.
+    `plan` is the plan object or the path of a .json file; `project` is the video's short name.
+    Relative file paths in the plan are looked up in the project folder first. The plan keys are in
+    `studio_guide`: `format` ("9:16" or "16:9"), `style`, `scenes`, `captions` (`mode` phrase, word
+    or headline; `style.case` "upper" or "as_is"), `audio`, `cues`. The engine adds no sound effects.
+    Custom scenes are `{"kind": "custom", "component": "<Name>"}` with `<project>/components/<Name>.tsx`
+    (see `studio_guide(custom_scenes=true)`). Compile errors return `{"valid": false, "errors": [...]}`.
 
     An invalid plan, a missing file or bad `times` returns `{"valid": false, "errors":
-    ["scenes[3].kind: ...", ...]}` with every problem as `path: message`, and nothing is
-    rendered. `warnings` in the result list what the plan asked for that the engine does
-    not draw or apply yet, accent words that no caption word matches, one-colour frames
-    in a stills round (empty frames), and risky code in custom components.
+    ["scenes[3].kind: ...", ...]}`, one `path: message` per problem; nothing renders. Preview and final
+    take longer than a tool call: you get `{"job_id", "state": "running"}`, then call `job_status`.
+    Results have `summary`, `timing` (seconds per stage) and `warnings`. Files go to
+    `<project>/renders/<name>-<mode>-<format>.mp4` (stills: `.jpg`).
     """
     return render.render_video(
         plan, project, mode=mode, times=times, compare=compare, format=format, name=name,
-        save_sounds=save_sounds,
+        save_sounds=save_sounds, then=then,
     )
 
 
@@ -388,21 +285,15 @@ def qa_verify_video(
 ) -> list[str | Image] | dict:
     """Check a finished video for technical defects. Run it on every final render before you publish.
 
-    It measures and never judges the creative work. `format` ("9:16" or "16:9") sets the
-    frame size to expect; without it the frame's own shape decides. Hard failures (`passed`
-    is false): frame size, frame rate, progressive scan, audio present, integrated loudness
-    -14 LUFS +/-1.5, true peak at most -1.0 dBTP, video and audio lengths within 0.5 s of each
-    other, and black of 1.0 s or more in the middle of the video. Warnings (`passed` stays
-    true): shorter black and black at the edges, a frozen picture of 3 s or more, silence of
-    2 s or more in the middle, and, when `target` ("tiktok", "shorts" or "youtube") is given,
-    a duration above that platform's limit. A file named `-preview-` (a `render_video` preview,
-    half size and not mastered) reports frame size, loudness and true peak as warnings, and
-    its result has a `preview` note.
-    Every entry in `hard_failures` and `warnings` has `check`, `message` and, where it
-    applies, `start` and `end` in seconds. `images` holds `frames` evenly spread frames
-    (default 4) and one frame for each black gap and frozen picture, at most 8 in all: look
-    at them. Fix every hard failure; judge the warnings yourself. Long videos run in the
-    background: you get `{"job_id", "state": "running"}`; call `job_status` until it is done.
+    It measures and never judges the creative work. `format` ("9:16" or "16:9") sets the frame size to
+    expect. Hard failures (`passed` false): frame size, frame rate, progressive scan, audio present,
+    loudness -14 LUFS +/-1.5, true peak at most -1.0 dBTP, audio and video lengths within 0.5 s, black
+    of 1.0 s or more in the middle. Warnings (`passed` stays true): shorter black, a frozen picture of
+    3 s or more, silence of 2 s or more, and a duration above the `target` platform limit ("tiktok",
+    "shorts", "youtube"). A `-preview-` file reports size and loudness as warnings only.
+    Each entry in `hard_failures` and `warnings` has `check`, `message`, and `start` and `end` when they
+    apply. `images` holds at most 8 frames, including the black and frozen moments: look at them. Fix
+    every hard failure. Long videos run in the background: call `job_status`.
     """
     return qa.qa_verify_video(video_path, format=format, frames=frames, target=target)
 
@@ -418,40 +309,20 @@ def export_package(
 ) -> list[str | Image] | dict:
     """Package a finished video for publishing: the final folder with videos, covers and post.md.
 
-    Call it after `qa_verify_video` passes on the final renders. `videos` maps "9:16" and/or
-    "16:9" to the mp4 path (the files `render_video` makes in mode "final"). Write `texts`
-    yourself, for each platform's viewers:
-    - "tiktok": {"caption": str, "hashtags": [str]}
-    - "shorts": {"title": str, "description": str, "hashtags": [str]} (uses the 9:16 video)
-    - "youtube": {"title": str, "description": str, "tags": [str]} (uses the 16:9 video)
-    Give only the platforms you publish to. A hashtag gets a "#" when it lacks one.
-    `cover_times` ({"9:16": seconds, "16:9": seconds}) picks the cover frame; by default it is
-    the first of the QA's evenly spread frames that is not black. `name` sets the file names
-    (default: the project name).
+    Call it after `qa_verify_video` passes. `videos` maps "9:16" and/or "16:9" to the mp4 paths from
+    `render_video` mode "final". Write `texts` yourself, per platform, and give only the platforms you
+    publish to: "tiktok": {"caption", "hashtags"}; "shorts": {"title", "description", "hashtags"} (uses
+    the 9:16 video); "youtube": {"title", "description", "tags"} (uses the 16:9 video). `cover_times`
+    ({"9:16": seconds, "16:9": seconds}) picks the cover frame; `name` sets the file names.
 
-    Files go to `<project>/final/`: `<name>_9x16.mp4` and/or `<name>_16x9.mp4` (copied, not
-    re-encoded), `<name>_cover_9x16.jpg` (1080x1920) and `<name>_cover_16x9.jpg` (1280x720,
-    under 2 MB), and `post.md`. The covers come back as images.
-    The export refuses when QA finds a hard failure: nothing is written and `hard_failures`
-    says why. A text over a platform's length limit is listed in `violations` and marked in
-    post.md; the files are still written, so shorten the text and export again. On success
-    the project's `.work/` folder is removed.
+    Files go to `<project>/final/`: the videos (copied), covers as jpg and `post.md`. The covers come back
+    as images. The export refuses when QA has a hard failure and writes nothing. A text over a platform's
+    length limit is listed in `violations` and marked in post.md; the files are still written, so shorten
+    the text and export again. A long export runs in the background: call `job_status`.
 
-    `save_to_library` keeps what worked for the next video: after a good final, offer the
-    user to save the custom scenes, characters, plates or caption styles to their style
-    library, and pass this only after they agree. It is
-    `{"name": "yacht-scenes", "components": ["Art", "Scenes1"], "what": "...", "fits_when": "...",
-    "props": "...", "replace": false, "poster_time": 12.5}`. `components` are file names in
-    `<project>/components/` (the files they import come along). `what` says what the entry is,
-    `fits_when` when to use it (a reference where it fits, and where it does not); at most 200
-    and 250 characters, they form the entry's line in the index; `props` (optional, 600) lists
-    the props worth changing. `poster_time`
-    (optional, seconds) picks the poster frame from the final, else the cover frame is used.
-    `replace` must be true to overwrite an entry of the same name. The entry goes to
-    `<OMNIFRAME_OUTPUT_DIR>/library/<name>/` with `card.md` and a 512 px `poster.jpg`, and the
-    result has a `library` block; `studio_guide` lists the entries from then on.
-    A long video runs in the background: you get `{"job_id", "state": "running"}`; call
-    `job_status` until it is done.
+    `save_to_library` (only after the user agrees to keep a good scene): `{"name", "components": [file
+    names in <project>/components/], "what", "fits_when", "props", "replace", "poster_time"}`. The entry
+    goes to the style library, where `studio_guide` lists it from then on.
     """
     return export.export_package(
         project, videos, texts, cover_times=cover_times, name=name, save_to_library=save_to_library
@@ -526,16 +397,11 @@ def run_script(
 ) -> list[str | Image] | dict:
     """Run one of the user's own Python scripts, or list them when `name` is left out.
 
-    Call it without `name` to see the scripts in the repo's `scripts/` folder and in
-    `ARGUS_SCRIPTS_DIR`: each has a `summary` and an `args` example to copy. Call it with
-    `name` (lowercase letters, digits, underscore) and `args` (a JSON object) to run one.
-    The script's JSON result comes back as `result`. Set `args["project"]` to run inside
-    that project's folder, so relative paths in `args` resolve there; without it the
-    script runs in the output folder. A result may list `images` (file paths): they come
-    back as pictures. `timeout_s` (default 120, from 1 to 3600) stops a script that runs
-    too long; the result then has `timed_out: true`. A script that runs longer than about
-    20 seconds continues in the background: call `job_status` with the `job_id`.
-    Scripts run with the user's own rights, so run only scripts the user wrote or trusts.
+    Without `name` it lists the scripts in the repo's `scripts/` folder and in `ARGUS_SCRIPTS_DIR`, each
+    with a `summary` and an `args` example. With `name` (lowercase letters, digits, underscore) and `args`
+    (a JSON object) it runs one and returns its JSON as `result`. `args["project"]` runs it inside that
+    project's folder. A result may list `images` (paths), which come back as pictures. `timeout_s` (default
+    120) stops a long script with `timed_out: true`. Run only scripts the user wrote or trusts.
     """
     return scripts_runner.run_script(name, args, timeout_s=timeout_s)
 

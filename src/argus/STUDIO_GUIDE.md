@@ -14,6 +14,13 @@ Ask only what blocks you: the format if it is unclear (9:16, 16:9 or both) and t
 language. Decide everything else yourself and say what you decided. The saved user
 preferences below this guide override your defaults.
 
+**No look named, no reference given.** Before the storyboard, propose 2 or 3 looks that fit
+the request, in one message, in the user's language: a few words each (for an action trailer:
+"dark chrome and neon, film grain" / "bold paper cut-out" / "clean tech HUD"). Say which one you
+recommend and why, then ask the user to pick. This is the only question you ask before the
+storyboard. If the user says "you choose", take your recommendation and say so. Never take a look
+silently from a guess.
+
 ## 2. Watch before you write
 
 - Run `watch_video` on every reference and on the user's footage. Look at every
@@ -218,6 +225,19 @@ problems, then stills of those scenes only, then a preview, then the final once.
 Show the user the finished video. When they state something lasting ("always…",
 "never…", "my handle is…"), save it with `learn_and_record_memory`. Do not save
 one-off tweaks made during iterations.
+
+**Cheap rounds.** Each turn sends the whole chat again, so every picture and every file you wrote
+costs on each later turn. Edit scenes in place with small replacements; never rewrite a whole file
+or re-read a file you just wrote. Run one stills round of the whole video, fix only the scenes it
+shows wrong, and send a second round only for a visible defect. The stills reply lists pictures
+it already sent as `unchanged`: those are not new information.
+
+**Fast mode.** When the user says "no checks" (or the same in any language), skip the stills and
+the review rounds: render the preview directly, tell the user where it is, and let them watch it.
+Still run `qa_verify_video` on the final.
+
+**Final in one call.** A final makes no stills: its only check is the technical QA. Ask
+`render_video` for the final with `then: ["qa"]` to run that check in the same job. Use `job_status` (its `summary` says what is left) instead of polling by hand.
 
 ## 9. Costs and rights
 

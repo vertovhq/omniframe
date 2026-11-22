@@ -328,7 +328,32 @@ def _snapshot(job_id: str) -> dict:
         out["result"] = status.get("result") or {}
     elif status.get("state") == "error":
         out["error"] = status.get("error") or "unknown error"
-    return out
+    return {"summary": summarize(out), **out}
+
+
+def _eta_text(seconds: float) -> str:
+    s = int(round(seconds))
+    return f"{s // 60} min {s % 60:02d} s" if s >= 60 else f"{s} s"
+
+
+def summarize(snap: dict) -> str:
+    """One short English sentence on what a job is doing now, what is left, or what broke (task 20.10 item 8)."""
+    kind = snap.get("kind") or "job"
+    state = snap.get("state")
+    if state == "done":
+        return f"{kind} finished."
+    if state == "error":
+        first = str(snap.get("error") or "unknown error").strip().splitlines()[0][:240]
+        return f"{kind} failed: {first}. Fix the cause named above, then call again."
+    text = f"{kind} is {state or 'queued'}"
+    progress = snap.get("progress")
+    if isinstance(progress, (int, float)):
+        text += f" at {round(progress * 100)} %"
+    if snap.get("note"):
+        text += f" ({snap['note']})"
+    if isinstance(snap.get("eta_s"), (int, float)):
+        text += f", about {_eta_text(snap['eta_s'])} left"
+    return text + "."
 
 
 def status(job_id: str) -> dict:
@@ -412,9 +437,10 @@ def run_or_detach(
     while True:
         snap = _snapshot(job_id)
         if snap["state"] == "done":
-            return result_for_model({"engine": f"ARGUS {__version__}", **snap["result"]})
+            body = {"engine": f"ARGUS {__version__}", **snap["result"]}
+            return result_for_model({"summary": body.get("summary") or summarize(snap), **body})
         if snap["state"] == "error":
-            return {k: snap[k] for k in ("engine", "job_id", "kind", "state", "error")}
+            return {k: snap[k] for k in ("summary", "engine", "job_id", "kind", "state", "error")}
         if time.monotonic() >= deadline:
             break
         time.sleep(POLL_S)
@@ -422,7 +448,8 @@ def run_or_detach(
         "still running in a background process; call job_status with this job_id to follow it"
         + (" (an identical job was already running)" if reused else "")
     )
-    return {k: snap[k] for k in ("engine", "job_id", "kind", "state", "progress", "note", "elapsed_s")}
+    snap["summary"] = summarize(snap)
+    return {k: snap[k] for k in ("summary", "engine", "job_id", "kind", "state", "progress", "note", "elapsed_s")}
 
 
 def project_render_totals(project_root: Path) -> dict:

@@ -181,22 +181,23 @@ def test_select_frames_within_budget_keeps_every_shot() -> None:
 # ------------------------------------------------------------------ pagination
 
 def test_pagination_returns_two_sheets_per_page(many_segments: Path) -> None:
-    first = _run(many_segments, max_frames=14, page=1)
-    assert len(first["frames"]) == 14
+    # 12 frames per sheet (task 20.10 item 2): 30 frames make sheets of 12, 12 and 6
+    first = _run(many_segments, max_frames=30, page=1)
+    assert len(first["frames"]) == 30
     assert first["sheets_total"] == 3 and first["pages_total"] == 2
     assert [i["sheet"] for i in first["images"]] == [1, 2]
     assert "page=2" in first["page_note"]
 
-    second = _run(many_segments, max_frames=14, page=2)
+    second = _run(many_segments, max_frames=30, page=2)
     assert [i["sheet"] for i in second["images"]] == [3]
-    assert len(second["images"][0]["times"]) == 2
+    assert len(second["images"][0]["times"]) == 6
     assert "page_note" not in second
 
     # no frame is dropped: the sheets together cover every frame time once
     covered = [t for r in (first, second) for i in r["images"] for t in i["times"]]
     assert covered == [f["t"] for f in first["frames"]]
 
-    beyond = _run(many_segments, max_frames=14, page=3)
+    beyond = _run(many_segments, max_frames=30, page=3)
     assert beyond["images"] == [] and "does not exist" in beyond["page_note"]
 
 

@@ -48,11 +48,11 @@ FRAME_OFFSET_S = 0.15         # a shot's frame is taken this long after its firs
 LONG_SHOT_S = 6.0             # shots longer than this also get a middle frame
 HOOK_T = 0.5                  # the frame that decides whether a viewer stays
 HOOK_NEAR_S = 0.2             # a chosen frame this close to the hook time already is the hook frame
-DEFAULT_MAX_FRAMES = 24
+DEFAULT_MAX_FRAMES = 12       # one contact sheet by default (task 20.10 item 2)
 MAX_FRAMES_LIMIT = 120
-TILES_PER_SHEET = 6           # 2x3 for portrait video, 3x2 for landscape
+TILES_PER_SHEET = 12          # 3x4 for portrait video, 4x3 for landscape
 SHEETS_PER_PAGE = 2           # contact sheets returned per call
-SHEET_MAX_SIDE = 1600         # longest side of a contact sheet, in pixels
+SHEET_MAX_SIDE = 1280         # longest side of a contact sheet, in pixels (image tokens follow pixel size)
 SHEET_GAP = 6
 
 # --- get_frames ---
@@ -62,7 +62,7 @@ MAX_VIEW_SIDE = 2048
 
 HASH_CHUNK = 8 * 1024 * 1024  # content key = size + first and last 8 MB
 CACHE_VERSION = 1             # bump when the cached files change meaning
-FRAMES_VERSION = 2            # bump when select_frames or the frame sheets change; checked only for frames.<N>.json
+FRAMES_VERSION = 3            # bump when select_frames or the frame sheets change; checked only for frames.<N>.json
 
 # Verbatim prompt: Whisper otherwise "tidies" Russian speech and drops stumbles and
 # repeats, which the editing flow needs to see.
@@ -234,21 +234,24 @@ def _font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
 
 
 def _sheet_layout(frame_w: int, frame_h: int) -> tuple[int, int, int, int]:
-    """(columns, rows, tile_w, tile_h): 2x3 for portrait video, 3x2 otherwise; long side <= SHEET_MAX_SIDE."""
+    """(columns, rows, tile_w, tile_h) for one sheet of TILES_PER_SHEET tiles; long side <= SHEET_MAX_SIDE.
+
+    Portrait video: 3 columns by 4 rows. Landscape: 4 columns by 3 rows.
+    """
     aspect = frame_w / frame_h
     if frame_h > frame_w:
-        cols, rows = 2, 3
+        cols, rows = 3, 4
         tile_h = (SHEET_MAX_SIDE - SHEET_GAP * (rows + 1)) // rows
         tile_w = int(tile_h * aspect)
     else:
-        cols, rows = 3, 2
+        cols, rows = 4, 3
         tile_w = (SHEET_MAX_SIDE - SHEET_GAP * (cols + 1)) // cols
         tile_h = int(tile_w / aspect)
     return cols, rows, max(tile_w, 16), max(tile_h, 16)
 
 
 def build_sheet(tiles: list[tuple[Path, float, int]], frame_size: tuple[int, int], out: Path) -> None:
-    """One contact sheet of up to 6 `(frame_file, time, shot_number)` tiles, labelled `mm:ss.s  #shot`."""
+    """One contact sheet of up to TILES_PER_SHEET `(frame_file, time, shot_number)` tiles, labelled `mm:ss.s  #shot`."""
     cols, rows, tile_w, tile_h = _sheet_layout(*frame_size)
     width = cols * tile_w + (cols + 1) * SHEET_GAP
     height = rows * tile_h + (rows + 1) * SHEET_GAP

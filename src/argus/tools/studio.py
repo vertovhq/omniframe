@@ -8,6 +8,7 @@ the knowledge base file that `learn_and_record_memory` appends to.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from collections.abc import Iterable
@@ -22,6 +23,31 @@ from .flow_browser import _profile_dir as _flow_profile_dir
 
 # Upper bound for the preferences text, in characters, so a long file cannot flood the context.
 PREFERENCES_LIMIT = 4000
+
+# Digest of what each guide read returned during this server run (task 20.10 item 15).
+_SENT: dict[str, str] = {}
+
+
+def once(key: str, result: dict, full: bool = False) -> dict:
+    """`result`, or a one-line answer when the same content already went out in this server run.
+
+    The first read of a guide or kit group returns the full text; a repeated read with the same
+    content returns its hash only, and `full=True` asks for the text again. The state lives in
+    the server process, so a new chat on the same server gets the one line too: it must pass
+    `full=true` to see the text.
+    """
+    digest = hashlib.sha256(
+        json.dumps(result, sort_keys=True, default=str, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()[:12]
+    if not full and _SENT.get(key) == digest:
+        return {
+            "engine": f"ARGUS {__version__}",
+            "unchanged": True,
+            "hash": digest,
+            "note": f"unchanged since your last read, hash {digest}; pass full=true to get it again",
+        }
+    _SENT[key] = digest
+    return result
 
 
 def read_guide() -> str:
@@ -173,9 +199,14 @@ def sfx_group() -> dict:
     }
 
 
-def kit_group_for_model(group: str) -> dict | list:
-    """`kit_group_result` as a tool return value: `[json, Image]` when the strip is cached."""
-    result = kit_group_result(group)
+def kit_group_for_model(group: str, full: bool = False) -> dict | list:
+    """`kit_group_result` as a tool return value: `[json, Image]` when the strip is cached.
+
+    A group read again with the same content answers with one line (`once`).
+    """
+    result = once(f"kit:{group}", kit_group_result(group), full)
+    if result.get("unchanged"):
+        return result
     path = result.get("strip", {}).get("path")
     if path and Path(path).is_file():
         return [json.dumps(result, ensure_ascii=False, indent=2), Image(path=Path(path))]

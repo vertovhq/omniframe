@@ -40,6 +40,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 import uuid
 from collections import deque
@@ -86,7 +87,9 @@ AUDIO_TIMELINE_NAME = "audio-timeline"
 TIMELINE_MAX_SIDE = 1600       # the timeline image keeps its width (the model sees it at this size)
 MAX_STILLS = 12                # frames per call; they come back as one contact sheet, so one image
 DEFAULT_STILLS = 6
-SHEET_MAX_SIDE = 1600          # longest side of the contact sheet (the model sees it at this size)
+SHEET_MAX_SIDE = 1280          # longest side of the contact sheet (image tokens follow the pixel size)
+SINGLE_FRAME_MAX_SIDE = 768    # one frame asked alone is sent at this size
+STILLS_SENT = "stills-sent.json"  # <project>/cache/: picture hashes of the last stills call
 SHEET_LABEL_H = 40             # timecode and scene line under each cell
 SHEET_BG = (18, 18, 22)
 EMPTY_FRAME_SPREAD = 3         # a still whose channels all lie within this many levels is one colour
@@ -962,6 +965,24 @@ def _run_node_bundled(
 
 # ------------------------------------------------------------------ stills
 
+def _file_hash(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _read_hashes(path: Path) -> set[str]:
+    """Picture hashes of the previous stills call; empty when there is none or the file is unreadable."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {str(h) for h in data} if isinstance(data, list) else set()
+
+
+def _write_hashes(path: Path, hashes: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(hashes), encoding="utf-8")
+
+
 def one_colour(path: Path) -> tuple[int, int, int] | None:
     """The mean colour of a still that is one colour all over (an empty frame), else None."""
     with PILImage.open(path) as img:
@@ -982,12 +1003,13 @@ def sheet_grid(n: int, ratio: float) -> tuple[int, int, int, int]:
     return cols, rows, cell_w, round(cell_w / ratio)
 
 
-def build_contact_sheet(cells: Sequence[tuple[Path, str]], out: Path) -> Path:
+def build_contact_sheet(cells: Sequence[tuple[Path | None, str]], out: Path) -> Path:
     """One JPEG: every picture in a grid, reading order, each with its label under it.
 
-    The pictures of one call share a size; the first one sets the grid.
+    The pictures of one call share a size; the first real one sets the grid. A cell with no
+    picture (`None`) is a grey box: the frame was sent by an earlier call.
     """
-    with PILImage.open(cells[0][0]) as first:
+    with PILImage.open(next(p for p, _ in cells if p is not None)) as first:
         ratio = first.width / first.height
     cols, rows, cw, ch = sheet_grid(len(cells), ratio)
     sheet = PILImage.new("RGB", (cols * cw, rows * (ch + SHEET_LABEL_H)), SHEET_BG)
@@ -996,8 +1018,12 @@ def build_contact_sheet(cells: Sequence[tuple[Path, str]], out: Path) -> Path:
     font = _label_font(size)
     for i, (picture, label) in enumerate(cells):
         x, y = (i % cols) * cw, (i // cols) * (ch + SHEET_LABEL_H)
-        with PILImage.open(picture) as img:
-            sheet.paste(img.convert("RGB").resize((cw, ch), PILImage.Resampling.LANCZOS), (x, y))
+        if picture is None:
+            draw.rectangle([x, y, x + cw - 1, y + ch - 1], fill=(44, 44, 52))
+            label = f"{label} | unchanged"
+        else:
+            with PILImage.open(picture) as img:
+                sheet.paste(img.convert("RGB").resize((cw, ch), PILImage.Resampling.LANCZOS), (x, y))
         while len(label) > 4 and draw.textlength(label, font=font) > cw - 16:
             label = label[:-2] + "…"
         draw.text((x + 8, y + ch + SHEET_LABEL_H // 2), label, fill=(235, 235, 240), font=font, anchor="lm")
@@ -1279,18 +1305,35 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
             else:
                 entry["path"] = str(files[i])
             entries.append(entry)
+        # A picture the previous stills call of this project already sent is not sent again (task 20.10 item 16).
+        sent_file = root / "cache" / STILLS_SENT
+        before = _read_hashes(sent_file)
+        for e in entries:
+            e["hash"] = _file_hash(Path(e["path"]))
+            e["unchanged"] = e["hash"] in before
+        _write_hashes(sent_file, [e["hash"] for e in entries])
         if len(entries) >= 2:
             # One image for the model: every frame in a grid, each cell labelled with its time and scenes.
+            # An unchanged frame keeps its cell as a grey box, so the grid stays in place.
             sheet = renders / f"{name}-{'compare' if compare else 'stills'}-{tag}-sheet.jpg"
-            build_contact_sheet(
-                [(Path(e["path"]), f"t {e['t']:.2f} s | {e['scene']}") for e in entries], sheet,
-            )
-            result["images"] = [{"path": str(sheet), "cells": entries}]
+            cells = [
+                (None if e["unchanged"] else Path(e["path"]), f"t {e['t']:.2f} s | {e['scene']}") for e in entries
+            ]
+            if any(not e["unchanged"] for e in entries):
+                build_contact_sheet(cells, sheet)
+                result["images"] = [{"path": str(sheet), "cells": entries}]
+            else:
+                result["images"] = []
             result["image_max_side"] = SHEET_MAX_SIDE
         else:
-            result["images"] = entries
-            if compare:
-                result["image_max_side"] = COMPARE_MAX_WIDTH
+            result["images"] = [] if entries[0]["unchanged"] else entries
+            result["image_max_side"] = COMPARE_MAX_WIDTH if compare else SINGLE_FRAME_MAX_SIDE
+        unchanged = [e["t"] for e in entries if e["unchanged"]]
+        if unchanged:
+            result["unchanged"] = unchanged
+            result["unchanged_note"] = (
+                "these frames are the same pictures the previous stills call sent, so they are not sent again"
+            )
         timing["sheet_s"] = round(time.monotonic() - t_sheet, 3)
         result["stills"] = [str(f) for f in files]
         result["note"] = (
@@ -1331,11 +1374,22 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
             has_audio=info.has_audio,
             size_bytes=out.stat().st_size,
         )
+        if not preview and "qa" in payload.get("then", []):
+            # `then: ["qa"]`: the technical checks run in this job, so the model makes one call less.
+            from . import qa as qa_checks
+
+            report(0.96, "checking the file")
+            t_qa = time.monotonic()
+            checked = qa_checks.verify_video(out, format=fmt)
+            timing["qa_s"] = round(time.monotonic() - t_qa, 3)
+            result["qa"] = {k: checked[k] for k in ("passed", "failures", "warnings", "summary") if k in checked}
 
     shutil.rmtree(work, ignore_errors=True)
     result["elapsed_s"] = round(time.monotonic() - started, 1)
     timing["total_s"] = round(time.monotonic() - started, 3)
     result["timing"] = timing
+    # ARGUS time per stage only (model time is outside ARGUS); the worker sends stderr to the job's log.txt.
+    print("ARGUS stage times: " + ", ".join(f"{k} {v}" for k, v in timing.items()), file=sys.stderr, flush=True)
     return result
 
 
@@ -1351,12 +1405,20 @@ def render_video(
     name: str = "video",
     wait_s: float | None = None,
     save_sounds: Any = None,
+    then: list[str] | None = None,
 ) -> dict | list:
     """Tool logic of `render_video`: validate, then run the `render` job.
 
     An invalid request returns `{"valid": false, "errors": [...]}` and starts nothing.
     """
     root = project_dir(project)
+    chained = [str(step) for step in (then or [])]
+    bad_steps = [f"then: {step!r} is not a step; the only one is \"qa\"" for step in chained if step != "qa"]
+    if chained and mode != "final":
+        bad_steps.append("then: applies to mode \"final\" only")
+    if bad_steps:
+        return {"engine": f"ARGUS {__version__}", "valid": False, "errors": bad_steps,
+                "note": "nothing was rendered; fix the listed problems and call again"}
     payload, errors = prepare_render(
         plan, root, mode=mode, times=times, compare=compare, format=format, name=name, save_sounds=save_sounds,
     )
@@ -1367,6 +1429,7 @@ def render_video(
             "errors": errors,
             "note": "nothing was rendered; fix the listed problems and call again",
         }
+    payload["then"] = chained
     if mode != "audio" and not (engine_dir() / "node_modules").is_dir():
         raise RuntimeError(not_ready_message())
     wait = wait_s if wait_s is not None else (STILLS_WAIT_S if mode == "stills" else jobs.DEFAULT_WAIT_S)
