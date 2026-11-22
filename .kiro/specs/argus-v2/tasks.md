@@ -518,7 +518,7 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
     - Item 6 (Known issue 33): the reply of `calculate_beat_grid` has the tempo, confidence, `beat_count`, the first 12 beats and `beats_path`. Direct run on a 120 s click track at 170 BPM: reply 556 characters (limit 3,000), 342 beats in the JSON file. With `project`, the file goes to `<project>/audio/`; without it, to `<OMNIFRAME_OUTPUT_DIR>/beats/`. STUDIO_GUIDE §5 says what to do at low confidence, with no threshold in code. Tests `test_reply_is_short_and_the_full_beat_list_goes_to_a_file` and `test_without_a_project_the_file_goes_to_the_output_folder`; not run.
     - Items 1–6 pytest: not run, as the author asked. Run the full `pytest -q` and the engine typecheck when the author says "можно тесты". Closed 2026-11-21: full `pytest -q` 465 passed, exit 0 (607 s); targeted run of items 1–6 and 8: 63 passed; engine `tsc --noEmit` exit 0. The BUILD_LOG entry for 20.9 is in `docs/BUILD_LOG.md`.
 
-- [ ] 20.10 Credit economy and demo-run bugs (P1, after the demo final render; before 23.1) — model: Haiku high; Sonnet if Verify fails twice
+- [x] 20.10 Credit economy and demo-run bugs (P1, after the demo final render; before 23.1) — model: Haiku high; Sonnet if Verify fails twice
   - Source: author, 2026-11-22. The 65 s demo (`projects/kiroween-demo`) cost 83 Kiro credits in one Sonnet chat (~80 min); the 15 s octopus video cost 22 credits / 16 min. Target: a video from scratch ≤ 25 credits and ≤ 20 min. Likely main cost (Opus estimate, not measured): images that stay in the chat history and are re-sent on every turn, plus long scene-code writing on Sonnet. No creative scoring in code (product steering).
   - Images:
     1. Stills and `watch_video` return one contact sheet image by default (≤ 1280 px on the long side), not one image per frame. Single frames only when the model asks for them.
@@ -569,6 +569,17 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
     - 17: not built. A scene-level cache needs scene keys, partial renders and an ffmpeg join with audio; the spec says to skip it if it is not simple. Proposed decision: skip, to be confirmed by the author.
     - 18: each render result has `timing` per stage, and `render_timing` is summed per project in `export`. Not verified in a run.
     - Open for the author: which of 5(a) export chain, 5(c) stills checks and the 14 cut to half go in now; whether 17 is skipped; who commits the working-tree changes above (they are not mine).
+  - Notes (2026-11-22), after commit `8837a86`; the tests named below passed in the full run (523 passed, exit 0), engine `tsc --noEmit -p engine` exit 0:
+    - 19: reply-size log `<project>/.work/economy.jsonl`; `tests/test_reply_log.py`.
+    - 20: tool surface length test; `tests/test_tool_surface.py`.
+    - 21: `studio_guide()` core and `studio_guide(section=...)`; `tests/test_guide_sections.py`.
+    - 22: `then` chain on a final render (`qa`, `export`); `tests/test_chained_jobs.py`.
+    - 23: budget rules as text in the guide core and in `SKILL.md`; no code enforces them, as the item says.
+    - 24: resume file `src/argus/state.py` (`<project>/.work/state.json`); no own test, covered by the full run only.
+    - 26: `mediaUrl` in `engine/src/kit/media.ts`, documented in `groups/core.md`; `tests/test_project_images.py`.
+    - Decisions 5(c): missing-media check in the stills job; `tests/test_missing_media.py`. The safe-area check waits for 20.7b.
+    - 7: mock-up blocks in `kit/mockups.tsx` and their preview `custom/previews/mockups.tsx` (added here); `tests/test_components.py` 31 passed.
+    - Marked `[x]` at the owner's request while the octopus Verify step (credits, minutes, `economy` totals) is still open, as with task 6.
 
 - [ ] 21. Documentation (P2)
   - `README.md` (English): what ARGUS is, who it is for, the three scenarios, 60-second judge quickstart without keys (install → `argus-doctor` → connect in Kiro → sample prompts with `examples/media` and `examples/plans`), tools table, how the model works with ARGUS, Remotion license note, disclosure (design §18).

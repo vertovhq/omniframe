@@ -329,3 +329,10 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Kiro: none beyond the 20.9 checks in `tasks.md` and the steering rule for detached runs (output to files, then read back).
 - Verified: full `pytest -q` 465 passed, exit 0 (607 s); targeted run of items 1–6 and 8: 63 passed; engine `tsc --noEmit` exit 0. Direct runs: `argus-doctor` exit 0; QA on a generated 540x960 preview → passed, warnings `resolution` and `loudness`; beat grid on a 120 s click track at 170 BPM → reply 556 characters, 342 beats in the file.
 - Credits: <author fills>
+
+## Task 20.10 — Credit economy and demo-run bugs (date not recorded, Haiku 5.5 high)
+- Built: items 19–24 and 26 and the task's Decisions in commit `8837a86` (25 files): reply-size log `economy.jsonl`, shorter tool surface, guide core with sections, `then: ["qa", "export"]` chain, resume file `state.json`, `mediaUrl` for project images in custom scenes, missing-media check in the stills job; mock-up kit blocks and their preview `engine/src/custom/previews/mockups.tsx`.
+- Bugs & fixes: `test_components` raised FileNotFoundError because the preview of group `mockups` was never written → wrote it from the kit blocks. `mediaKey` was exported from `media.ts`, so the kit test wanted it in a group file → made it private and documented `mediaUrl` in `groups/core.md`. Tool surface was 9,011 characters against a 9,000 limit → shortened the `calculate_beat_grid` description.
+- Kiro: steering `tech.md` (long runs detached, output to files, read back with `read_file`); no hook or MCP result.
+- Verified: `tests/test_components.py` 31 passed; full `pytest -q -rf` 523 passed, exit 0 (13 min 41 s); engine `tsc --noEmit -p engine` exit 0. Not verified: the octopus run (Verify step 2: credits and minutes before and after, `economy` totals from `export_package`).
+- Credits: <author fills>
