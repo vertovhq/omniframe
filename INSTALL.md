@@ -6,6 +6,23 @@ About 30 minutes, most of it downloads. If a step fails, copy the exact error te
 Supported: Windows, macOS and Linux. The commands below show Windows PowerShell first, then
 macOS and Linux.
 
+## Option B: no clone (uvx or Kiro Power)
+
+Install `uv` (https://docs.astral.sh/uv/), ffmpeg and Node.js 18 or newer. Then use this command as the
+MCP server command in your client:
+
+```bash
+uvx --from git+https://github.com/vertovhq/argus argus-studio
+```
+
+For Kiro, the folder [`kiro-power/`](kiro-power/README.md) is a power that installs the same server with
+its guide. Import it from a clone with Add Custom Power.
+
+The first start copies the graphics engine into `~/.argus/engine` and installs its packages in the
+background. Check it with the `doctor` tool, or run
+`uvx --from git+https://github.com/vertovhq/argus argus-doctor`. Keys go in `~/.argus/.env`. The steps
+below (sections 2 to 4) apply only to Option A, the clone.
+
 ## 1. Requirements
 
 | Tool | Why | Check |
@@ -140,5 +157,6 @@ Files go to `<OMNIFRAME_OUTPUT_DIR>/projects/demo/`. Long jobs return a `job_id`
 | `argus-doctor` reports ffmpeg or Node missing | PATH did not update. Open a new terminal. |
 | `provider api` error mentioning 2026-10-22 | Veo API is shut down. Use `provider="flow"`. |
 | New tools are not in the chat | The MCP server was not reloaded after the config change. |
+| Render says the engine is installing or not installed (uvx or Kiro Power) | The background install is still running or failed. The `doctor` tool shows the step, and `~/.argus/engine-setup.log` has the output. |
 | Tool call timed out | Not an error in most cases. Long work runs in the background; check `job_status`. |
 | Render does not match what you wanted | Check the stills first and say what is wrong before the final render. |

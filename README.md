@@ -76,6 +76,22 @@ The install script installs the Python package, the edge-tts voice, the Node pac
 and a `.env` copy of `.env.example`. It also tries to install Chromium for the optional Flow route.
 Run it inside the activated venv. Step by step: [INSTALL.md](INSTALL.md).
 
+### Without cloning: uvx or Kiro Power
+
+With [uv](https://docs.astral.sh/uv/) installed, the server runs straight from GitHub. Use this as the
+MCP command:
+
+```bash
+uvx --from git+https://github.com/vertovhq/argus argus-studio
+```
+
+On the first start the server installs the graphics engine into `~/.argus/engine` in the background. It
+needs Node.js 18 or newer and ffmpeg on PATH. Check progress with the `doctor` tool, or with
+`uvx --from git+https://github.com/vertovhq/argus argus-doctor`. Keys go in `~/.argus/.env`.
+
+The [`kiro-power/`](kiro-power/README.md) folder is a Kiro power. It bundles the same server and the
+working guide in one install.
+
 ## Connect your client
 
 Kiro reads `.kiro/settings/mcp.json` in the workspace, or `~/.kiro/settings/mcp.json` for every

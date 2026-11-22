@@ -75,6 +75,22 @@ bash install.sh     # Windows: powershell -ExecutionPolicy Bypass -File install.
 `.env.example`. Он также пробует поставить Chromium для необязательного пути Flow. Запускай его в
 активированном venv. Пошагово: [INSTALL.md](INSTALL.md).
 
+### Без клонирования: uvx или Kiro Power
+
+С установленным [uv](https://docs.astral.sh/uv/) сервер запускается прямо с GitHub. Эта команда
+подходит как MCP-команда:
+
+```bash
+uvx --from git+https://github.com/vertovhq/argus argus-studio
+```
+
+При первом запуске сервер ставит движок графики в `~/.argus/engine` в фоне. Нужны Node.js 18 или новее
+и ffmpeg в PATH. Ход установки видно в инструменте `doctor` или в
+`uvx --from git+https://github.com/vertovhq/argus argus-doctor`. Ключи лежат в `~/.argus/.env`.
+
+Папка [`kiro-power/`](kiro-power/README.md) — power для Kiro. Она ставит тот же сервер и рабочий гид
+одним действием.
+
 ## Подключение клиента
 
 Kiro читает `.kiro/settings/mcp.json` в рабочей папке или `~/.kiro/settings/mcp.json` для всех папок:

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "argus-studio",
+  "version": "3.0.0-dev.0",
+  "description": "Vertical video studio for TikTok, YouTube Shorts and Reels: watches references and footage, cuts recordings, draws kinetic graphics, makes voiceovers and captions, renders, checks quality and exports the upload package.",
+  "author": {
+    "name": "VertovHQ",
+    "url": "https://github.com/vertovhq"
+  },
+  "keywords": [
+    "video",
+    "vertical video",
+    "tiktok",
+    "youtube shorts",
+    "reels",
+    "voiceover",
+    "captions",
+    "video editing",
+    "remotion",
+    "ffmpeg",
+    "loudness"
+  ],
+  "homepage": "https://github.com/vertovhq/argus",
+  "repository": "https://github.com/vertovhq/argus",
+  "license": "AGPL-3.0-or-later"
+}

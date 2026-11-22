@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover
     # mcp 1.x (FastMCP era) — same decorator & run API
     from mcp.server.fastmcp import FastMCP as MCPServer  # type: ignore[no-redef]
 
-from . import __version__, jobs
+from . import __version__, engine_setup, jobs
 from .config import CONFIG
 from .media_out import Image
 from .tools import beats, export, memory, qa, render, scripts_runner, sfx, studio, watch
@@ -576,6 +576,10 @@ def main() -> None:
         jobs.cleanup_old_jobs()
     except Exception as exc:  # housekeeping must never stop the server
         print(f"[ARGUS] job cleanup skipped: {exc}", file=sys.stderr)
+    try:
+        engine_setup.ensure_started()  # no-op for a repository checkout; never waits
+    except Exception as exc:
+        print(f"[ARGUS] engine setup not started: {exc}", file=sys.stderr)
     mcp.run()
 
 

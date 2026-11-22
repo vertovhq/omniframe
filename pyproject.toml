@@ -49,5 +49,11 @@ path = "src/argus/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/argus"]
 
+# The render engine travels inside the wheel as argus/_engine; see src/argus/engine_setup.py.
+# Hatch is expected to skip git-ignored files here (engine/node_modules, engine/public/sfx).
+# Check the wheel's contents before a release; this is not verified yet.
+[tool.hatch.build.targets.wheel.force-include]
+"engine" = "argus/_engine"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

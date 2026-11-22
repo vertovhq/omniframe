@@ -164,8 +164,11 @@ def check_npx() -> dict:
 
 
 def check_engine() -> dict:
-    env = os.environ.get("ARGUS_ENGINE_DIR", "").strip()
-    eng = Path(env).resolve() if env else Path(__file__).resolve().parents[2] / "engine"
+    from . import engine_setup
+
+    if engine_setup.is_packaged():
+        return _check_packaged_engine(engine_setup)
+    eng = engine_setup.resolve_engine_dir()
     if not (eng / "package.json").exists():
         return _check(
             "engine", "engine/ (Remotion)", "fail", f"engine not found: {eng}",
@@ -181,6 +184,32 @@ def check_engine() -> dict:
             "engine", "engine/ (Remotion)", "fail", f"render packages missing: {', '.join(missing)} ({eng})", install,
         )
     return _check("engine", "engine/ (Remotion)", "ok", str(eng))
+
+
+def _check_packaged_engine(engine_setup) -> dict:
+    """Engine from a package install: its state comes from the background installer."""
+    label = "engine/ (Remotion)"
+    eng = engine_setup.resolve_engine_dir()
+    if engine_setup.engine_ready():
+        return _check("engine", label, "ok", f"{eng} (installed by ARGUS {__version__})")
+    status = engine_setup.read_status()
+    state = status.get("state")
+    if state == "installing" and engine_setup._pid_alive(int(status.get("pid") or 0)):
+        return _check(
+            "engine", label, "warn",
+            f"installing in the background, step: {status.get('step') or 'starting'}; log: {engine_setup.log_path()}",
+            "wait and run argus-doctor again",
+        )
+    if state == "error":
+        return _check(
+            "engine", label, "fail", str(status.get("error") or "install failed"),
+            f"fix the problem, restart the argus-studio MCP server to retry; log: {engine_setup.log_path()}",
+        )
+    return _check(
+        "engine", label, "fail", "not installed yet",
+        "restart the argus-studio MCP server (it installs the engine in the background), "
+        "or run: python -m argus.engine_setup",
+    )
 
 
 def check_render_browser() -> dict:

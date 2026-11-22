@@ -51,6 +51,7 @@ from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
 
 from .. import __version__, jobs
+from ..engine_setup import not_ready_message, resolve_engine_dir
 from ..captions import _token as _caption_token
 from ..captions import clean_word_timings, load_words, remap_words_to_clips, resolve_cues
 from ..config import CONFIG
@@ -178,11 +179,8 @@ def _ensure_default_sfx() -> Path:
 
 
 def engine_dir() -> Path:
-    override = os.environ.get("ARGUS_ENGINE_DIR", "").strip()
-    if override:
-        return Path(override).resolve()
-    # src/argus/tools/render.py -> repo root -> engine/
-    return Path(__file__).resolve().parents[3] / "engine"
+    """The Remotion engine folder: `ARGUS_ENGINE_DIR`, the repository `engine/`, or `~/.argus/engine`."""
+    return resolve_engine_dir()
 
 
 def _find_browser() -> str | None:
@@ -1287,6 +1285,6 @@ def render_video(
             "note": "nothing was rendered; fix the listed problems and call again",
         }
     if mode != "audio" and not (engine_dir() / "node_modules").is_dir():
-        raise RuntimeError(f"The engine is not installed: run `npm install` inside {engine_dir()}.")
+        raise RuntimeError(not_ready_message())
     wait = wait_s if wait_s is not None else (STILLS_WAIT_S if mode == "stills" else jobs.DEFAULT_WAIT_S)
     return jobs.run_or_detach("render", payload, wait_s=wait)

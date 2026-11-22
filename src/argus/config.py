@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def find_env_file(cwd: Path | None = None, repo_root: Path | None = None) -> Path | None:
-    """First existing env file, in order: `ARGUS_ENV_FILE`, `./.env`, `<repo>/.env`.
+    """First existing env file, in order: `ARGUS_ENV_FILE`, `./.env`, `<repo>/.env`, `~/.argus/.env`.
 
     An `ARGUS_ENV_FILE` that points at a missing file is skipped, so the lookup
     continues with the next candidate.
@@ -30,6 +30,8 @@ def find_env_file(cwd: Path | None = None, repo_root: Path | None = None) -> Pat
         candidates.append(Path(explicit).expanduser())
     candidates.append((cwd or Path.cwd()) / ".env")
     candidates.append((repo_root or REPO_ROOT) / ".env")
+    # package installs (uvx, Kiro Power) have no repository: keys go in ~/.argus/.env
+    candidates.append(Path.home() / ".argus" / ".env")
     for candidate in candidates:
         if candidate.is_file():
             return candidate.resolve()
