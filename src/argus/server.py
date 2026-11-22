@@ -214,7 +214,7 @@ def voice_options(
     without asking), `plan` (the ElevenLabs tier, or a note when it cannot be read),
     `edge_voices` (free defaults per language), `gemini_voices` (names),
     `providers` (what works right now and why not) and `default_provider`. `limit`
-    caps every list (max 50), and the whole answer stays under 6000 characters: when
+    caps every list (max 50), and the whole answer stays under 9000 characters: when
     it would be longer, the longest lists lose their last voices and `notes` says so,
     so narrow the search with `language`, `gender` and `query` instead of raising `limit`.
     Pass a returned `id` as `voice` to `synthesize_voiceover`.

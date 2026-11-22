@@ -26,6 +26,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -37,7 +38,7 @@ from typing import Protocol
 from .. import __version__, jobs
 from ..config import CONFIG
 from ..ffmpeg import run_ffmpeg, stream_info
-from ..project import project_dir, slugify
+from ..project import project_dir, project_holdings, slugify
 from . import model_catalog, watch
 
 # ------------------------------------------------------------------ constants
@@ -133,7 +134,7 @@ _LANGUAGE_NAMES = {
 
 MAX_VOICE_LIST = 50
 VOICE_DESCRIPTION_CHARS = 80      # a voice's description in `voice_options`
-VOICE_RESPONSE_MAX_CHARS = 6000   # `voice_options` without `details`, measured as JSON with indent=2 (what the client gets)
+VOICE_RESPONSE_MAX_CHARS = 9000   # `voice_options` without `details`, measured as JSON with indent=2 (what the client gets); was 6000, too small for the models and provider texts (about 6000 already) so no voice fit
 MAX_QUERY_WORDS = 4               # Voice Library search runs once per query word
 # https://elevenlabs.io/docs/api-reference/voices/voice-library/get-shared : `free_users_allowed` (boolean) says
 # whether free users may use a library voice. Those with false go to their own list, marked as paid-plan only.
@@ -325,6 +326,13 @@ def _eleven_headers() -> dict[str, str]:
     return {"xi-api-key": CONFIG.elevenlabs_api_key, "Accept": "application/json"}
 
 
+# 429 (rate limit) answers are retried this many times. The wait is the standard `Retry-After` header
+# when the server sends one, else ELEVEN_RATE_BACKOFF_S doubled per retry. The ElevenLabs error page
+# (api-reference/errors) could not be read from here, so its rate-limit wording is not checked.
+ELEVEN_RATE_RETRIES = 3
+ELEVEN_RATE_BACKOFF_S = 2.0
+
+
 def _eleven_json(method: str, path: str, params: dict | None = None, body: dict | None = None,
                  timeout: float = ELEVEN_HTTP_TIMEOUT_S) -> dict | list:
     """One ElevenLabs JSON call. Errors carry the HTTP status and a short server message, never the key."""
@@ -338,15 +346,58 @@ def _eleven_json(method: str, path: str, params: dict | None = None, body: dict 
     if body is not None:
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json"
-    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    for attempt in range(ELEVEN_RATE_RETRIES + 1):
+        request = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            text = _eleven_error_text(exc.code, method, path, exc.read().decode("utf-8", "replace"))
+            if exc.code != 429:
+                raise RuntimeError(text) from exc
+            wait = _rate_wait_s(exc, attempt)
+            if attempt < ELEVEN_RATE_RETRIES:
+                time.sleep(wait)
+                continue
+            raise RuntimeError(f"{text}; rate limited, wait {wait} s before the next call") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"ElevenLabs is not reachable: {exc.reason}") from exc
+    raise RuntimeError("ElevenLabs call not sent")  # unreachable: the loop returns or raises
+
+
+def _rate_wait_s(exc: urllib.error.HTTPError, attempt: int) -> int:
+    """Seconds to wait after a 429: the server's `Retry-After` when it gives one, else a doubling pause."""
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", "replace")[:300]
-        raise RuntimeError(f"ElevenLabs HTTP {exc.code} on {method} {path}: {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"ElevenLabs is not reachable: {exc.reason}") from exc
+        return max(1, min(60, int(float(exc.headers.get("Retry-After", "")))))
+    except (TypeError, ValueError):
+        return int(ELEVEN_RATE_BACKOFF_S * (2 ** attempt))
+
+
+def _eleven_error_text(code: int, method: str, path: str, body: str) -> str:
+    """What a refused ElevenLabs call says: the HTTP code, the server's message, and what the user can change.
+
+    ElevenLabs answers `{"detail": {"status": "missing_permissions", "message": "... missing the permission
+    voices_read ..."}}` when the key lacks a permission. The key itself is never part of the text.
+    """
+    message = body[:300]
+    status = ""
+    try:
+        detail = json.loads(body).get("detail")
+    except (ValueError, AttributeError):
+        detail = None
+    if isinstance(detail, dict):
+        status = str(detail.get("status") or "")
+        message = str(detail.get("message") or status or message)[:300]
+    elif isinstance(detail, str):
+        message = detail[:300]
+    text = f"ElevenLabs HTTP {code} on {method} {path}: {message}"
+    permission = re.search(r"permission (\w+)", message)
+    if status == "missing_permissions" and permission:
+        text += (f". The API key lacks the permission {permission.group(1)}: enable it for this key in the "
+                 "ElevenLabs dashboard (API keys), or set a key that has it")
+    elif code == 401:
+        text += ". The API key is missing or wrong: check ELEVENLABS_API_KEY in .env"
+    return text
 
 
 _model_limits: dict[str, int] = {}
@@ -385,7 +436,6 @@ def _eleven_tts_models(errors: dict[str, str]) -> list[dict]:
             "name": entry.get("name") or model_id,
             "use": "text to speech",
             "max_chars": entry.get("maximum_text_length_per_request") or ELEVEN_CHAR_LIMITS.get(model_id),
-            "languages": _shorten(", ".join(str(lang.get("name", "")) for lang in entry.get("languages") or []), 120),
         }))
     ranked = model_catalog.newest_first(models)
     default = CONFIG.eleven_model or (ranked[0]["id"] if ranked else None)
@@ -857,6 +907,7 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
 
     result: dict = {
         "audio": str(out),
+        "project_folder": str(root),  # where the files went; check it when the project name was typed by hand
         "words_path": str(words_path) if words is not None else None,
         "duration": duration,
         "provider": provider.name,
@@ -866,6 +917,11 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         "words": len(words) if words is not None else 0,
         "parts": len(chunks),
     }
+    if payload.get("project_holds"):
+        result["project_note"] = (
+            f"project {root.name!r} already holds {', '.join(payload['project_holds'])} from earlier work; this voice "
+            "went into its audio/ folder. If this is a new video, stop and call again with a new project name."
+        )
     if provider.name == "elevenlabs":
         result["delivery"] = delivery_style(model or "")
     if provider.name == "edge" and _TAG_RE.search(text):
@@ -899,6 +955,8 @@ def synthesize_voiceover(
     payload = {
         "text": text,
         "project": project,
+        "project_holds": project_holdings(project),  # read before the job creates folders
+
         "provider": (provider or "").strip().lower() or None,
         "voice": voice,
         "model": model,
@@ -1037,6 +1095,13 @@ def _edge_voices(code: str | None, gender: str | None, words: list[str], limit: 
 def _json_size(value: object) -> int:
     """Characters of `value` as the client receives it (JSON, indent 2, no \\u escapes)."""
     return len(json.dumps(value, ensure_ascii=False, indent=2, default=str))
+
+
+def _voice_count(result: dict) -> int:
+    """How many voices the answer lists, the paid-plan list included."""
+    paid = result.get("library_voices_paid_plan_only")
+    listed = sum(len(result.get(k) or []) for k in ("own_voices", "library_voices", "edge_voices", "gemini_voices"))
+    return listed + (len(paid["voices"]) if paid else 0)
 
 
 def _trim_voice_lists(result: dict, max_chars: int) -> int:
@@ -1191,6 +1256,12 @@ def voice_options(
     if code and code not in EDGE_VOICES:
         notes.append(f"no edge default for {code!r}: any ShortName from `edge-tts --list-voices` works as `voice`")
     gemini = [v for v in AVAILABLE_VOICES if not words or _word_hits(words, v)][:limit]
+    edge = _edge_voices(code, sex, words, limit)
+    if not (own or library or library_paid or edge or gemini) and not errors and (language or gender or query):
+        notes.append(
+            f"no voice matches language={language!r}, gender={gender!r}, query={query!r}: gender takes male or "
+            "female, and query words must occur in a voice's name, description or labels (mostly English)"
+        )
     models = _model_options(errors, notes)
     result: dict = {
         "engine": f"ARGUS {__version__}",
@@ -1199,7 +1270,7 @@ def voice_options(
         "providers": _provider_status(),
         "own_voices": own,
         "library_voices": library,
-        "edge_voices": _edge_voices(code, sex, words, limit),
+        "edge_voices": edge,
         "gemini_voices": gemini,
     }
     if library_paid:
@@ -1224,6 +1295,13 @@ def voice_options(
     notes.append(cut_note)
     if not _trim_voice_lists(result, VOICE_RESPONSE_MAX_CHARS):
         notes.remove(cut_note)
+    elif not _voice_count(result):
+        # the rest of the answer alone is over the limit: say so, instead of an empty list with a vague note
+        notes[-1] = (
+            f"no voice fits: the rest of this answer ({_json_size(result)} characters: models, provider_choice, "
+            f"providers, notes) takes the {VOICE_RESPONSE_MAX_CHARS}-character room. Tell the user that no voice "
+            "could be listed; the author can raise VOICE_RESPONSE_MAX_CHARS in tools/voiceover.py"
+        )
     if not notes:
         del result["notes"]
     return result

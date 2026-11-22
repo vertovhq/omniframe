@@ -239,6 +239,29 @@ def test_public_dir_links_files_and_rewrites_paths(root: Path, tmp_path: Path) -
     assert "audio" not in bare  # stills carry no sound
 
 
+def test_component_media_is_linked_again_from_the_project_index(root: Path, tmp_path: Path) -> None:
+    """A component names a file by its public path. A later job whose plan no longer names the file
+    must still link it, or the engine answers 404 (bug seen on 2026-11-22)."""
+    video = _tone(tmp_path / "scr1.wav")
+    index = root / "cache" / render.PUBLIC_INDEX
+    first = render._PublicDir(root / ".work" / "first", [], index=index)
+    rel = first.add(str(video), "scenes[0].media")
+    first.remember()
+    assert index.is_file()
+
+    components = root / render.COMPONENTS_DIR
+    components.mkdir(parents=True, exist_ok=True)
+    (components / "mediaPaths.ts").write_text(f'export const MEDIA = {{scr1: "{rel}"}};\n', encoding="utf-8")
+    later = render._PublicDir(root / ".work" / "later", [], index=index)  # a plan that names no video
+    assert not (later.root / rel).exists()
+    assert render.link_component_media(later, components) == [rel]
+    assert os.path.samefile(later.root / rel, video)
+
+    # a name the project never added is left alone, and a linked name is not linked twice
+    (components / "other.tsx").write_text('const a = "m/00000000-missing.mp4";\n', encoding="utf-8")
+    assert render.link_component_media(later, components) == []
+
+
 # ------------------------------------------------------------------ stills comparison
 
 def test_side_by_side_puts_reference_left_and_render_right(tmp_path: Path) -> None:

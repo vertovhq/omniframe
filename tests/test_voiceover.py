@@ -448,7 +448,7 @@ def test_tool_logic_validates_then_starts_a_job(voice_env) -> None:
     kind, data, wait_s = started[0]
     assert kind == "voiceover" and wait_s == 5
     assert data == {"text": "Hello", "project": "My Video", "provider": None, "voice": "Brian",
-                    "model": None, "name": "Intro Take", "settings": {}}
+                    "model": None, "name": "Intro Take", "settings": {}, "project_holds": []}
 
     with pytest.raises(ValueError, match="empty text"):
         voiceover.synthesize_voiceover("  ", "p")

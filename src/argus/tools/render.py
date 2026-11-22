@@ -77,7 +77,7 @@ from ..plan import (
 )
 from ..project import project_dir, slugify
 from . import media_prep, sounds
-from .components import EngineHold, check_components, used_components
+from .components import COMPONENTS_DIR, EngineHold, check_components, used_components
 from .library import project_library_dir
 from .watch import format_time
 
@@ -128,6 +128,7 @@ CLIP_END_SLACK_S = 0.1         # container durations are rounded; `out` may exce
 PROTOCOL = "@@ARGUS "          # prefix of the stdout lines of engine/scripts/render.mjs
 DEFAULT_SFX = ("whoosh.mp3", "pop.mp3", "hit.wav")
 MEDIA_DIR = "m"                # inside the public dir; plan files are linked here
+PUBLIC_INDEX = "public-index.json"  # <project>/cache/: public name under m/ -> source file (see _PublicDir)
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -595,12 +596,20 @@ def _link_or_copy(src: Path, dst: Path) -> None:
 
 
 class _PublicDir:
-    """The per-job public dir: engine fonts plus every file of the plan, under `m/`."""
+    """The per-job public dir: engine fonts plus every file of the plan, under `m/`.
 
-    def __init__(self, root: Path, bases: Sequence[Path]) -> None:
+    `index` is the project's `cache/public-index.json`, which maps each name under `m/` to its source
+    file. Custom components name media by that path, so `link_component_media` needs it to link a file
+    that an earlier job added and this job's plan no longer names.
+    """
+
+    def __init__(self, root: Path, bases: Sequence[Path], index: Path | None = None) -> None:
         self.root = root
         self.bases = list(bases)
         self._done: dict[Path, str] = {}
+        self._index_path = index
+        self._names: dict[str, str] = _read_name_index(index)
+        self._new: dict[str, str] = {}
         fonts = engine_dir() / "public" / "fonts"
         if fonts.is_dir():
             for font in fonts.iterdir():
@@ -620,7 +629,77 @@ class _PublicDir:
             rel = f"{MEDIA_DIR}/{digest}-{_SAFE_NAME.sub('_', src.name)}"
             _link_or_copy(src, self.root / rel)
             self._done[src] = rel
+            if self._names.get(rel) != str(src):
+                self._new[rel] = str(src)
+                self._names[rel] = str(src)
         return rel
+
+    def source_of(self, rel: str) -> Path | None:
+        """The source file a name under `m/` was made from, from this project's index."""
+        value = self._names.get(rel)
+        return Path(value) if value else None
+
+    def remember(self) -> None:
+        """Merge the names this job added into the project index.
+
+        Jobs of one project can run at the same time, so the file is read again before it is
+        written. The index is only a shortcut: a failed write is ignored.
+        """
+        if self._index_path is None or not self._new:
+            return
+        merged = _read_name_index(self._index_path)
+        merged.update(self._new)
+        try:
+            self._index_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._index_path.with_name(f"{self._index_path.name}.{uuid.uuid4().hex[:6]}.tmp")
+            tmp.write_text(json.dumps(merged, indent=1, sort_keys=True), encoding="utf-8")
+            os.replace(tmp, self._index_path)
+        except OSError:
+            return
+        self._new = {}
+
+
+def _read_name_index(path: Path | None) -> dict[str, str]:
+    """`{name under m/: source path}` from the project index; empty when missing or unreadable."""
+    if path is None or not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(k): str(v) for k, v in data.items()}
+
+
+COMPONENT_MEDIA = re.compile(r"m/[0-9a-f]{8}-[A-Za-z0-9._-]+")
+
+
+def link_component_media(public: _PublicDir, components: Path) -> list[str]:
+    """Link the files that custom components name by their public path, `m/<digest>-<file>`.
+
+    A component reads a media file by the name `_PublicDir.add` gave it in an earlier job
+    (`components/mediaPaths.ts`). A plan that no longer names that file would leave it out of the
+    public dir, and the render would fail with HTTP 404 on the file. The name is looked up in the
+    project index and the file is linked again. Returns the names that were linked.
+    """
+    if not components.is_dir():
+        return []
+    named: set[str] = set()
+    for path in components.rglob("*"):
+        if path.is_file() and path.suffix in (".ts", ".tsx"):
+            named.update(COMPONENT_MEDIA.findall(path.read_text(encoding="utf-8", errors="replace")))
+    linked: list[str] = []
+    for rel in sorted(named):
+        dst = public.root / rel
+        if dst.exists():
+            continue
+        src = public.source_of(rel)
+        if src is None or not src.is_file():
+            continue  # never added by a job of this project: nothing to link, the render reports the 404
+        _link_or_copy(src, dst)
+        linked.append(rel)
+    return linked
 
 
 def _prepare_clip_media(
@@ -1098,7 +1177,7 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
 
     timing: dict[str, Any] = {}
     report(0.01, "preparing files")
-    public = _PublicDir(work / "public", [Path(b) for b in payload["bases"]])
+    public = _PublicDir(work / "public", [Path(b) for b in payload["bases"]], index=root / "cache" / PUBLIC_INDEX)
     bases = [Path(b) for b in payload["bases"]]
     clip_media = _prepare_clip_media(plan, bases, root, with_audio=mode != "stills", report=report)
     # Sound events become WAV files at known times (`sounds.resolve_events`); the engine only plays them.
@@ -1113,6 +1192,8 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         engine_plan, payload.get("caption_words"), public,
         with_audio=mode != "stills", clip_media=clip_media, cues=payload.get("cues"),
     )
+    relinked = link_component_media(public, root / COMPONENTS_DIR)
+    public.remember()
     spec: dict[str, Any] = {
         "props": props,
         "publicDir": str(public.root),
@@ -1129,6 +1210,8 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         "duration": plan.duration,
         "project": root.name,
     }
+    if relinked:
+        result["relinked_media"] = relinked  # files a component names that this plan does not
     if payload.get("warnings") or sfx_warnings:
         result["warnings"] = [*payload.get("warnings", []), *sfx_warnings]
     if (note := style_note(mode, plan)) is not None:

@@ -85,7 +85,8 @@ class FakeApi:
 
     def __init__(self, library: object = LIBRARY, own: object = OWN, fail_library: int | None = None,
                  tier: str = "creator", plan_error: bool = False, pages: list[list[dict]] | None = None,
-                 models: object = None, fail_models: int | None = None) -> None:
+                 models: object = None, fail_models: int | None = None,
+                 fail_voices: int | None = None, voices_error: object = None) -> None:
         self.calls: list[tuple[str, dict]] = []
         self.library = library
         self.own = own
@@ -95,6 +96,8 @@ class FakeApi:
         self.pages = pages
         self.models = MODELS if models is None else models
         self.fail_models = fail_models
+        self.fail_voices = fail_voices
+        self.voices_error = voices_error
 
     def __call__(self, request, timeout=None):
         parsed = urlparse(request.full_url)
@@ -105,6 +108,9 @@ class FakeApi:
                 raise urllib.error.HTTPError(request.full_url, 500, "no", {}, io.BytesIO(b'{"detail":"down"}'))
             return Reply({"tier": self.tier})
         if parsed.path == "/v2/voices":
+            if self.fail_voices:
+                raise urllib.error.HTTPError(request.full_url, self.fail_voices, "no", {},
+                                             io.BytesIO(json.dumps(self.voices_error).encode("utf-8")))
             if self.pages is not None:
                 index = int(query.get("next_page_token", "0"))
                 last = index == len(self.pages) - 1
@@ -304,6 +310,47 @@ def test_a_refused_library_search_does_not_hide_own_voices(monkeypatch: pytest.M
     assert "402" in result["errors"]["library_voices"] and "sk_test" not in json.dumps(result)
 
 
+MISSING_VOICES_READ = {"detail": {"status": "missing_permissions",
+                                  "message": "The API key you used is missing the permission voices_read to execute this operation."}}
+
+
+def test_a_refused_voice_list_names_the_http_code_and_the_missing_key_permission(monkeypatch, keyed) -> None:
+    monkeypatch.setattr("urllib.request.urlopen", FakeApi(fail_voices=401, voices_error=MISSING_VOICES_READ))
+    result = voiceover.voice_options(language="ru")
+
+    assert result["own_voices"] == []
+    text = result["errors"]["own_voices"]
+    assert "HTTP 401 on GET /v2/voices" in text
+    assert "lacks the permission voices_read" in text and "API keys" in text
+    assert "sk_test" not in json.dumps(result)
+    assert [v["name"] for v in result["edge_voices"]] == ["Dmitry", "Svetlana"]  # the other providers still answer
+    assert not any("no voice fits" in note for note in result.get("notes", []))
+
+
+def test_a_key_refused_as_invalid_is_told_to_check_the_env_variable(monkeypatch, keyed) -> None:
+    invalid = {"detail": {"status": "invalid_api_key", "message": "Invalid API key"}}
+    monkeypatch.setattr("urllib.request.urlopen", FakeApi(fail_voices=401, voices_error=invalid))
+    text = voiceover.voice_options()["errors"]["own_voices"]
+    assert "HTTP 401" in text and "Invalid API key" in text and "ELEVENLABS_API_KEY" in text
+
+
+def test_when_the_rest_of_the_answer_fills_the_room_the_note_says_no_voice_fits(monkeypatch, keyed) -> None:
+    # provider_choice and providers alone are about 1750 characters, so 1500 leaves no room for any voice
+    monkeypatch.setattr(voiceover, "VOICE_RESPONSE_MAX_CHARS", 1500)
+    result = voiceover.voice_options(language="ru")
+
+    assert result["own_voices"] == [] and result["edge_voices"] == [] and result["gemini_voices"] == []
+    assert result["library_voices"] == [] and "library_voices_paid_plan_only" not in result
+    assert any(note.startswith("no voice fits") and "VOICE_RESPONSE_MAX_CHARS" in note for note in result["notes"])
+
+
+def test_a_filter_that_matches_no_voice_is_said_not_left_empty(no_keys) -> None:
+    result = voiceover.voice_options(query="глубокий мужской голос")
+
+    assert result["edge_voices"] == [] and result["gemini_voices"] == []
+    assert any(note.startswith("no voice matches") and "глубокий" in note for note in result["notes"])
+
+
 # ------------------------------------------------------------------ size and details
 
 def test_free_plan_moves_non_premade_and_library_voices_to_the_paid_list(monkeypatch: pytest.MonkeyPatch,
@@ -498,11 +545,11 @@ def test_limit_caps_every_list(monkeypatch: pytest.MonkeyPatch, keyed) -> None:
     assert len(voiceover.voice_options(limit=500)["own_voices"]) == 50
 
 
-def test_the_answer_stays_under_6000_characters_and_says_what_was_left_out(monkeypatch: pytest.MonkeyPatch, keyed) -> None:
+def test_the_answer_stays_under_9000_characters_and_says_what_was_left_out(monkeypatch: pytest.MonkeyPatch, keyed) -> None:
     monkeypatch.setattr("urllib.request.urlopen", FakeApi(library=BIG_LIBRARY, own=BIG_OWN))
     result = voiceover.voice_options(limit=50)
 
-    assert _size(result) <= voiceover.VOICE_RESPONSE_MAX_CHARS == 6000
+    assert _size(result) <= voiceover.VOICE_RESPONSE_MAX_CHARS == 9000
     assert any("left out" in note and "language, gender or query" in note for note in result["notes"])
     assert result["own_voices"][0]["id"].startswith("own000")  # the best-ranked voices are the ones kept
     kept = [*result["own_voices"], *result["library_voices"], *result["library_voices_paid_plan_only"]["voices"]]
@@ -515,7 +562,7 @@ def test_details_come_on_top_of_the_voices_and_the_answer_still_fits(monkeypatch
     plain = voiceover.voice_options(limit=50)
     full = voiceover.voice_options(limit=50, details=True)
 
-    assert _size(full) <= 6000
+    assert _size(full) <= 9000
     assert "delivery" in full and len(full["models"]["elevenlabs"]) == 2  # the rules are never the part that is cut
     assert len(full["own_voices"]) < len(plain["own_voices"])  # the room they take comes out of the voices
     assert any("left out" in note for note in full["notes"])
@@ -523,12 +570,12 @@ def test_details_come_on_top_of_the_voices_and_the_answer_still_fits(monkeypatch
 
 def test_a_small_answer_has_no_left_out_note(keyed) -> None:
     result = voiceover.voice_options()
-    assert _size(result) <= 6000
+    assert _size(result) <= 9000
     assert not any("left out" in note for note in result.get("notes", []))
 
 
 def test_the_answer_without_a_key_is_small_too(no_keys) -> None:
-    assert _size(voiceover.voice_options(limit=50)) <= 6000
+    assert _size(voiceover.voice_options(limit=50)) <= 9000
 
 
 # ------------------------------------------------------------------ provider choice

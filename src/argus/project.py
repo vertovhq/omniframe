@@ -43,3 +43,24 @@ def project_dir(name: str) -> Path:
     for folder in PROJECT_FOLDERS:
         (root / folder).mkdir(parents=True, exist_ok=True)
     return root
+
+
+# Entries that mean a project already holds a finished or planned video (not just its empty folders).
+FINISHED_SIGNS = ("plan.json", "renders", "final", "components")
+
+
+def project_holdings(name: str) -> list[str]:
+    """The entries of an existing project folder that mean it already holds another video's work.
+
+    Call it before `project_dir`. Empty default folders and files like `audio/` do not count: a
+    second voice in the same video is normal.
+    """
+    root = CONFIG.output_dir / "projects" / slugify(name)
+    if not root.is_dir():
+        return []
+    held = []
+    for entry in FINISHED_SIGNS:
+        path = root / entry
+        if path.is_file() or (path.is_dir() and any(path.iterdir())):
+            held.append(entry)
+    return held

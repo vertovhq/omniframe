@@ -2,7 +2,7 @@ import {useMemo} from 'react';
 import type {CSSProperties, FC} from 'react';
 import {AbsoluteFill, Sequence, spring, useCurrentFrame, useVideoConfig} from 'remotion';
 import type {CaptionStyle, Captions, WordTiming} from './types';
-import {eBack} from './kit/motion';
+import {headlineMotion} from './headline';
 import {readableOn} from './kit/text';
 import {DESIGN_SHORT_SIDE, fontFor, useLayout, useStyle} from './style';
 import {fitLines, fitSizeToHeight, measureTextWidth, normalizeToken, useFontsReady} from './text';
@@ -364,9 +364,9 @@ const HEX6 = /^#[0-9a-f]{6}$/i;
 
 /**
  * Headline mode: a short line of big, slightly slanted words in the middle of the frame. A word
- * is hidden until it is spoken, then slams in (from 1.9x, with a small overshoot and a tilt).
- * Accent words (`accent_words`) sit in a box of the accent colour. Nothing is picked for the
- * model: a word is boxed only when the plan lists it.
+ * is hidden until it is spoken, then slams into its slot (`headlineMotion`). Accent words
+ * (`accent_words`) sit in a box of the accent colour. Nothing is picked for the model: a word is
+ * boxed only when the plan lists it.
  */
 const HeadlineLineView: FC<{line: CaptionLine; fromFrame: number; look: CaptionLook}> = ({line, fromFrame, look}) => {
   const frame = useCurrentFrame();
@@ -402,13 +402,12 @@ const HeadlineLineView: FC<{line: CaptionLine; fromFrame: number; look: CaptionL
   const justify = look.position === 'upper' ? 'flex-start' : look.position === 'center' ? 'center' : 'flex-end';
 
   const wordNodes = line.words.map((w, i) => {
-    const p = Math.min(1, Math.max(0, (t - w.s) / HEADLINE_SLAM_S));
-    const land = eBack(p);
+    const motion = headlineMotion((t - w.s) / HEADLINE_SLAM_S);
     const boxed = matchesAccent(w.w, look.accentWords);
     const wordStyle: CSSProperties = {
       display: 'inline-block',
-      opacity: Math.min(1, p * 5),
-      transform: `scale(${(1.9 - 0.9 * land).toFixed(4)}) rotate(${(-5 * (1 - land)).toFixed(3)}deg)`,
+      opacity: motion.opacity,
+      transform: `translateY(${motion.translateEm.toFixed(3)}em) rotate(${motion.rotateDeg.toFixed(3)}deg)`,
       transformOrigin: '50% 60%',
       color: boxed ? onPlate : look.color,
       background: boxed ? plate : undefined,
