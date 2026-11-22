@@ -1,11 +1,11 @@
 """argus doctor — one-command environment self-check.
 
-Verifies everything the pipeline needs before a new user hits
-"ничего не работает". Critical: python, ffmpeg, ffprobe, Node.js + npx, the engine
-(node_modules with remotion and the renderer/bundler packages), numpy, Pillow and
-OMNIFRAME_OUTPUT_DIR. Optional (a warning, never an error): faster-whisper, edge-tts
-(installed + service alive), playwright+chromium (critical only in flow mode), the
-Gemini key and the ElevenLabs key.
+Verifies everything the pipeline needs before a new user hits "nothing works".
+Critical: python, ffmpeg, ffprobe, Node.js + npx, the engine (node_modules with remotion
+and the renderer/bundler packages), numpy, Pillow and OMNIFRAME_OUTPUT_DIR. Optional (a
+warning, never an error): faster-whisper, edge-tts (installed + service alive),
+playwright+chromium (critical only in flow mode), a Chrome or Edge for the renderer
+(otherwise Remotion downloads its own browser), the Gemini key and the ElevenLabs key.
 
 Console:  argus-doctor [--json] [--flow] [--no-live]
 MCP:      doctor(check_flow=False) -> the same report as JSON.
@@ -35,17 +35,17 @@ CRITICAL_IDS = frozenset({"python", "ffmpeg", "ffprobe", "node", "npx", "engine"
 # packages the renderer needs inside engine/node_modules (engine/package.json)
 ENGINE_PACKAGES = ("remotion", "@remotion/renderer", "@remotion/bundler")
 
-HINT_NODE = "установи Node.js 18+: winget install OpenJS.NodeJS.LTS (или https://nodejs.org)"
-HINT_FFMPEG = "поставь ffmpeg: winget install Gyan.FFmpeg (или choco install ffmpeg, или https://www.gyan.dev/ffmpeg/builds/)"
-HINT_CORE = 'pip install -e .  (numpy и Pillow входят в основные зависимости)'
-HINT_EDGE = 'pip install edge-tts  (или pip install -e ".[voice]")'
+HINT_NODE = "install Node.js 18+: winget install OpenJS.NodeJS.LTS (or https://nodejs.org)"
+HINT_FFMPEG = "install ffmpeg: winget install Gyan.FFmpeg (or choco install ffmpeg, or https://www.gyan.dev/ffmpeg/builds/)"
+HINT_CORE = 'pip install -e .  (numpy and Pillow are core dependencies)'
+HINT_EDGE = 'pip install edge-tts  (or pip install -e ".[voice]")'
 HINT_ASR = 'pip install -e ".[asr]"  (faster-whisper)'
 HINT_FLOW = 'pip install -e ".[flow]" && playwright install chromium'
 
 # 1-word live synthesis probe for edge-tts (runs in a child python, 15s budget)
 _EDGE_PROBE = (
     "import asyncio, sys, edge_tts; "
-    "asyncio.run(edge_tts.Communicate('привет', 'ru-RU-DmitryNeural').save(sys.argv[1]))"
+    "asyncio.run(edge_tts.Communicate('hello', 'en-US-AriaNeural').save(sys.argv[1]))"
 )
 
 
@@ -73,15 +73,15 @@ def check_python() -> dict:
         return _check("python", "python", "ok", detail)
     return _check(
         "python", "python", "fail", detail,
-        "нужен Python 3.11+: winget install Python.Python.3.12 (или https://python.org)",
+        "Python 3.11+ is needed: winget install Python.Python.3.12 (or https://python.org)",
     )
 
 
 def _exe_status(cid: str, label: str, exe: str, env_var: str) -> dict:
     resolved = _which(exe)
     if not resolved:
-        via = f" (из {env_var})" if os.environ.get(env_var, "").strip() else ""
-        return _check(cid, label, "fail", f"не найден{via}: {exe}", HINT_FFMPEG)
+        via = f" (from {env_var})" if os.environ.get(env_var, "").strip() else ""
+        return _check(cid, label, "fail", f"not found{via}: {exe}", HINT_FFMPEG)
     try:
         p = _run([resolved, "-version"])
     except (OSError, subprocess.TimeoutExpired) as e:
@@ -108,9 +108,9 @@ def _check_module(cid: str, label: str, module: str, missing_status: str, hint: 
     except (OSError, subprocess.TimeoutExpired) as e:
         return _check(cid, label, missing_status, str(e), hint)
     if p.returncode != 0:
-        detail = "модуль не установлен" + (f"; {note}" if note else "")
+        detail = "module not installed" + (f"; {note}" if note else "")
         return _check(cid, label, missing_status, detail, hint)
-    return _check(cid, label, "ok", "установлен")
+    return _check(cid, label, "ok", "installed")
 
 
 def check_numpy() -> dict:
@@ -122,10 +122,10 @@ def check_pillow() -> dict:
 
 
 def check_faster_whisper() -> dict:
-    # опциональный: без него watch_video не отдаёт транскрипт (кадры и звуковые события работают)
+    # optional: without it, watch_video returns no transcript (frames and sound events still work)
     return _check_module(
         "faster_whisper", "faster-whisper", "faster_whisper", "warn", HINT_ASR,
-        "опционально: без него watch_video не отдаёт транскрипт",
+        "optional: without it, watch_video returns no transcript",
     )
 
 
@@ -139,21 +139,21 @@ def _node_version(exe: str) -> dict:
         return _check("node", "node", "fail", (p.stderr or "").strip()[:120] or exe, HINT_NODE)
     major = int(m.group(1))
     if major < 18:
-        return _check("node", "node", "fail", f"v{major} (нужен 18+)", HINT_NODE)
+        return _check("node", "node", "fail", f"v{major} (18+ needed)", HINT_NODE)
     return _check("node", "node", "ok", f"v{major}")
 
 
 def check_node() -> dict:
     exe = _which("node")
     if not exe:
-        return _check("node", "node", "fail", "не найден в PATH", HINT_NODE)
+        return _check("node", "node", "fail", "not found on PATH", HINT_NODE)
     return _node_version(exe)
 
 
 def check_npx() -> dict:
     exe = _which("npx")
     if not exe:
-        return _check("npx", "npx", "fail", "не найден в PATH", HINT_NODE)
+        return _check("npx", "npx", "fail", "not found on PATH", HINT_NODE)
     try:
         p = _run([exe, "--version"])
     except (OSError, subprocess.TimeoutExpired) as e:
@@ -168,19 +168,35 @@ def check_engine() -> dict:
     eng = Path(env).resolve() if env else Path(__file__).resolve().parents[2] / "engine"
     if not (eng / "package.json").exists():
         return _check(
-            "engine", "engine/ (Remotion)", "fail", f"движок не найден: {eng}",
-            "склонируй репо argus-studio или задай ARGUS_ENGINE_DIR на папку engine/",
+            "engine", "engine/ (Remotion)", "fail", f"engine not found: {eng}",
+            "clone the argus-studio repo, or set ARGUS_ENGINE_DIR to the engine/ folder",
         )
     install = f"cd {eng} && npm install --no-audit --no-fund"
     modules = eng / "node_modules"
     if not modules.exists():
-        return _check("engine", "engine/ (Remotion)", "fail", f"нет node_modules: {eng}", install)
+        return _check("engine", "engine/ (Remotion)", "fail", f"node_modules missing: {eng}", install)
     missing = [name for name in ENGINE_PACKAGES if not (modules / name).is_dir()]
     if missing:
         return _check(
-            "engine", "engine/ (Remotion)", "fail", f"нет пакетов рендера: {', '.join(missing)} ({eng})", install,
+            "engine", "engine/ (Remotion)", "fail", f"render packages missing: {', '.join(missing)} ({eng})", install,
         )
     return _check("engine", "engine/ (Remotion)", "ok", str(eng))
+
+
+def check_render_browser() -> dict:
+    """The browser the renderer uses. Without Chrome or Edge, Remotion downloads its own."""
+    try:
+        from .tools.render import _find_browser
+    except ImportError as e:  # the render module needs Pillow; its own check reports that
+        return _check("render_browser", "render browser", "warn", f"could not check: {e}")
+    found = _find_browser()
+    if found:
+        return _check("render_browser", "render browser", "ok", found)
+    return _check(
+        "render_browser", "render browser", "warn",
+        "no Chrome or Edge found; Remotion downloads its own headless browser on the first render",
+        "optional: set REMOTION_BROWSER to a Chrome or Edge executable to skip the download",
+    )
 
 
 def probe_edge(retries: int = 2, timeout: float = 15.0) -> tuple[bool, str]:
@@ -191,19 +207,19 @@ def probe_edge(retries: int = 2, timeout: float = 15.0) -> tuple[bool, str]:
         last = ""
         for attempt in range(retries):
             if attempt:
-                time.sleep(1.5)  # edge троттлит подряд-запросы (см. KNOWLEDGE_BASE)
+                time.sleep(1.5)  # edge throttles back-to-back requests (see KNOWLEDGE_BASE)
             try:
                 p = subprocess.run(
                     [sys.executable, "-c", _EDGE_PROBE, str(out)],
                     capture_output=True, text=True, timeout=timeout, creationflags=NO_WINDOW,
                 )
             except subprocess.TimeoutExpired:
-                last = f"таймаут {timeout:.0f}с"
+                last = f"timeout after {timeout:.0f} s"
                 continue
             if p.returncode == 0 and out.exists() and out.stat().st_size > 0:
                 return True, ""
             lines = (p.stderr or p.stdout or "").strip().splitlines()
-            last = lines[-1] if lines else "пустой результат"
+            last = lines[-1] if lines else "empty result"
         return False, last
 
 
@@ -213,16 +229,16 @@ def check_edge_tts(live: bool) -> dict:
     except (OSError, subprocess.TimeoutExpired) as e:
         return _check("edge_tts", "edge-tts", "warn", str(e), HINT_EDGE)
     if p.returncode != 0:
-        # опциональный: бесплатный голос; без него есть Gemini и ElevenLabs по ключам
-        return _check("edge_tts", "edge-tts", "warn", "модуль не установлен; опционально: бесплатный голос", HINT_EDGE)
+        # optional: the free voice; Gemini and ElevenLabs (with keys) are the alternatives
+        return _check("edge_tts", "edge-tts", "warn", "module not installed; optional: the free voice", HINT_EDGE)
     if not live:
-        return _check("edge_tts", "edge-tts", "ok", "установлен (live-проба пропущена)")
+        return _check("edge_tts", "edge-tts", "ok", "installed (live probe skipped)")
     alive, err = probe_edge()
     if alive:
-        return _check("edge_tts", "edge-tts", "ok", "установлен, сервис отвечает")
+        return _check("edge_tts", "edge-tts", "ok", "installed, service answers")
     return _check(
-        "edge_tts", "edge-tts", "warn", f"установлен, но сервис молчит ({err})",
-        "проверь сеть/прокси (speech.platform.bing.com); это временная ошибка сервиса, не окружения",
+        "edge_tts", "edge-tts", "warn", f"installed, but the service is silent ({err})",
+        "check the network or proxy (speech.platform.bing.com); this is a temporary service error, not an environment problem",
     )
 
 
@@ -248,42 +264,45 @@ def check_playwright(flow: bool) -> dict:
         chromiums = sorted(_playwright_browsers_dir().glob("chromium-*"))
         if chromiums:
             return _check("playwright", "playwright+chromium", "ok", f"chromium: {chromiums[-1].name}")
-        missing, hint = "chromium не скачан", "playwright install chromium"
+        missing, hint = "chromium not downloaded", "playwright install chromium"
     else:
-        missing, hint = f"не установлен ({err})", HINT_FLOW
-    # отсутствует = пометка «опционально»; критично только в режиме flow
+        missing, hint = f"not installed ({err})", HINT_FLOW
+    # missing = a note "optional"; critical only in flow mode
     status = "fail" if flow else "warn"
-    note = "опционально, только для provider=\"flow\"" if not flow else "нужен для provider=\"flow\""
+    note = 'optional, only for provider="flow"' if not flow else 'needed for provider="flow"'
     return _check("playwright", "playwright+chromium", status, f"{missing}; {note}", hint)
 
 
 def check_gemini_key(cfg: ArgusConfig) -> dict:
     if cfg.gemini_api_key:
-        return _check("gemini_key", "ключ Gemini", "ok", "есть (Veo api / TTS доступны)")
+        return _check("gemini_key", "Gemini key", "ok", "set (Veo API and Gemini TTS available)")
     return _check(
-        "gemini_key", "ключ Gemini", "warn", "нет — offline-тулзы работают, Veo api и Gemini TTS недоступны",
-        "cp .env.example .env и впиши ARGUS_GEMINI_API_KEY (или экспортируй переменную)",
+        "gemini_key", "Gemini key", "warn", "not set; offline tools work, Veo API and Gemini TTS do not",
+        "copy .env.example to .env and set ARGUS_GEMINI_API_KEY (or export the variable)",
     )
 
 
 def check_elevenlabs_key(cfg: ArgusConfig) -> dict:
-    # опциональный: нужен только для голоса ElevenLabs
+    # optional: needed only for the ElevenLabs voice
     if cfg.elevenlabs_api_key:
-        return _check("elevenlabs_key", "ключ ElevenLabs", "ok", "есть (клоны голоса доступны)")
+        return _check("elevenlabs_key", "ElevenLabs key", "ok", "set (voice clones available)")
     return _check(
-        "elevenlabs_key", "ключ ElevenLabs", "warn", "нет — это не обязательно: edge/gemini/xtts работают без него",
-        "клоны голоса: впиши ELEVENLABS_API_KEY в .env (или экспортируй) — только если нужны",
+        "elevenlabs_key", "ElevenLabs key", "warn", "not set; not required, edge and gemini work without it",
+        "voice clones: set ELEVENLABS_API_KEY in .env (or export it), only if you need them",
     )
 
 
 def check_output_dir(cfg: ArgusConfig) -> dict:
     try:
         if cfg.output_dir.exists():
-            return _check("output_dir", "папка вывода", "ok", str(cfg.output_dir))
+            return _check("output_dir", "output folder", "ok", str(cfg.output_dir))
         cfg.output_dir.mkdir(parents=True, exist_ok=True)
-        return _check("output_dir", "папка вывода", "ok", f"создана: {cfg.output_dir}")
+        return _check("output_dir", "output folder", "ok", f"created: {cfg.output_dir}")
     except OSError as e:
-        return _check("output_dir", "папка вывода", "fail", f"{cfg.output_dir}: {e}", "проверь OMNIFRAME_OUTPUT_DIR и права на папку")
+        return _check(
+            "output_dir", "output folder", "fail", f"{cfg.output_dir}: {e}",
+            "check OMNIFRAME_OUTPUT_DIR and the folder permissions",
+        )
 
 
 # ------------------------------------------------------------------- report
@@ -301,6 +320,7 @@ def run_checks(flow: bool | None = None, live: bool = True, config: ArgusConfig 
         check_node(),
         check_npx(),
         check_engine(),
+        check_render_browser(),
         check_numpy(),
         check_pillow(),
         check_faster_whisper(),
@@ -310,7 +330,7 @@ def run_checks(flow: bool | None = None, live: bool = True, config: ArgusConfig 
         check_elevenlabs_key(cfg),
         check_output_dir(cfg),
     ]
-    # playwright становится критичным только в режиме flow (иначе — опциональный ⚠)
+    # playwright becomes critical only in flow mode (otherwise it is an optional warning)
     critical_failures = [
         c["id"] for c in checks
         if c["status"] == "fail" and (c["id"] in CRITICAL_IDS or (c["id"] == "playwright" and flow))
@@ -331,8 +351,8 @@ def render_text(report: dict) -> str:
     lines = [
         f"ARGUS doctor v{report['argus']} — {report['platform']}, "
         f"python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-        + (" | режим flow" if report["flow_mode"] else "")
-        + (" | без live-проб" if not report["live"] else ""),
+        + (" | flow mode" if report["flow_mode"] else "")
+        + (" | no live probes" if not report["live"] else ""),
         "",
     ]
     for c in report["checks"]:
@@ -343,9 +363,9 @@ def render_text(report: dict) -> str:
     fails = len(report["critical_failures"])
     lines.append("")
     if fails:
-        lines.append(f"ИТОГ: ✗ {fails} критичных проверок не пройдено, предупреждений: {warns}")
+        lines.append(f"RESULT: ✗ {fails} critical checks failed, warnings: {warns}")
     else:
-        lines.append(f"ИТОГ: ✓ окружение готово" + (f" (предупреждений: {warns})" if warns else ""))
+        lines.append("RESULT: ✓ environment ready" + (f" (warnings: {warns})" if warns else ""))
     return "\n".join(lines)
 
 

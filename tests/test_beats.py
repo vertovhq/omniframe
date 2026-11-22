@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -25,6 +27,12 @@ def _click_track(path: Path, bpm: float, seconds: float = 8.0) -> None:
     ], check=True, capture_output=True)
 
 
+@pytest.fixture(autouse=True)
+def _output_in_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The beat list file goes to the output folder when no project is given: keep it in tmp_path."""
+    monkeypatch.setattr(beats, "CONFIG", dataclasses.replace(CONFIG, output_dir=tmp_path / "out"))
+
+
 @pytest.mark.parametrize("bpm", [90.0, 120.0, 140.0])
 def test_grid_finds_known_tempo(tmp_path: Path, bpm: float) -> None:
     track = tmp_path / f"click_{bpm:g}.wav"
@@ -32,10 +40,11 @@ def test_grid_finds_known_tempo(tmp_path: Path, bpm: float) -> None:
     result = beats.calculate_beat_grid(str(track))
     assert abs(result["bpm"] - bpm) <= 3.0, result["bpm"]
     assert result["confidence"] > 0.3
-    # beats are evenly spaced at the reported interval
+    # beats are evenly spaced at the reported interval; the full list is in the file
     interval = result["beat_interval_s"]
     assert 60.0 / (bpm + 3) <= interval <= 60.0 / (bpm - 3)
-    for a, b in zip(result["beats"], result["beats"][1:]):
+    full = json.loads(Path(result["beats_path"]).read_text(encoding="utf-8"))
+    for a, b in zip(full["beats"], full["beats"][1:]):
         assert abs((b - a) - interval) < 0.01
 
 
@@ -62,3 +71,31 @@ def test_silent_audio_fails_clean(tmp_path: Path) -> None:
 def test_missing_file_fails(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         beats.calculate_beat_grid(str(tmp_path / "nope.mp3"))
+
+
+def test_reply_is_short_and_the_full_beat_list_goes_to_a_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 2-minute track has about 340 beats: the reply lists 12 and points to the file."""
+    track = tmp_path / "long.wav"
+    _click_track(track, bpm=170.0, seconds=120.0)
+    monkeypatch.setattr(beats, "project_dir", lambda name: tmp_path / "projects" / name)
+
+    result = beats.calculate_beat_grid(str(track), project="demo")
+
+    assert len(json.dumps(result, ensure_ascii=False)) < 3000
+    assert result["beat_count"] > 300
+    assert len(result["first_beats"]) == beats.MAX_INLINE_BEATS
+    path = Path(result["beats_path"])
+    assert path.parent == tmp_path / "projects" / "demo" / "audio"
+    full = json.loads(path.read_text(encoding="utf-8"))
+    assert len(full["beats"]) == result["beat_count"]
+
+
+def test_without_a_project_the_file_goes_to_the_output_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    track = tmp_path / "click.wav"
+    _click_track(track, bpm=120.0, seconds=8.0)
+    monkeypatch.setattr(beats, "CONFIG", dataclasses.replace(CONFIG, output_dir=tmp_path / "out"))
+
+    result = beats.calculate_beat_grid(str(track))
+
+    assert Path(result["beats_path"]).parent == tmp_path / "out" / "beats"
+    assert Path(result["beats_path"]).is_file()

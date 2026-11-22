@@ -689,14 +689,17 @@ def preset_tokens(name: str) -> dict[str, Any]:
     return copy.deepcopy(STYLE_PRESETS[name])
 
 
-def is_builtin_style(style: StyleTokens) -> bool:
-    """True when the style is the built-in `dark` preset, the engine's own default look.
+def builtin_preset(style: StyleTokens) -> str | None:
+    """The name of the built-in preset (`dark` or `light`) the style equals, else None.
 
-    Compares the colors, fonts, grain and vignette that the preset sets. Changing any of
-    them (the accent, a font, the grain) makes the style the plan's own.
+    Compares the colors, fonts, grain and vignette that a preset sets. Changing any of them
+    (the accent, a font, the grain) makes the style the plan's own.
     """
     tokens = style.model_dump(mode="json", exclude_none=True)
-    return all(tokens.get(key) == value for key, value in preset_tokens("dark").items())
+    for name in STYLE_PRESETS:
+        if all(tokens.get(key) == value for key, value in preset_tokens(name).items()):
+            return name
+    return None
 
 
 def derive_duration(

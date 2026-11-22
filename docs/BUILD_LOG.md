@@ -38,21 +38,33 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 
 ## Entries
 
-## Task 1 — Setup
+## Task 1 — Setup (date and model not recorded; commit 0f3129f)
+- Built: `src/argus/project.py` (`slugify`, `project_dir` with the folder layout), config fields `whisper_model`, `eleven_model`, `render_concurrency`, `scripts_dir` and the `.env` lookup order, `numpy` and `Pillow` dependencies with the `asr` extra, version `3.0.0.dev0`, `.kiro/settings/mcp.json`.
+- Bugs & fixes: none recorded.
+- Kiro: none recorded beyond the spec task list and steering `tech.md` that set the layout.
+- Verified: no result recorded in `tasks.md` or this log. Tests in git: `tests/test_project.py`.
+- Credits: <author fills>
 
-_To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
+## Task 2 — Remove creative gates (date and model not recorded; commit 0f3129f)
+- Built: removed the `validate_beats` and `story_guide` tools, `detect_genre`, the slop-word list, the overlap helpers, `src/argus/STORY_GUIDE.md` and `tests/test_reference.py`; removed the borrowing-limit section from `STARTER.md` and the two montazh `SKILL.md` files; server instructions replaced with the text from design §2.
+- Bugs & fixes: none recorded.
+- Kiro: none recorded.
+- Verified: no result recorded in `tasks.md` or this log.
+- Credits: <author fills>
 
-## Task 2 — Remove creative gates
+## Task 3 — Studio guide and preferences (date and model not recorded; commit 0f3129f)
+- Built: `studio_guide()` returning the guide, capabilities (tools, providers from config and import checks) and the last 4,000 characters of the preferences file; `learn_and_record_memory` writing `# ARGUS — user preferences`; `src/argus/STUDIO_GUIDE.md`, copied from the spec and later edited by tasks 20.5b, 20.6 and 20.7a.
+- Bugs & fixes: none recorded.
+- Kiro: none recorded.
+- Verified: `tests/test_studio_guide.py` exists in git; no run result recorded in `tasks.md` or this log.
+- Credits: <author fills>
 
-_To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
-
-## Task 3 — Studio guide and preferences
-
-_To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
-
-## Task 4 — Images to the model + jobs
-
-_To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
+## Task 4 — Images to the model + jobs (date and model not recorded; commit 0f3129f)
+- Built: `src/argus/media_out.py` (`prepare_image`, `tool_result` returning a summary plus image content), `src/argus/jobs.py` (`run_or_detach`, the worker `python -m argus.jobs <job_dir>`, status, cleanup of jobs older than 7 days), the `job_status` tool; tests `tests/test_jobs.py` and `tests/test_media_out.py`.
+- Bugs & fixes: none recorded.
+- Kiro: none recorded.
+- Verified: no run result recorded in `tasks.md` or this log.
+- Credits: <author fills>
 
 ## Task 5 — watch_video and get_frames (2026-11-16, Sonnet 5.5)
 - Built: `tools/watch.py` (content-hash cache by stage, shot detection, frame budget, 6-tile contact sheets, onset sound events, faster-whisper transcript when installed, 2 sheets per page) run as a `watch` job; `get_frames` with `crop` and an 8-time cap; both registered in `server.py`; `analyze_reference` and `tools/reference.py` removed. Small changes elsewhere: `ffmpeg.decode_audio` and `run_ffmpeg_stderr`, `beats._onset_envelope` on a running sum, `image_max_side` in `jobs`.
@@ -62,17 +74,26 @@ _To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
 - Credits: <author fills>
 - Details: `.kiro/specs/argus-v2/task5.md`
 
-## Task 6 — Voice v2
+## Task 6 — Voice v2 (2026-11-16, model not recorded)
+- Built: `tools/voiceover.py` with providers `elevenlabs`, `edge` and `gemini` behind a `VoiceProvider` protocol, `split_text` for long text, `words_from_alignment`, job kind `voiceover`; `voice_options` returning `provider_choice` and, with a key, the `delivery` vocabulary. Provider doc URLs are in code comments. Tests `tests/test_voiceover.py` (25) and `tests/test_voice_options.py` (15).
+- Bugs & fixes: none recorded. The task was marked `[x]` by the owner before its live ElevenLabs check ran, so that check is still open in `tasks.md`.
+- Kiro: none recorded.
+- Verified: offline tests; full suite 158 passed, 1 skipped (task notes). Real ElevenLabs and edge-tts calls: not run.
+- Credits: <author fills>
 
-_To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
+## Task 7 — Plan model v2 (2026-11-16, model not recorded)
+- Built: `src/argus/plan.py` (pydantic models, `dark` and `light` presets, format sizes, safe areas, `validate_plan` returning every error as `path: message`, `derive_duration`); `src/argus/captions.py` (word helpers moved from `tools/subtitles.py`, `remap_words_to_clips`); `engine/src/types.ts` (plan types); four sample plans in `examples/plans/`. Tests `tests/test_plan.py` and `tests/test_captions.py`.
+- Bugs & fixes: none recorded.
+- Kiro: none recorded.
+- Verified: full suite 189 passed, 1 skipped; engine `tsc --noEmit` exit 0 (task notes).
+- Credits: <author fills>
 
-## Task 7 — Plan model v2
-
-_To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
-
-## Task 8 — Engine: formats and style tokens
-
-_To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
+## Task 8 — Engine: formats and style tokens (2026-11-16, model not recorded)
+- Built: `engine/src/style.ts` replacing `theme.ts` (`resolveStyle`, `StyleContext` and `useStyle()`, `useLayout()`, `fontFor`, font loading); `Root.tsx` takes width and height from the format; text sizes relative to the short side; scenes with `until` and `overlay`.
+- Bugs & fixes: none recorded. The 9:16 output differs from v1 by centring in the safe area (card about 60 px higher, HUD plate about 16 px higher); listed in the task notes.
+- Kiro: none recorded.
+- Verified: `tsc --noEmit` exit 0; pytest 189 passed, 1 skipped; 9:16 dark stills compared side by side with the v1 baseline (`engine/test-baseline/`, git-ignored); 16:9 and stress plans checked by eye for the safe area.
+- Credits: <author fills>
 
 ## Task 9 — Engine: captions and audio (2026-11-16, Sonnet 5.5)
 - Built: `captions.tsx` (word and phrase modes, accent words, upper/center/lower inside the safe area, plate), `audio.tsx` (voice, music with ducking and 0.25 s ramps, fades, `audio.sfx`); `sfx.ts` no longer adds automatic effects.
@@ -219,6 +240,7 @@ _To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
 - Kiro: spec task 20.2 gave the block list; the engine steering rule on determinism is why `Particles` use `random(seed)`; `render_video` stills with its component typecheck are the test of the kit. No hook result noted.
 - Verified: engine `tsc --noEmit` exit 0; `test_captions` + `test_plan` + `test_studio_guide` 48 passed; `test_components` offline subset 25 passed; three new engine tests passed in 24.41 s (`SceneTrack` switching on a word cue from a words file in a scene that starts at 1 s; the `KIT.md` example in 9:16 and in 16:9). Looked at four of the eight stills of the example (9:16 and 16:9 at 1.5 s and 3.6 s): text, plate and pop-up are centred and not clipped in both formats.
 - Not verified: full `pytest -q` after the change (started once at the end, output still empty after about 16 minutes, so no result; `Plan.to_dict()` now always has `cues: {}`, so a test that compares a whole plan dict could fail); no still or test for `LightCone`, dust `Particles`, `PollCard`, `Checklist`, `ProgressBar`, `Bubble`, `Label`, `Slide`, `Pop`; an unknown cue name in `useCue` (should stop the render with a message) was not tried; the running `argus` server must be reloaded; the target (under 20 minutes and 20 credits on the Kiroween video) is not measured and belongs after 20.3.
+- Later run: full `pytest -q` → 340 passed (exit 0) at the start of 20.6, recorded in the Task 20.5 entry. The run above has no result.
 - Credits: <author fills>
 - Questions for the auditor:
   1. Word cues need `captions.words`, so a video with a voice and no captions cannot use them. Should the voice's own words file count, or is requiring `captions` right?
@@ -299,4 +321,11 @@ _To be filled retroactively from git and .kiro/specs/argus-v2/task5–7.md._
 - Bugs & fixes: the first full run failed `test_veo_provider_validation` (ImportError) because `veo.py` and `model_catalog.py` were edited while that run was still collecting tests → rerun on the final code, no code change. `test_studio_guide` expected `veo_api` available with a key → test now expects the shutdown note. `test_config` read a pinned `ARGUS_TTS_MODEL` from the user's `.env` → the test clears the model variables first.
 - Kiro: none beyond the spec task text and the steering rules. The shell returned echoed input, so runs wrote to files that were read back.
 - Verified: full `pytest -q` 441 passed, exit 0 (10 min 31 s, on the final code). Live, read-only, with the author's key: `/v2/voices` returns 24 voices over all pages (21 premade, 3 Voice Library copies, 0 personal); models as listed above. Not verified: the count in the author's ElevenLabs app; no real Veo call (the route is refused by design).
+- Credits: <author fills>
+
+## Task 20.9 — Leftovers before the freeze (2026-11-21, Haiku 5.5)
+- Built: `argus-doctor` in English, with a render-browser line (Chrome or Edge path, or "Remotion downloads its own"); one `NO_WINDOW` flag for every subprocess call in `src/argus`; `style_note` on stills and preview answers for the `dark` and `light` presets; `qa_verify_video` reports size, loudness and true peak of a `-preview-` file as warnings; `calculate_beat_grid` replies with 12 beats and `beats_path` (full list in JSON, `project` optional); STUDIO_GUIDE §5 on the look and on low beat confidence; the spec copy of the guide is a pointer; 20.4 set to dropped; gaps in this log filled.
+- Bugs & fixes: `test_beats` read `beats` after the reply stopped carrying it → KeyError in 3 tests → the test reads `beats_path`, and the tests write to a temp output folder. Beat times came back as `np.float64` → cast to float. `style_note` covered `dark` only → added `light` with its own line and tests for both. A pytest run started on a stale test file → stopped and restarted. Commit `4473b5d` had a BOM in its message → amended without BOM.
+- Kiro: none beyond the 20.9 checks in `tasks.md` and the steering rule for detached runs (output to files, then read back).
+- Verified: full `pytest -q` 465 passed, exit 0 (607 s); targeted run of items 1–6 and 8: 63 passed; engine `tsc --noEmit` exit 0. Direct runs: `argus-doctor` exit 0; QA on a generated 540x960 preview → passed, warnings `resolution` and `loudness`; beat grid on a 120 s click track at 170 BPM → reply 556 characters, 342 beats in the file.
 - Credits: <author fills>

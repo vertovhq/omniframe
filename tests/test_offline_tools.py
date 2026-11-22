@@ -141,6 +141,26 @@ def test_qa_resolution_follows_the_format(qa_output: Path, size: str, fmt: str |
 
 
 @pytest.mark.usefixtures("qa_output")
+def test_qa_preview_reports_size_and_loudness_as_warnings(qa_output: Path) -> None:
+    """A `-preview-` render is half size and not mastered: size and loudness warn, the file passes."""
+    preview = _clip(qa_output / "demo-preview-9x16.mp4", [("motion", 4.0)], [("tone", 4.0)],
+                    size="540x960", normalise=False)
+    report = qa.verify_video(preview)
+    assert report["passed"] is True, report["hard_failures"]
+    warned = {w["check"] for w in report["warnings"]}
+    assert {"resolution", "loudness"} <= warned
+    assert report["preview"] and "preview" in report["preview"]
+    assert report["checks"]["resolution"]["passed"] is False  # still measured, just not a failure
+
+    same_size = _clip(qa_output / "demo-9x16.mp4", [("motion", 4.0)], [("tone", 4.0)],
+                      size="540x960", normalise=False)
+    report = qa.verify_video(same_size)
+    assert report["passed"] is False
+    assert "resolution" in {f["check"] for f in report["hard_failures"]}
+    assert "preview" not in report
+
+
+@pytest.mark.usefixtures("qa_output")
 def test_qa_black_gap_in_the_middle_is_a_hard_failure(qa_output: Path) -> None:
     clip = _clip(qa_output / "black_15.mp4", [("motion", 1.25), ("black", 1.5), ("motion", 1.25)], [("tone", 4.0)])
     report = qa.verify_video(clip)

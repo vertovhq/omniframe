@@ -10,10 +10,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus.plan import is_builtin_style, preset_tokens, validate_plan  # noqa: E402
+from argus.plan import builtin_preset, preset_tokens, validate_plan  # noqa: E402
 from argus.tools import render, studio  # noqa: E402
 
-GUIDE_LINE = "style: engine defaults (dark, #7C5CFA, Inter)"
+DARK_LINE = "style: engine defaults (dark, #7C5CFA, Inter)"
+LIGHT_LINE = "style: built-in preset light (#7C5CFA accent, Inter)"
 
 
 def _plan(style):
@@ -32,24 +33,34 @@ def _own_style(**changes) -> dict:
     return tokens
 
 
-def test_default_style_by_name_gets_the_note_on_stills_and_preview() -> None:
-    plan = _plan("dark")
-    assert is_builtin_style(plan.style)
-    for mode in ("stills", "preview"):
-        note = render.style_note(mode, plan)
-        assert note == render.STYLE_NOTE
-    assert GUIDE_LINE in render.STYLE_NOTE
-    assert render.STYLE_NOTE.count("\n") == 0  # one line
+@pytest.mark.parametrize(("preset", "line"), [("dark", DARK_LINE), ("light", LIGHT_LINE)])
+@pytest.mark.parametrize("mode", ["stills", "preview"])
+def test_builtin_preset_gets_the_note_on_stills_and_preview(preset: str, line: str, mode: str) -> None:
+    plan = _plan(preset)
+    assert builtin_preset(plan.style) == preset
+    note = render.style_note(mode, plan)
+    assert note == render.STYLE_NOTES[preset]
+    assert note.startswith(line)
+    assert "\n" not in note  # one line
 
 
-def test_default_tokens_written_out_get_the_note() -> None:
-    plan = _plan(_own_style())
-    assert render.style_note("stills", plan) == render.STYLE_NOTE
+def test_dark_note_is_the_engine_default_line() -> None:
+    assert render.STYLE_NOTE == (
+        "style: engine defaults (dark, #7C5CFA, Inter). Set your own palette, fonts and layout "
+        "from the reference or the user's request."
+    )
+    assert render.STYLE_NOTES["light"] == render.STYLE_NOTE_LIGHT
+
+
+def test_preset_written_out_as_tokens_gets_the_note() -> None:
+    assert render.style_note("stills", _plan(_own_style())) == render.STYLE_NOTES["dark"]
+    light_tokens = copy.deepcopy(preset_tokens("light"))
+    assert render.style_note("preview", _plan(light_tokens)) == render.STYLE_NOTES["light"]
 
 
 def test_own_palette_has_no_note() -> None:
     plan = _plan(_own_style(colors={**preset_tokens("dark")["colors"], "accent": "#FF3B30"}))
-    assert not is_builtin_style(plan.style)
+    assert builtin_preset(plan.style) is None
     assert render.style_note("stills", plan) is None
     assert render.style_note("preview", plan) is None
 
@@ -61,15 +72,16 @@ def test_own_font_or_grain_has_no_note() -> None:
     assert render.style_note("stills", _plan(_own_style(grain=0.2))) is None
 
 
-def test_light_preset_has_no_note() -> None:
-    plan = _plan("light")
-    assert not is_builtin_style(plan.style)
-    assert render.style_note("stills", plan) is None
+def test_light_preset_with_a_changed_accent_has_no_note() -> None:
+    light = copy.deepcopy(preset_tokens("light"))
+    light["colors"]["accent"] = "#FF3B30"
+    assert render.style_note("stills", _plan(light)) is None
 
 
 @pytest.mark.parametrize("mode", ["final", "audio"])
-def test_final_and_audio_answers_have_no_note(mode: str) -> None:
-    assert render.style_note(mode, _plan("dark")) is None
+@pytest.mark.parametrize("preset", ["dark", "light"])
+def test_final_and_audio_answers_have_no_note(mode: str, preset: str) -> None:
+    assert render.style_note(mode, _plan(preset)) is None
 
 
 def test_guide_tells_the_model_to_name_the_look_first() -> None:

@@ -7,6 +7,7 @@ except the edge live probe, which is tested via a mocked subprocess.run.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -117,7 +118,7 @@ def test_all_critical_ok(tmp_path, monkeypatch):
     assert report["ok"] is True
     assert report["critical_failures"] == []
     ids = {c["id"] for c in report["checks"]}
-    optional = {"faster_whisper", "edge_tts", "playwright", "gemini_key", "elevenlabs_key"}
+    optional = {"faster_whisper", "edge_tts", "playwright", "gemini_key", "elevenlabs_key", "render_browser"}
     assert ids == set(doctor.CRITICAL_IDS) | optional
     assert not {i for i in ids if "ass" in i}  # no ASS subtitle check any more
     assert {"numpy", "pillow"} <= set(doctor.CRITICAL_IDS)
@@ -142,7 +143,7 @@ def test_output_dir_created_deep(tmp_path, monkeypatch):
     check = next(c for c in doctor.run_checks(flow=False, live=False, config=cfg)["checks"]
                  if c["id"] == "output_dir")
     assert check["status"] == "ok"
-    assert "создан" in check["detail"]
+    assert "created" in check["detail"]
     assert Path(cfg.output_dir).is_dir()
 
 
@@ -263,7 +264,7 @@ def test_elevenlabs_key_optional(tmp_path, monkeypatch):
     )
     without = doctor.run_checks(flow=False, live=False, config=cfg)
     key = next(c for c in without["checks"] if c["id"] == "elevenlabs_key")
-    assert key["status"] == "warn"  # необязательный: отсутствие — статус, не ошибка
+    assert key["status"] == "warn"  # optional: absence is a status, not an error
     assert "elevenlabs_key" not in without["critical_failures"]
     assert without["ok"] is True
 
@@ -280,7 +281,7 @@ def test_playwright_optional_vs_flow(tmp_path, monkeypatch):
         if "-version" in argv:
             return SimpleNamespace(returncode=0, stdout="x version 1", stderr="")
         if cmd[:2] == [sys.executable, "-c"]:
-            if "import playwright" in cmd[2]:  # playwright отсутствует
+            if "import playwright" in cmd[2]:  # playwright is not installed
                 return SimpleNamespace(returncode=1, stdout="", stderr="No module named playwright")
             return SimpleNamespace(returncode=0, stdout="", stderr="")  # import edge_tts
         raise AssertionError(f"unexpected probe: {argv}")
@@ -290,12 +291,12 @@ def test_playwright_optional_vs_flow(tmp_path, monkeypatch):
 
     offline = doctor.run_checks(flow=False, live=False, config=cfg)
     pw = next(c for c in offline["checks"] if c["id"] == "playwright")
-    assert pw["status"] == "warn"  # пометка «опционально»
+    assert pw["status"] == "warn"  # marked optional
     assert offline["ok"] is True
 
     flow = doctor.run_checks(flow=True, live=False, config=cfg)
     pw_flow = next(c for c in flow["checks"] if c["id"] == "playwright")
-    assert pw_flow["status"] == "fail"  # в режиме flow — критично
+    assert pw_flow["status"] == "fail"  # critical in flow mode
     assert flow["ok"] is False and "playwright" in flow["critical_failures"]
 
 
@@ -334,8 +335,8 @@ def test_edge_probe_reports_last_error(tmp_path, monkeypatch):
     assert alive is False and "no route to host" in err
 
     check = doctor.check_edge_tts(live=True)
-    assert check["status"] == "warn"  # сервис молчит — окружение не виновато
-    assert "pip" not in check["hint"]  # доустанавливать ничего не нужно
+    assert check["status"] == "warn"  # the service is silent: the environment is not at fault
+    assert "pip" not in check["hint"]  # nothing to install
 
 
 # ------------------------------------------------------------------- CLI/wiring
@@ -354,3 +355,32 @@ def test_main_json_exit_codes(tmp_path, monkeypatch, capsys):
         "critical_failures": ["node"], "ok": False,
     })
     assert doctor.main(["--json"]) == 1
+
+
+# ------------------------------------------------------------- render browser
+
+def test_render_browser_found_is_ok(tmp_path, monkeypatch):
+    from argus.tools import render
+
+    browser = _fake_exe(tmp_path, "chrome.exe")
+    monkeypatch.setattr(render, "_find_browser", lambda: browser)
+    check = doctor.check_render_browser()
+    assert check["status"] == "ok" and check["detail"] == browser
+
+
+def test_render_browser_missing_says_remotion_downloads(tmp_path, monkeypatch):
+    from argus.tools import render
+
+    monkeypatch.setattr(render, "_find_browser", lambda: None)
+    check = doctor.check_render_browser()
+    assert check["status"] == "warn"  # optional: Remotion downloads its own browser
+    assert "Remotion downloads" in check["detail"]
+    assert "REMOTION_BROWSER" in check["hint"]
+
+
+# ------------------------------------------------------------------ language
+
+def test_doctor_messages_are_english():
+    """Tool messages are English (product steering); the doctor source and this file have no Cyrillic."""
+    for path in (Path(doctor.__file__), Path(__file__)):
+        assert re.search("[\u0400-\u04FF]", path.read_text(encoding="utf-8")) is None, path.name

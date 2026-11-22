@@ -15,6 +15,7 @@ cuts land on beats instead of drifting against the music bed.
 from __future__ import annotations
 
 import array
+import json
 import math
 import subprocess
 import tempfile
@@ -22,7 +23,10 @@ from pathlib import Path
 
 from ..config import CONFIG
 from ..ffmpeg import NO_WINDOW
+from ..project import project_dir
 from .. import __version__
+
+MAX_INLINE_BEATS = 12  # the answer lists this many beat times; the full list is in the file at `beats_path`
 
 RATE = 22050  # mono, enough for onset detection
 HOP = 512     # ~23ms hop at 22050 Hz
@@ -110,15 +114,25 @@ def _tempo_and_phase(env: list[float]) -> tuple[float, float, float]:
     window = env_np[:int(period) + 1]
     phase_hops = int(window.argmax())
     confidence = float(ac_np[best])
-    return bpm, phase_hops * hop_s, confidence
+    return float(bpm), float(phase_hops * hop_s), float(confidence)
 
 
-def calculate_beat_grid(audio_path: str, snap_times: list[float] | None = None) -> dict:
+def beats_file(audio: Path, project: str | None) -> Path:
+    """Where the full beat list is written: the project's audio folder, or `<output>/beats/`."""
+    folder = project_dir(project) / "audio" if project else Path(CONFIG.output_dir) / "beats"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / f"{audio.stem}.beats.json"
+
+
+def calculate_beat_grid(
+    audio_path: str, snap_times: list[float] | None = None, project: str | None = None,
+) -> dict:
     """Measure tempo + beat grid of a music track; optionally snap cut times.
 
     audio_path: music bed (mp3/wav). snap_times: candidate scene-cut seconds
     -> each is snapped to the nearest beat (never mid-scene drift).
-    Returns {bpm, beats: [...], snapped: [...], confidence}.
+    The answer has the tempo, the confidence, the first beats and `beats_path`, the JSON
+    file with every beat time (a track of 2 minutes has about 300 beats, too many for a reply).
     """
     src = Path(audio_path).resolve()
     if not src.exists():
@@ -130,14 +144,26 @@ def calculate_beat_grid(audio_path: str, snap_times: list[float] | None = None) 
     period = 60.0 / bpm
     duration = len(samples) / RATE
     beats = [round(phase + i * period, 3) for i in range(int((duration - phase) / period) + 1)]
+    full = {
+        "audio": str(src),
+        "bpm": round(bpm, 2),
+        "beat_interval_s": round(period, 3),
+        "first_beat_s": round(phase, 3),
+        "confidence": round(confidence, 3),
+        "beats": beats,
+    }
+    target = beats_file(src, project)
+    target.write_text(json.dumps(full, ensure_ascii=False), encoding="utf-8")
     result = {
         "engine": f"ARGUS {__version__}",
         "audio": str(src),
         "bpm": round(bpm, 2),
         "beat_interval_s": round(period, 3),
         "first_beat_s": round(phase, 3),
-        "beats": beats,
         "confidence": round(confidence, 3),
+        "beat_count": len(beats),
+        "first_beats": beats[:MAX_INLINE_BEATS],
+        "beats_path": str(target),
         "note": "snap scene cuts to beats (perceptual threshold ~3 frames); "
                 "music first - measure the grid BEFORE laying out scene timing",
     }

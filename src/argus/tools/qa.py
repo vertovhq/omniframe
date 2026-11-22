@@ -58,6 +58,15 @@ PLATFORM_LIMITS: dict[str, tuple[float, str]] = {
     "youtube": (900.0, "15 minutes (12 hours with a verified account)"),
 }
 
+# A preview from render_video (mode "preview") is named `<name>-preview-<format>.mp4`. It is half
+# size and not mastered, so these checks report as warnings on it (Known issue 32).
+PREVIEW_MARK = "-preview-"
+PREVIEW_SOFT_CHECKS = frozenset({"resolution", "loudness", "true_peak"})
+PREVIEW_NOTE = (
+    "this file is a preview (half size, not mastered): size, loudness and true peak are "
+    "warnings here; the other checks still fail the file"
+)
+
 DEFAULT_FRAMES = 4
 MAX_IMAGES = 8                 # evenly spread frames and issue frames together
 
@@ -90,9 +99,10 @@ class _Finding:
 class _Checks:
     """Check results by name, and the findings behind the failed ones."""
 
-    def __init__(self) -> None:
+    def __init__(self, soft: frozenset[str] = frozenset()) -> None:
         self.results: dict[str, dict] = {}
         self.findings: list[_Finding] = []
+        self.soft = soft  # check names whose failures are warnings for this file (previews)
 
     def result(self, name: str, passed: bool, measured: object, expected: str) -> None:
         self.results[name] = {"passed": bool(passed), "measured": measured, "expected": expected}
@@ -109,7 +119,8 @@ class _Checks:
         """A check with one value. A failure adds one finding."""
         self.result(name, passed, measured, expected)
         if not passed:
-            self.findings.append(_Finding(name, severity, message))
+            level = "warning" if name in self.soft else severity
+            self.findings.append(_Finding(name, level, message))
 
     def detection(self, name: str, found: list[_Finding], expected: str) -> None:
         """A check that can find several problems (black, freeze, silence)."""
@@ -441,7 +452,8 @@ def verify_video(
     count = _check_frames(frames)
     say = report or _no_progress
 
-    checks = _Checks()
+    is_preview = PREVIEW_MARK in src.name
+    checks = _Checks(PREVIEW_SOFT_CHECKS if is_preview else frozenset())
     say(0.02, "reading streams")
     try:
         info = stream_info(src)
@@ -472,7 +484,10 @@ def verify_video(
         _check_platform_duration(checks, info.duration, platform)
     say(0.80, "taking frames")
     images, note = _frame_images(src, info.duration, count, checks.findings)
-    return _result(src, fmt, checks, info.duration, images, note)
+    out = _result(src, fmt, checks, info.duration, images, note)
+    if is_preview:
+        out["preview"] = PREVIEW_NOTE
+    return out
 
 
 def run_job(payload: dict, report: Callable[..., None]) -> dict:

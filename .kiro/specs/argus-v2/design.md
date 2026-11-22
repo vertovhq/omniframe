@@ -362,8 +362,8 @@ spread plus one frame per black/freeze issue (cap 8).
 
 ## 14. Studio guide and memory
 
-- `src/argus/STUDIO_GUIDE.md` = `.kiro/specs/argus-v2/STUDIO_GUIDE.md` (written by the
-  planner; copy as is, edit only tool names if they change).
+- `src/argus/STUDIO_GUIDE.md` is the guide (first written by the planner). The spec folder
+  holds only a pointer to it (20.9 item 3); edit the `src/` copy.
 - `studio_guide()` returns `{guide, capabilities: {tools: [...], providers: {...}},
   preferences}`; preferences = knowledge-base file content, last ~4000 characters.
 - `learn_and_record_memory`: same file format; docstring tells the model to record only

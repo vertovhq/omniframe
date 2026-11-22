@@ -146,7 +146,12 @@ video to the end on your own.
   after the end, a sound louder than the voice over words), then render the preview.
 - Offer to save the sounds the user liked (`save_sounds` in `render_video(mode="audio")`).
   Save only after they agree.
-- For music-driven edits run `calculate_beat_grid` and cut on the beats.
+- For music-driven edits run `calculate_beat_grid` (pass `project`) and cut on the beats.
+  Read its `confidence` yourself. When it is low, the grid may not match the track (ambient
+  music, a long rubato intro, a track with no clear pulse). Then do not snap every cut to it:
+  check the first beats against the sound events that `watch_video` lists, or cut by the story
+  and the speech, and tell the user which way you went. The full beat list is in `beats_path`;
+  read the file only when you need the times.
 
 ## 7. Editing the user's footage
 

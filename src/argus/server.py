@@ -395,7 +395,9 @@ def qa_verify_video(
     other, and black of 1.0 s or more in the middle of the video. Warnings (`passed` stays
     true): shorter black and black at the edges, a frozen picture of 3 s or more, silence of
     2 s or more in the middle, and, when `target` ("tiktok", "shorts" or "youtube") is given,
-    a duration above that platform's limit.
+    a duration above that platform's limit. A file named `-preview-` (a `render_video` preview,
+    half size and not mastered) reports frame size, loudness and true peak as warnings, and
+    its result has a `preview` note.
     Every entry in `hard_failures` and `warnings` has `check`, `message` and, where it
     applies, `start` and `end` in seconds. `images` holds `frames` evenly spread frames
     (default 4) and one frame for each black gap and frozen picture, at most 8 in all: look
@@ -457,15 +459,19 @@ def export_package(
 
 
 @mcp.tool()
-def calculate_beat_grid(audio_path: str, snap_times: list[float] | None = None) -> dict:
+def calculate_beat_grid(
+    audio_path: str, snap_times: list[float] | None = None, project: str | None = None,
+) -> dict:
     """Measure tempo + beat grid of a music track; snap scene cuts to beats.
 
     Music-first rhythm: run this on the BGM BEFORE laying out scene timing,
     then put every scene cut on a beat (perceptual threshold ~3 frames).
     snap_times: candidate cut seconds -> returned snapped to the nearest beat
-    (with per-cut shift). Offline: numpy + ffmpeg, no network.
+    (with per-cut shift). Pass `project` so the full beat list is written to that
+    project's audio folder. The reply gives `bpm`, `confidence`, `beat_count`, the first
+    beats and `beats_path` (every beat time, in JSON). Offline: numpy + ffmpeg, no network.
     """
-    return beats.calculate_beat_grid(audio_path, snap_times)
+    return beats.calculate_beat_grid(audio_path, snap_times, project=project)
 
 
 @mcp.tool()

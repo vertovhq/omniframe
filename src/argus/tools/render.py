@@ -71,7 +71,7 @@ from ..plan import (
     Plan,
     WordCue,
     WordsRemap,
-    is_builtin_style,
+    builtin_preset,
     validate_plan,
 )
 from ..project import project_dir, slugify
@@ -92,11 +92,16 @@ EMPTY_FRAME_SPREAD = 3         # a still whose channels all lie within this many
 BUNDLE_KEEP_S = 600            # bundles of other engine states older than this are removed
 BUNDLE_DIR = "bundle"          # <project>/cache/bundle/<key>/, one per engine state
 STILLS_WAIT_S = 90.0           # stills usually finish inside one tool call (bundle + a few frames)
-# Information only: a stills or preview answer carries it when the plan uses the built-in look.
+# Information only: a stills or preview answer carries the line for the built-in preset the plan uses.
 STYLE_NOTE = (
     "style: engine defaults (dark, #7C5CFA, Inter). Set your own palette, fonts and layout "
     "from the reference or the user's request."
 )
+STYLE_NOTE_LIGHT = (
+    "style: built-in preset light (#7C5CFA accent, Inter). Set your own palette, fonts and layout "
+    "from the reference or the user's request."
+)
+STYLE_NOTES = {"dark": STYLE_NOTE, "light": STYLE_NOTE_LIGHT}
 PREVIEW_SCALE = 0.5
 PREVIEW_CRF = 28
 FINAL_CRF = 18
@@ -1070,10 +1075,11 @@ def _run_audio(payload: dict, plan: Plan, root: Path, report: Callable[..., None
 
 
 def style_note(mode: str, plan: Plan) -> str | None:
-    """`style_note` for a stills or preview answer whose plan has the built-in look; else None."""
-    if mode in ("stills", "preview") and is_builtin_style(plan.style):
-        return STYLE_NOTE
-    return None
+    """`style_note` for a stills or preview answer whose plan uses a built-in preset (dark or light); else None."""
+    if mode not in ("stills", "preview"):
+        return None
+    preset = builtin_preset(plan.style)
+    return STYLE_NOTES[preset] if preset is not None else None
 
 
 def run_job(payload: dict, report: Callable[..., None]) -> dict:
