@@ -14,6 +14,7 @@ Build each scene from three layers: a background, a main element, a detail layer
 **depth** panel tilt, parallax layers, card stack, phone and laptop frames that hold another scene
 **camera** dolly, punch-in, rack focus (shake and snap are in energy)
 **info** counters, plates, deltas, polls, checklists, progress bars, bubbles, cards
+**mockups** `AppWindow` (title bar and a prompt typed in), `ToolCallStack` (tool calls sliding in one by one), `ScreenFrame` (laptop or monitor that holds a scene or video), `CounterOverlay` (a counter pinned to a corner)
 
 Cues: `"cues": {"burn": {"word": "сгорает"}, "end": 41.2}`; a word cue is where it is spoken (`nth`, `offset`; needs `captions.words`). Scenes with video (`Media`) render slower.
 

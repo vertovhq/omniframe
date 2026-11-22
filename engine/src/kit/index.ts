@@ -18,3 +18,4 @@ export * from './type';
 export * from './bursts';
 export * from './depth';
 export * from './camera';
+export * from './mockups';
