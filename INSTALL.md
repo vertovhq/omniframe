@@ -87,7 +87,7 @@ ElevenLabs keys start with `sk_`. The key is shown once, when you create it. A l
 without `sk_` is a key ID, and the API rejects it with `api_key_id_used_as_api_key`.
 
 Veo: the Gemini API shut Veo 3.1 Preview down on 2026-10-22, so `provider="api"` is refused. For Veo
-clips, use the Flow route: set `ARGUS_VEO_PROVIDER=flow` in `.env`, then run `flow_login` once from the
+clips, use the Flow route: set `ARGUS_VEO_PROVIDER=flow` in `.env`, then run `generate_veo_clip` with `login=true` once from the
 chat and sign in with your own Google account. The Flow route is experimental.
 
 Other settings are documented in `.env.example`. `OMNIFRAME_OUTPUT_DIR` sets where projects are written.

@@ -126,13 +126,13 @@ Any other MCP client works the same way: start `python -m argus` from the venv, 
 | `voice_options` | Voices, models and providers available now | optional |
 | `synthesize_voiceover` | Voice audio and word timings (`{w, s, e}`), mastered to -14 LUFS. Providers: edge (free), ElevenLabs, Gemini | none (edge); keys improve quality |
 | `generate_veo_clip` | Veo 3.1 clip through your Flow session (`provider="flow"`). The API route is refused (see Honest notes) | Flow login |
-| `flow_login` | One-time Flow login: opens a browser window, you sign in, the profile is saved | Google account |
+| `generate_veo_clip` with `login=true` | One-time Flow login: opens a browser window, you sign in, the profile is saved | Google account |
 | `render_video` | Plan to stills, preview or final in 9:16 or 16:9: graphics, footage clips, captions, music, sound effects | none |
 | `job_status` | State and result of a long job that returned a `job_id` | none |
 | `qa_verify_video` | Technical checks (size, fps, loudness, true peak, black gaps, audio length) and frames to look at | none |
 | `export_package` | Final folder with the videos, covers and `post.md`. Refuses when QA has a hard failure | none |
 | `calculate_beat_grid` | Tempo and beat grid of a music track | none |
-| `search_sfx`, `download_sfx` | Freesound sound effects (CC0 by default). They read public Freesound pages | none |
+| `search_sfx` (with `download=[ids]`, `out_dir`) | Freesound sound effects (CC0 by default). They read public Freesound pages | none |
 | `run_script` | Runs your own Python scripts from the scripts folder | none |
 | `learn_and_record_memory` | Saves a lasting user preference; `studio_guide` returns it in later sessions | none |
 | `doctor` | Environment check: Python, ffmpeg, Node, engine, numpy, Pillow, optional extras, keys, output folder | none |
@@ -179,7 +179,7 @@ The working order for every plan: `synthesize_voiceover` when the video has a vo
   (https://aistudio.google.com/docs/video). `generate_veo_clip` with `provider="api"` returns that
   message and makes no call.
 - **Flow is opt-in and fragile.** `provider="flow"` drives your own flow.google session with
-  Playwright. It needs one `flow_login`, uses one account per person, and depends on Google's
+  Playwright. It needs one `generate_veo_clip` with `login=true`, uses one account per person, and depends on Google's
   interface. The selectors are in `src/argus/tools/flow_browser.py`.
 - **Captions come from the plan.** The engine draws them from the plan's `captions` block. ARGUS
   writes no `.ass` files.

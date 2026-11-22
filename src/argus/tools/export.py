@@ -533,6 +533,9 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         result["library"] = library_out
     # What the project's renders cost so far (seconds, from the kept render jobs' `timing`).
     result["render_timing"] = jobs.project_render_totals(root)
+    from .. import economy  # local import: the reply-size log of every tool call so far
+
+    result["economy"] = economy.totals(root.name)
     return result
 
 

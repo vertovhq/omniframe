@@ -606,9 +606,13 @@ class _PublicDir:
     that an earlier job added and this job's plan no longer names.
     """
 
-    def __init__(self, root: Path, bases: Sequence[Path], index: Path | None = None) -> None:
+    def __init__(self, root: Path, bases: Sequence[Path], index: Path | None = None, collect: bool = False) -> None:
         self.root = root
         self.bases = list(bases)
+        # `collect` (stills jobs, task 20.10 item 5c): a missing file is listed in `missing` instead of raising,
+        # so the stills job reports every missing file at once.
+        self.collect = collect
+        self.missing: list[str] = []
         self._done: dict[Path, str] = {}
         self._index_path = index
         self._names: dict[str, str] = _read_name_index(index)
@@ -625,6 +629,9 @@ class _PublicDir:
         if src is None and _builtin_sfx(value):
             src = (_ensure_default_sfx() / Path(value).name).resolve()
         if src is None or not src.is_file():
+            if self.collect:
+                self.missing.append(f"{where}: file not found: {value}")
+                return value
             raise FileNotFoundError(f"{where}: file not found: {value}")
         rel = self._done.get(src)
         if rel is None:
@@ -702,6 +709,40 @@ def link_component_media(public: _PublicDir, components: Path) -> list[str]:
             continue  # never added by a job of this project: nothing to link, the render reports the 404
         _link_or_copy(src, dst)
         linked.append(rel)
+    return linked
+
+
+PROJECT_MEDIA_NAME = re.compile(r"""["'`]([A-Za-z0-9_./-]+\.(?:png|jpe?g|webp|gif|svg|mp4|webm|mov))["'`]""", re.IGNORECASE)
+
+
+def _media_key(name: str) -> str:
+    """The name under `m/` for a project file a component names. Must match `mediaKey` in engine/src/kit/media.ts."""
+    return re.sub(r"[^A-Za-z0-9._-]", "_", name)
+
+
+def link_project_images(public: _PublicDir, components: Path, bases: Sequence[Path]) -> dict[str, str]:
+    """Link every project file that a custom component names in a string, e.g. `mediaUrl("media/octo.png")`.
+
+    Plan files are linked by `_PublicDir.add`; a component names its files only in its own code, so
+    this scans the component sources for image and video names and resolves them in the project
+    folder, then the other bases. Names that do not resolve are left out, and the render reports the
+    missing file. Returns `{name: "m/<key>"}` for the files it linked.
+    """
+    if not components.is_dir():
+        return {}
+    names: set[str] = set()
+    for path in components.rglob("*"):
+        if path.is_file() and path.suffix in (".ts", ".tsx"):
+            names.update(PROJECT_MEDIA_NAME.findall(path.read_text(encoding="utf-8", errors="replace")))
+    linked: dict[str, str] = {}
+    for name in sorted(names):
+        src = resolve_asset(name, bases)
+        if src is None or not src.is_file():
+            continue
+        rel = f"{MEDIA_DIR}/{_media_key(name)}"
+        if not (public.root / rel).exists():
+            _link_or_copy(src, public.root / rel)
+        linked[name] = rel
     return linked
 
 
@@ -1203,7 +1244,10 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
 
     timing: dict[str, Any] = {}
     report(0.01, "preparing files")
-    public = _PublicDir(work / "public", [Path(b) for b in payload["bases"]], index=root / "cache" / PUBLIC_INDEX)
+    public = _PublicDir(
+        work / "public", [Path(b) for b in payload["bases"]], index=root / "cache" / PUBLIC_INDEX,
+        collect=mode == "stills",
+    )
     bases = [Path(b) for b in payload["bases"]]
     clip_media = _prepare_clip_media(plan, bases, root, with_audio=mode != "stills", report=report)
     # Sound events become WAV files at known times (`sounds.resolve_events`); the engine only plays them.
@@ -1218,7 +1262,18 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         engine_plan, payload.get("caption_words"), public,
         with_audio=mode != "stills", clip_media=clip_media, cues=payload.get("cues"),
     )
+    if public.missing:  # stills only (task 20.10 item 5c): every missing file at once, nothing is drawn
+        shutil.rmtree(work, ignore_errors=True)
+        return {
+            "engine": f"ARGUS {__version__}",
+            "valid": False,
+            "mode": mode,
+            "missing_media": public.missing,
+            "summary": f"{len(public.missing)} media file(s) not found, so no still was drawn. "
+                       "Fix the paths in the plan, then render the stills again.",
+        }
     relinked = link_component_media(public, root / COMPONENTS_DIR)
+    linked_images = link_project_images(public, root / COMPONENTS_DIR, bases)
     public.remember()
     spec: dict[str, Any] = {
         "props": props,
@@ -1236,6 +1291,8 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         "duration": plan.duration,
         "project": root.name,
     }
+    if linked_images:
+        result["linked_images"] = linked_images  # project files a component names with mediaUrl("...")
     if relinked:
         result["relinked_media"] = relinked  # files a component names that this plan does not
     if payload.get("warnings") or sfx_warnings:
@@ -1383,6 +1440,12 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
             checked = qa_checks.verify_video(out, format=fmt)
             timing["qa_s"] = round(time.monotonic() - t_qa, 3)
             result["qa"] = {k: checked[k] for k in ("passed", "failures", "warnings", "summary") if k in checked}
+        if not preview and "export" in payload.get("then", []):
+            # `then: ["export"]`: the publishing folder is written in this job, from the file rendered here.
+            report(0.97, "writing the export")
+            t_exp = time.monotonic()
+            result["export"] = _chained_export(root, out, fmt, payload.get("export") or {}, report)
+            timing["export_s"] = round(time.monotonic() - t_exp, 3)
 
     shutil.rmtree(work, ignore_errors=True)
     result["elapsed_s"] = round(time.monotonic() - started, 1)
@@ -1391,6 +1454,23 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     # ARGUS time per stage only (model time is outside ARGUS); the worker sends stderr to the job's log.txt.
     print("ARGUS stage times: " + ", ".join(f"{k} {v}" for k, v in timing.items()), file=sys.stderr, flush=True)
     return result
+
+
+def _chained_export(root: Path, out: Path, fmt: str, args: dict, report: Any) -> dict:
+    """`then: ["export"]`: run the export job's own functions in this job, with this render's final file.
+
+    `args` are the arguments of `export_package` (`texts`, `cover_times`, `name`, `save_to_library`).
+    The project and the video come from this render, so the model does not pass them again.
+    """
+    from . import export as export_job  # local: the export module is not needed by a plain render
+
+    payload, errors = export_job.prepare_export(
+        root, {fmt: str(out)}, args.get("texts") or {}, args.get("cover_times"),
+        args.get("name"), args.get("save_to_library"),
+    )
+    if payload is None:
+        return {"valid": False, "errors": errors, "note": "the export was not written; fix the listed problems"}
+    return export_job.run_job(payload, report)
 
 
 # ------------------------------------------------------------------ tool
@@ -1406,14 +1486,21 @@ def render_video(
     wait_s: float | None = None,
     save_sounds: Any = None,
     then: list[str] | None = None,
+    export: Any = None,
 ) -> dict | list:
     """Tool logic of `render_video`: validate, then run the `render` job.
 
+    `then` may hold "qa" and "export"; "export" takes `export`, the arguments of `export_package`, and
+    writes the publishing folder from this render's final file (task 20.10 item 22).
     An invalid request returns `{"valid": false, "errors": [...]}` and starts nothing.
     """
     root = project_dir(project)
     chained = [str(step) for step in (then or [])]
-    bad_steps = [f"then: {step!r} is not a step; the only one is \"qa\"" for step in chained if step != "qa"]
+    bad_steps = [
+        f"then: {step!r} is not a step; the steps are \"qa\" and \"export\"" for step in chained if step not in ("qa", "export")
+    ]
+    if "export" in chained and not isinstance(export, dict):
+        bad_steps.append("then: \"export\" needs `export`, the arguments of export_package as an object")
     if chained and mode != "final":
         bad_steps.append("then: applies to mode \"final\" only")
     if bad_steps:
@@ -1430,7 +1517,18 @@ def render_video(
             "note": "nothing was rendered; fix the listed problems and call again",
         }
     payload["then"] = chained
+    if "export" in chained:
+        payload["export"] = export
     if mode != "audio" and not (engine_dir() / "node_modules").is_dir():
         raise RuntimeError(not_ready_message())
     wait = wait_s if wait_s is not None else (STILLS_WAIT_S if mode == "stills" else jobs.DEFAULT_WAIT_S)
-    return jobs.run_or_detach("render", payload, wait_s=wait)
+    reply = jobs.run_or_detach("render", payload, wait_s=wait)
+    from .. import state as project_state  # the project's stage for studio_guide(project=...)
+
+    if isinstance(plan, str):
+        project_state.record(project, plan=plan)
+    if isinstance(reply, dict):
+        project_state.record(project, last_render={
+            "mode": mode, "job_id": reply.get("job_id"), "summary": str(reply.get("summary", ""))[:160],
+        })
+    return reply

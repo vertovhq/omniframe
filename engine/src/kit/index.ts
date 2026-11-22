@@ -19,3 +19,4 @@ export * from './bursts';
 export * from './depth';
 export * from './camera';
 export * from './mockups';
+export * from './media';

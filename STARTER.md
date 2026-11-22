@@ -19,7 +19,7 @@ order and my saved preferences. The main tools are `watch_video`, `get_frames`, 
 1. Write the script: a hook in the first 1.5 seconds, the promise, three to five beats, and a call to
    action. Show it to me and wait for my approval before you voice it.
 2. Choose the picture: kinetic graphics from a plan for `render_video` (free, local), Veo clips
-   (`generate_veo_clip`, with `provider="flow"` after `flow_login`), or a mix. Tell me which one you
+   (`generate_veo_clip`, with `provider="flow"` after its `login=true` run), or a mix. Tell me which one you
    chose and why.
 3. Choose the voice. Use `voice_options`, pick one yourself, and tell me which one. Without keys, use
    edge (free). With the ElevenLabs or Gemini keys, you can use their voices too. Write the delivery

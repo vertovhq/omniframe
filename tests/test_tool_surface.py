@@ -1,0 +1,52 @@
+"""Task 20.10 item 20: the tool surface sent on every turn (descriptions plus input schemas) stays small,
+and the two merged tools are gone: `flow_login` is `generate_veo_clip(login=true)`, `download_sfx` is
+`search_sfx(download=[...], out_dir=...)`.
+
+Offline: reads the registered tools of the server, no calls.
+"""
+
+from __future__ import annotations
+
+import inspect
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from argus import server  # noqa: E402
+
+SURFACE_LIMIT = 9000  # descriptions + input schemas of all tools, characters (20.10 item 20)
+
+
+def _tools() -> list:
+    return list(server.mcp._tool_manager.list_tools())
+
+
+def _schema(tool) -> dict:
+    return getattr(tool, "parameters", None) or getattr(tool, "inputSchema", None) or {}
+
+
+def surface_size() -> int:
+    return sum(
+        len(tool.description or "") + len(json.dumps(_schema(tool), separators=(",", ":"), ensure_ascii=False))
+        for tool in _tools()
+    )
+
+
+def test_descriptions_and_schemas_stay_under_the_limit() -> None:
+    assert surface_size() <= SURFACE_LIMIT, surface_size()
+
+
+def test_merged_tools_are_gone_and_their_options_exist() -> None:
+    names = {tool.name for tool in _tools()}
+    assert "flow_login" not in names
+    assert "download_sfx" not in names
+    assert "login" in inspect.signature(server.generate_veo_clip).parameters
+    assert "download" in inspect.signature(server.search_sfx).parameters
+
+
+def test_every_parameter_description_is_short() -> None:
+    for tool in _tools():
+        for prop in (_schema(tool).get("properties") or {}).values():
+            assert len(prop.get("description", "")) <= 80, tool.name

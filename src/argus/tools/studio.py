@@ -11,11 +11,12 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 from collections.abc import Iterable
 from importlib import resources
 from pathlib import Path
 
-from .. import __version__
+from .. import __version__, state
 from ..config import CONFIG, ArgusConfig
 from ..media_out import Image
 from . import kit_preview, library, sounds
@@ -142,16 +143,75 @@ def read_kit() -> str:
         return f"The motion kit catalogue is missing ({path}). Read the files in engine/src/kit/ instead."
 
 
-def studio_guide(tool_names: Iterable[str], config: ArgusConfig | None = None, *, custom_scenes: bool = False) -> dict:
-    """Guide + capabilities + preferences, as returned by the `studio_guide` tool.
+SECTION_HEADING = re.compile(r"^## (\d+)\. (.+)$", re.MULTILINE)
+
+
+def guide_sections(text: str) -> dict[str, tuple[str, str]]:
+    """`{number: (title, body)}` for every `## N. Title` section of the guide text, in order."""
+    matches = list(SECTION_HEADING.finditer(text))
+    out: dict[str, tuple[str, str]] = {}
+    for i, match in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        out[match.group(1)] = (match.group(2).strip(), text[match.end():end].strip())
+    return out
+
+
+def core_text(text: str) -> str:
+    """The guide core: the title, section 0 (look, order, budget rules), and an index of the other sections."""
+    sections = guide_sections(text)
+    first = SECTION_HEADING.search(text)
+    head = text[: first.start()].strip() if first else ""
+    core = sections.get("0")
+    core_part = f"{core[0]}\n\n{core[1]}" if core else ""
+    index = "\n".join(
+        f'- section {num} "{title}": studio_guide(section="{num}")'
+        for num, (title, _) in sections.items() if num != "0"
+    )
+    return "\n\n".join(part for part in (head, core_part, "Other sections:\n" + index) if part)
+
+
+def find_section(sections: dict[str, tuple[str, str]], key: str) -> str | None:
+    """The number of the section named `key`: its number, `core`, or a word of its title (case-insensitive)."""
+    key = key.strip().lower()
+    if key == "core":
+        key = "0"
+    if key in sections:
+        return key
+    for num, (title, _) in sections.items():
+        if key and key in title.lower():
+            return num
+    return None
+
+
+def section_for_model(section: str, full: bool = False) -> dict:
+    """`studio_guide(section=...)`: one section of the guide. An unknown name lists the valid ones."""
+    sections = guide_sections(read_guide())
+    head = {"engine": f"ARGUS {__version__}"}
+    num = find_section(sections, section)
+    if num is None:
+        names = [f"{n} {title}" for n, (title, _) in sections.items()]
+        return {**head, "error": f"unknown section {section!r}", "sections": names}
+    title, body = sections[num]
+    return once(f"section:{num}", {**head, "section": num, "title": title, "text": body}, full)
+
+
+def studio_guide(
+    tool_names: Iterable[str],
+    config: ArgusConfig | None = None,
+    *,
+    custom_scenes: bool = False,
+    project: str | None = None,
+) -> dict:
+    """Guide core + capabilities + preferences, as returned by the `studio_guide` tool.
 
     With `custom_scenes` the result also has `motion_kit`, the index of the kit groups
-    (one group's text and strip: `kit_group_result`).
+    (one group's text and strip: `kit_group_result`). With `project` it has `resume`, at most
+    5 lines of the project's stage (`state.resume_lines`).
     """
     cfg = CONFIG if config is None else config
     preferences, truncated = read_preferences(cfg.knowledge_base)
     out = {
-        "guide": read_guide(),
+        "guide": core_text(read_guide()),
         "capabilities": {
             "tools": sorted(tool_names),
             "providers": providers(cfg),
@@ -165,6 +225,10 @@ def studio_guide(tool_names: Iterable[str], config: ArgusConfig | None = None, *
         out["library"]["sfx"] = sfx_lines  # one line per saved sound; copy its recipe into audio.sounds
     if custom_scenes:
         out["motion_kit"] = read_kit()
+    if project:
+        resume = state.resume_lines(project)
+        if resume:
+            out["resume"] = resume
     return out
 
 

@@ -23,6 +23,17 @@ every creative decision. The tools return pictures and timecodes so you can look
 2. Watch the material: `watch_video` for a shot list and sound events, `get_frames` for exact frames.
 3. Write the plan (the scenes, captions and audio) and check it with `render_video` in `stills` mode.
    Look at every frame before the next step.
+
+## Budget rules (do not)
+
+- Do not re-read files you wrote.
+- Do not list folders recursively.
+- Edit scenes with small replacements, not whole files.
+- Do not run more than two stills rounds. The second round is only for scenes with a visible defect.
+- Do not call `job_status` more than once per wait.
+- Do not read long data (beats, transcripts, QA reports) whole. Read the file lines you need.
+- With "no checks", go straight to the preview.
+- Read a guide section with `studio_guide(section=...)` only when you need it.
 4. Voice the script with `synthesize_voiceover` when there is narration. Use the same project name.
 5. Render `preview`, then `final`. Long renders return a `job_id`; follow it with `job_status`.
 6. Run `qa_verify_video` on the final file. Fix every hard failure before export.

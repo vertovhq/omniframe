@@ -166,15 +166,13 @@ def ensure_started() -> dict:
         return read_status()
     argus_home().mkdir(parents=True, exist_ok=True)
     with open(log_path(), "a", encoding="utf-8") as log:
-        kwargs: dict = {}
-        if os.name == "nt":
-            kwargs["creationflags"] = NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
-        else:
-            kwargs["start_new_session"] = True
+        kwargs: dict = {} if os.name == "nt" else {"start_new_session": True}
         proc = subprocess.Popen(
             [sys.executable, "-m", "argus.engine_setup"],
             stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-            cwd=str(argus_home()), **kwargs,
+            cwd=str(argus_home()),
+            creationflags=NO_WINDOW | (subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0),
+            **kwargs,
         )
     _write_status(state="installing", step="starting", pid=proc.pid, error="", started=time.time())
     return read_status()
