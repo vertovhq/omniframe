@@ -122,7 +122,7 @@ In the Kiro chat, ask for `doctor`. It returns the same report as JSON.
 In the Kiro chat:
 
 1. `Call studio_guide and follow its working order.`
-2. `Watch examples/media/man-with-camera-fragment.mp4 with watch_video, then get_frames at 2 and 6 seconds. Describe what you see.`
+2. `Watch examples/media/moving-shapes-8s.mp4 with watch_video, then get_frames at 2 and 6 seconds. Describe what you see.`
 3. `Read examples/media/sample-voiceover.txt and voice it with synthesize_voiceover, project demo.`
 4. `Render stills of examples/plans/graphics_9x16.json in project demo at 1, 4 and 8 seconds. Show me the frames.`
 5. When the stills look right: `Render a preview, then the final of the same plan.`

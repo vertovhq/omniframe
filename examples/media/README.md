@@ -2,9 +2,9 @@
 
 Files for the judge quickstart in the main [README](../../README.md).
 
-- `man-with-camera-fragment.mp4`: an 8 to 10 second fragment of *Man with a Movie Camera*
-  (Dziga Vertov, 1929). The film is in the public domain in the United States. The fragment has no
-  sound track, so the voice comes from ARGUS.
+- `moving-shapes-8s.mp4`: an 8 second clip, 720x1280 (9:16), 30 fps, with no sound track. It was
+  generated for this repository with ffmpeg's lavfi sources: a moving gradient and five moving boxes.
+  It contains no third-party material.
 - `sample-voiceover.txt`: the text of the sample voiceover. ARGUS voices it when you run the example
   (`synthesize_voiceover`). No audio file is stored in the repository.
 

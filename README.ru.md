@@ -50,7 +50,7 @@ N credits и занимает M min. Цифры появятся после де
 3. Подключи MCP-клиент (см. [Подключение клиента](#подключение-клиента)) и перезагрузи MCP-серверы.
 4. Напиши в чат, по порядку (файлы лежат в [`examples/media/`](examples/media/README.md)):
    - `Вызови studio_guide и следуй рабочему порядку из него.`
-   - `Посмотри examples/media/man-with-camera-fragment.mp4 через watch_video, потом get_frames на 2 и 6 секундах. Опиши, что видишь.`
+   - `Посмотри examples/media/moving-shapes-8s.mp4 через watch_video, потом get_frames на 2 и 6 секундах. Опиши, что видишь.`
    - `Прочитай examples/media/sample-voiceover.txt и озвучь его через synthesize_voiceover, проект demo.`
    - `Отрендери stills из examples/plans/graphics_9x16.json в проекте demo на 1, 4 и 8 секундах. Покажи кадры.`
 

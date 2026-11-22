@@ -49,7 +49,7 @@ QA and export. Veo clips need a Flow login or an API key (see [Honest notes](#ho
 3. Connect your MCP client (see [Connect your client](#connect-your-client)) and reload its MCP servers.
 4. Ask in the chat, in this order (files are in [`examples/media/`](examples/media/README.md)):
    - `Call studio_guide and follow its working order.`
-   - `Watch examples/media/man-with-camera-fragment.mp4 with watch_video, then get_frames at 2 and 6 seconds. Describe what you see.`
+   - `Watch examples/media/moving-shapes-8s.mp4 with watch_video, then get_frames at 2 and 6 seconds. Describe what you see.`
    - `Read examples/media/sample-voiceover.txt and voice it with synthesize_voiceover, project demo.`
    - `Render stills of examples/plans/graphics_9x16.json in project demo at 1, 4 and 8 seconds. Show me the frames.`
 
