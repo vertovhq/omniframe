@@ -468,3 +468,71 @@ def test_delivery_style_tells_v3_from_v2() -> None:
     assert "audio tags" in voiceover.delivery_style("eleven_v4")
     assert "SSML" in voiceover.delivery_style("eleven_multilingual_v2")
     assert "no SSML" in voiceover.delivery_style("eleven_v3")
+
+
+# ------------------------------------------------------------------ a name that already holds a voice
+
+@pytest.fixture
+def direct_jobs(voice_env) -> list:
+    """Runs each voiceover job at once in this process, ElevenLabs mocked; returns the started payloads."""
+    started: list[dict] = []
+
+    def run_now(kind, data, key=None, wait_s=20.0):
+        started.append(data)
+        return voiceover.run_job(data, lambda *a, **k: None)
+
+    voice_env["monkeypatch"].setattr(jobs, "run_or_detach", run_now)
+    return started
+
+
+CLASH = "voice.mp3 already exists in project octopus-hearts with other text; pass overwrite=true or another name"
+
+
+def test_other_text_under_the_same_name_is_refused_and_the_files_stay(voice_env, direct_jobs) -> None:
+    voice_env["monkeypatch"].setattr("urllib.request.urlopen", FakeEleven())
+    first = voiceover.synthesize_voiceover("First text.", "octopus-hearts", name="voice", wait_s=5)
+    audio, words = Path(first["audio"]), Path(first["words_path"])
+    audio_before, words_before = audio.read_bytes(), words.read_bytes()
+
+    out = voiceover.synthesize_voiceover("Another text.", "Octopus Hearts", name="voice", wait_s=5)
+
+    assert out["summary"] == CLASH and out["error"] == CLASH
+    assert audio.read_bytes() == audio_before and words.read_bytes() == words_before
+    assert len(direct_jobs) == 1  # the refused call started no job
+
+
+def test_overwrite_true_replaces_the_voice(voice_env, direct_jobs) -> None:
+    fake = FakeEleven(durations=[1.0])
+    voice_env["monkeypatch"].setattr("urllib.request.urlopen", fake)
+    first = voiceover.synthesize_voiceover("First text.", "octopus-hearts", name="voice", wait_s=5)
+    audio = Path(first["audio"])
+    audio_before = audio.read_bytes()
+
+    fake.durations = [2.0]  # a longer take, so the new audio differs
+    second = voiceover.synthesize_voiceover("Another text.", "octopus-hearts", name="voice", overwrite=True, wait_s=5)
+
+    assert "error" not in second and second["duration"] > 1.5  # the first take was 1 s
+    assert audio.read_bytes() != audio_before
+    assert read_words(second)[0]["w"] == "Another"
+    assert len(direct_jobs) == 2
+
+
+def test_same_text_under_the_same_name_is_a_repeat_and_goes_through(voice_env, direct_jobs) -> None:
+    voice_env["monkeypatch"].setattr("urllib.request.urlopen", FakeEleven())
+    voiceover.synthesize_voiceover("Same text.", "octopus-hearts", name="voice", wait_s=5)
+
+    second = voiceover.synthesize_voiceover("Same text.", "octopus-hearts", name="voice", wait_s=5)
+
+    assert "error" not in second and "audio" in second
+    assert len(direct_jobs) == 2
+
+
+def test_a_file_with_no_text_record_counts_as_other_text(voice_env, direct_jobs) -> None:
+    audio = project.project_dir("octopus-hearts") / "audio"
+    (audio / "voice.mp3").write_bytes(b"made before the text record")
+
+    out = voiceover.synthesize_voiceover("Any text.", "octopus-hearts", name="voice", wait_s=5)
+
+    assert out["summary"] == CLASH
+    assert (audio / "voice.mp3").read_bytes() == b"made before the text record"
+    assert direct_jobs == []

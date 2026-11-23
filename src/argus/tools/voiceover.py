@@ -19,6 +19,7 @@ loudnorm) -> mp3. Anything that can take longer than ~20 s runs through `argus.j
 from __future__ import annotations
 
 import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -883,6 +884,7 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         _concat_wavs(wavs, joined)
         out.parent.mkdir(parents=True, exist_ok=True)
         _master(joined, out)
+        _text_sign_path(out.parent, name).write_text(_text_sign(text), encoding="utf-8")
         duration = round(stream_info(out).duration, 3)
 
         words: list[dict] | None
@@ -931,6 +933,31 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     return result
 
 
+def _text_sign(text: str) -> str:
+    """SHA-256 of the spoken text. Stored beside the audio, it tells a repeat from other text under the same name."""
+    return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
+
+
+def _text_sign_path(audio: Path, name: str) -> Path:
+    return audio / f"{name}.text.sha256"
+
+
+def _voice_clash(project: str, name: str, text: str) -> str | None:
+    """Why this voice may not replace `<project>/audio/<name>.mp3`, or None when it may.
+
+    The same text under the same name is a repeat and is replaced. Other text, or a file with no record of
+    its text (made before this record existed), is not replaced unless the caller passes `overwrite`.
+    """
+    slug = slugify(project)
+    audio = CONFIG.output_dir / "projects" / slug / "audio"
+    if not (audio / f"{name}.mp3").exists():
+        return None
+    sign = _text_sign_path(audio, name)
+    if sign.is_file() and sign.read_text(encoding="utf-8").strip() == _text_sign(text):
+        return None
+    return f"{name}.mp3 already exists in project {slug} with other text; pass overwrite=true or another name"
+
+
 def synthesize_voiceover(
     text: str,
     project: str,
@@ -939,6 +966,7 @@ def synthesize_voiceover(
     model: str | None = None,
     name: str = "voice",
     settings: dict | None = None,
+    overwrite: bool = False,
     wait_s: float = jobs.DEFAULT_WAIT_S,
 ) -> dict | list:
     """Tool logic of `synthesize_voiceover`: validate, then run the `voiceover` job.
@@ -952,6 +980,9 @@ def synthesize_voiceover(
     if settings is not None and not isinstance(settings, dict):
         raise ValueError("settings must be an object like {\"stability\": 0.5}")
     resolve_provider(provider)  # fail early on an unknown or unavailable provider
+    clash = None if overwrite else _voice_clash(project, slugify(name), text)
+    if clash:
+        return {"engine": f"ARGUS {__version__}", "summary": clash, "error": clash}
     payload = {
         "text": text,
         "project": project,

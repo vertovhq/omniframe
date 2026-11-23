@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Annotated
+
+from pydantic import Field
 
 try:
     # mcp >= 2.x
@@ -140,6 +143,7 @@ def synthesize_voiceover(
     model: str | None = None,
     name: str = "voice",
     settings: dict | None = None,
+    overwrite: Annotated[bool, Field(description="Replace this name's voice file when its text differs")] = False,
 ) -> dict:
     """Speak `text` into `<project>/audio/<name>.mp3` with word timings for captions.
 
@@ -149,7 +153,8 @@ def synthesize_voiceover(
     """
     from .tools.voiceover import synthesize_voiceover as impl
 
-    return impl(text, project, provider=provider, voice=voice, model=model, name=name, settings=settings)
+    return impl(text, project, provider=provider, voice=voice, model=model, name=name, settings=settings,
+                overwrite=overwrite)
 
 
 @_tool

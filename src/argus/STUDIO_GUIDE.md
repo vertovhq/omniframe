@@ -13,6 +13,8 @@ gave no reference, propose 2 or 3 looks in one message, recommend one, and ask t
 Order: plan, then stills sheet, then fixes, then preview, then final once.
 Show the subject. A video about a thing shows that thing on screen in most scenes: the user's footage, a clip, or a figure you draw in plain React/SVG in the chosen look. Text-only scenes are for the hook and the captions, not the whole video.
 
+Before a new video, check studio_guide(project=...) and the style library; reuse your own scenes from a past video in the same series instead of rewriting them.
+
 Budget, a "do not" list (no code enforces it):
 - Do not re-read files you wrote.
 - Do not list folders recursively.

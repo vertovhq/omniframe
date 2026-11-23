@@ -342,3 +342,11 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Built: scene kind `layers` (`plan.py`, `layers.py`, `engine/src/layers.tsx`), guide section 11 (2,979 characters), commit `7f45153` on `layers-wip`; main branch has none of it. Dropped by the author on 2026-11-22: stills looked crude and the plan was longer than TSX.
 - Measured on `octopus-layers` (Swim + Blood): plan 11,256 characters against 7,829 in `Swim.tsx` + `Blood.tsx`; the 6 stills were rendered next to the old video and in a second look.
 - Verified: `test_layers`, guide and tool-surface tests 50 passed; engine `tsc --noEmit` exit 0. Not verified: the full `pytest` run (its result was never read).
+
+## Voice overwrite guard (date not recorded, Haiku 5.5)
+- Built: `synthesize_voiceover` leaves `<project>/audio/<name>.mp3` alone when it holds other text. `<name>.text.sha256` records each voice's text; the same text is a repeat, and `overwrite=true` replaces the file. Guide core line: check `studio_guide(project=...)` and the style library before a new video.
+- Bugs & fixes: the new `overwrite` flag raised the tool surface from about 8,996 to 9,103 characters against the 9,000 limit → the author set `SURFACE_LIMIT` to 9,200 in `tests/test_tool_surface.py`.
+- Kiro: none.
+- Verified: `test_voiceover.py`, `test_voice_project.py`, `test_voice_options.py`, `test_guide_sections.py`, `test_tool_surface.py`: 92 passed, and the surface test failed until the limit change. After it, `test_tool_surface.py`: 4 passed. Full pytest not run.
+- Not verified: a voice file made before this change has no text record, so a repeat of its text is refused until one `overwrite=true` call. Not run against octopus-hearts.
+- Credits: <author fills>

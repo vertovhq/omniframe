@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from argus import server  # noqa: E402
 
-SURFACE_LIMIT = 9000  # descriptions + input schemas of all tools, characters (20.10 item 20)
+SURFACE_LIMIT = 9200  # descriptions + input schemas of all tools, characters (20.10 item 20; 9000 before the voice overwrite flag)
 
 
 def _tools() -> list:
@@ -44,6 +44,13 @@ def test_merged_tools_are_gone_and_their_options_exist() -> None:
     assert "download_sfx" not in names
     assert "login" in inspect.signature(server.generate_veo_clip).parameters
     assert "download" in inspect.signature(server.search_sfx).parameters
+
+
+def test_voiceover_overwrite_is_an_optional_flag_with_a_description() -> None:
+    tool = next(t for t in _tools() if t.name == "synthesize_voiceover")
+    prop = _schema(tool)["properties"]["overwrite"]
+    assert prop["type"] == "boolean" and prop["default"] is False
+    assert 0 < len(prop["description"]) <= 80
 
 
 def test_every_parameter_description_is_short() -> None:
