@@ -16,9 +16,12 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import economy  # noqa: E402
+from argus import economy, jobs, project  # noqa: E402
 from argus.config import CONFIG  # noqa: E402
 from argus.media_out import Image  # noqa: E402
+from argus.tools import export, qa  # noqa: E402
+
+from test_export import TEXTS, _master, _stage  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -98,3 +101,26 @@ def test_server_tools_are_wrapped_and_keep_their_names() -> None:
     names = server._registered_tool_names()
     assert "render_video" in names and "export_package" in names
     assert server.render_video.__name__ == "render_video"
+
+
+def test_export_totals_are_read_before_work_is_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    output = tmp_path / "out"
+    for module in (project, jobs, qa):
+        monkeypatch.setattr(module, "CONFIG", dataclasses.replace(module.CONFIG, output_dir=output))
+    folder = tmp_path / "masters"
+    folder.mkdir()
+    masters = {
+        "9:16": _master(folder / "vertical.mp4", "1080x1920"),
+        "16:9": _master(folder / "wide.mp4", "1920x1080"),
+    }
+    root, videos = _stage("Economy Run", masters)
+    economy.record(root.name, "render_video", {"summary": "rendered"}, 1.5)
+    economy.record(root.name, "job_status", {"summary": "done"}, 0.5)
+
+    result = export.export_package("Economy Run", videos, TEXTS, wait_s=300)
+
+    assert isinstance(result, list), result
+    data = json.loads(result[0])
+    assert not (root / ".work").exists()
+    assert data["economy"]["calls"] == 2
+    assert data["economy"]["seconds"] == 2.0

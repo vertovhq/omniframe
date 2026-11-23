@@ -11,6 +11,7 @@ gave no reference, propose 2 or 3 looks in one message, recommend one, and ask t
 "you choose", take your recommendation. This is the only question before the storyboard.
 
 Order: plan, then stills sheet, then fixes, then preview, then final once.
+Show the subject. A video about a thing shows that thing on screen in most scenes: the user's footage, a clip, or a figure you draw in plain React/SVG in the chosen look. Text-only scenes are for the hook and the captions, not the whole video.
 
 Budget, a "do not" list (no code enforces it):
 - Do not re-read files you wrote.

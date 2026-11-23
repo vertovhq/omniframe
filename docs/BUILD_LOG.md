@@ -335,6 +335,7 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Bugs & fixes: `test_components` raised FileNotFoundError because the preview of group `mockups` was never written → wrote it from the kit blocks. `mediaKey` was exported from `media.ts`, so the kit test wanted it in a group file → made it private and documented `mediaUrl` in `groups/core.md`. Tool surface was 9,011 characters against a 9,000 limit → shortened the `calculate_beat_grid` description.
 - Kiro: steering `tech.md` (long runs detached, output to files, read back with `read_file`); no hook or MCP result.
 - Verified: `tests/test_components.py` 31 passed; full `pytest -q -rf` 523 passed, exit 0 (13 min 41 s); engine `tsc --noEmit -p engine` exit 0. Not verified: the octopus run (Verify step 2: credits and minutes before and after, `economy` totals from `export_package`).
+- Octopus run 2026-11-23 on Haiku: ~4 min, <1 credit (author's counter), ElevenLabs George v4, QA passed, render_timing total 73 s; economy lost to the export bug, fixed.
 - Credits: <author fills>
 
 ## Task 20.7b — Scene language `layers` (dropped, code on branch `layers-wip`)

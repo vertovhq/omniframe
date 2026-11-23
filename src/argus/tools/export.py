@@ -517,6 +517,10 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     post = final / "post.md"
     post.write_text(_post_markdown(base, videos_out, covers_out, texts, violations), encoding="utf-8")
 
+    from .. import economy  # local import: the reply-size log of every tool call so far
+
+    # The log lives in .work, so the totals are read before .work is removed.
+    economy_totals = economy.totals(root.name)
     shutil.rmtree(root / ".work", ignore_errors=True)
     result = {
         "exported": True,
@@ -533,9 +537,7 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         result["library"] = library_out
     # What the project's renders cost so far (seconds, from the kept render jobs' `timing`).
     result["render_timing"] = jobs.project_render_totals(root)
-    from .. import economy  # local import: the reply-size log of every tool call so far
-
-    result["economy"] = economy.totals(root.name)
+    result["economy"] = economy_totals
     return result
 
 
