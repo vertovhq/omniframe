@@ -256,7 +256,7 @@ def export_package(
     texts: dict,
     cover_times: dict[str, float] | None = None,
     name: str | None = None,
-    save_to_library: dict | None = None,
+    save_to_library: dict | list[dict] | None = None,
 ) -> list[str | Image] | dict:
     """Write the publishing folder: videos, covers and post.md, under `<project>/final/`.
 

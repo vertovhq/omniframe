@@ -80,8 +80,11 @@ def _entry(lib: Path, name: str, what: str, *, age: int = 0, poster: bool = True
     )
     if poster:
         PILImage.new("RGB", (288, 512), (10 * age % 255, 40, 90)).save(folder / library.POSTER)
+    # `studio_guide` orders posters by the poster's mtime (the save time), so the age goes on both files
     stamp = 1_700_000_000 + age
-    os.utime(folder / library.CARD, (stamp, stamp))
+    for path in (folder / library.CARD, folder / library.POSTER):
+        if path.is_file():
+            os.utime(path, (stamp, stamp))
 
 
 # ------------------------------------------------------------------ saving
@@ -94,7 +97,8 @@ def test_saving_writes_the_entry_the_poster_and_the_index(out_dir: Path, root: P
     data = json.loads(result[0])
     assert data["exported"] is True
     saved = data["library"]
-    assert saved["saved"] is True and saved["entry"] == "yacht-scenes" and saved["poster_t"] == 1.0
+    assert saved["saved"] is True and len(saved["entries"]) == 1
+    assert saved["entries"][0]["entry"] == "yacht-scenes" and saved["entries"][0]["poster_t"] == 1.0
 
     lib = out_dir / "library"
     entry = lib / "yacht-scenes"
@@ -105,11 +109,17 @@ def test_saving_writes_the_entry_the_poster_and_the_index(out_dir: Path, root: P
 
     card = (entry / "card.md").read_text(encoding="utf-8")
     for expected in ("**What:** Night harbour", "**Fits when:** Money or luxury", "**Props:** accent, label",
-                     "**Source project:** project-1", "**Files:** Art.tsx, Dot.tsx", "./library/yacht-scenes/Art"):
+                     "**Source project:** project-1", "**Files:** Art.tsx, Dot.tsx", "./library/yacht-scenes/Art",
+                     "**Version:** 1", "**Times used:** 0", "- v1 (", "first save"):
         assert expected in card
     index = (lib / "index.md").read_text(encoding="utf-8")
     lines = [line for line in index.splitlines() if line.startswith("- ")]
-    assert len(lines) == 1 and lines[0].startswith("- **yacht-scenes**:") and "Files: Art, Dot" in lines[0]
+    assert len(lines) == 1
+    assert lines[0].startswith(
+        "- **yacht-scenes** (v1, used 0 times): Night harbour with a yacht, a captain and a HUD plate. "
+        "Fits when: Money or luxury stories in dark neon."
+    )
+    assert "Files: Art, Dot" in lines[0]
     assert not [p for p in lib.iterdir() if p.name.startswith(".")]  # no staging folder is left
 
     # the cover (1) and the library poster (2) come back as pictures; the poster copy is outside the entry
@@ -118,7 +128,23 @@ def test_saving_writes_the_entry_the_poster_and_the_index(out_dir: Path, root: P
     assert (root / "final" / "project-1_9x16.mp4").is_file()
 
 
-def test_the_index_follows_the_cards_and_a_second_entry_needs_a_new_name_or_replace(
+def test_a_list_saves_every_element_in_one_export(out_dir: Path, root: Path, master: Path) -> None:
+    videos = _final(root, master)
+    plain = {**SPEC, "name": "Plain dot", "components": ["Dot"], "what": "A dot.", "fits_when": "Never."}
+    result = export.export_package("Yacht Rework", videos, TEXTS, wait_s=300, save_to_library=[SPEC, plain])
+    data = json.loads(result[0])["library"]
+    assert data["saved"] is True and [e["entry"] for e in data["entries"]] == ["yacht-scenes", "plain-dot"]
+
+    lib = out_dir / "library"
+    index = (lib / "index.md").read_text(encoding="utf-8")
+    assert [ln.split("**")[1] for ln in index.splitlines() if ln.startswith("- ")] == ["plain-dot", "yacht-scenes"]
+
+    (lib / "plain-dot" / "card.md").unlink()  # a folder without a card is no entry
+    assert [c["name"] for c in library.read_cards(lib)] == ["yacht-scenes"]
+    assert "plain-dot" not in library.build_index(lib)
+
+
+def test_a_second_save_of_a_name_is_the_next_version_and_keeps_the_old_files(
     out_dir: Path, root: Path, master: Path
 ) -> None:
     videos = _final(root, master)
@@ -126,31 +152,48 @@ def test_the_index_follows_the_cards_and_a_second_entry_needs_a_new_name_or_repl
 
     again = export.export_package("Yacht Rework", videos, TEXTS, save_to_library=SPEC, wait_s=300)
     assert isinstance(again, dict) and again["valid"] is False
-    assert "already has 'yacht-scenes'" in again["errors"][0]
+    assert "changed" in again["errors"][0] and "'yacht-scenes'" in again["errors"][0]
 
-    other = export.export_package(
+    second = export.export_package(
         "Yacht Rework", videos, TEXTS, wait_s=300,
-        save_to_library={**SPEC, "name": "Plain dot", "components": ["Dot"], "what": "A dot.", "fits_when": "Never."},
+        save_to_library={**SPEC, "what": "New text.", "changed": "Bigger HUD plate."},
     )
-    assert isinstance(other, list)
-    replaced = export.export_package(
-        "Yacht Rework", videos, TEXTS, wait_s=300, save_to_library={**SPEC, "replace": True, "what": "New text."},
-    )
-    assert json.loads(replaced[0])["library"]["replaced"] is True
+    entry = json.loads(second[0])["library"]["entries"][0]
+    assert entry["saved"] is True and entry["version"] == 2
 
+    lib = out_dir / "library" / "yacht-scenes"
+    assert (lib / "Art.tsx").read_text(encoding="utf-8") == ART  # the newest files at the top
+    old = lib / "versions" / "v1"
+    assert (old / "Art.tsx").read_text(encoding="utf-8") == ART and (old / "card.md").is_file()
+    assert (old / "poster.jpg").is_file()
+    card = (lib / "card.md").read_text(encoding="utf-8")
+    assert "**Version:** 2" in card and "- v1 (" in card and "- v2 (" in card
+    assert "first save" in card and "Bigger HUD plate." in card
+    index = (out_dir / "library" / "index.md").read_text(encoding="utf-8")
+    assert "- **yacht-scenes** (v2, used 0 times): New text." in index
+
+    clash = export.export_package(
+        "Yacht Rework", videos, TEXTS, wait_s=300,
+        save_to_library=[SPEC, {**SPEC, "changed": "Again."}],
+    )
+    assert clash["valid"] is False and any("appears twice" in e for e in clash["errors"])
+
+
+def test_times_used_counts_each_render_that_imports_the_entry(out_dir: Path) -> None:
     lib = out_dir / "library"
-    index = (lib / "index.md").read_text(encoding="utf-8")
-    assert [ln.split("**")[1] for ln in index.splitlines() if ln.startswith("- ")] == ["plain-dot", "yacht-scenes"]
-    assert "New text." in index and "Night harbour" not in index
-
-    (lib / "plain-dot" / "card.md").unlink()  # a folder without a card is no entry
-    assert [c["name"] for c in library.read_cards(lib)] == ["yacht-scenes"]
-    assert "plain-dot" not in library.build_index(lib)
+    _entry(lib, "demo", "Demo.")
+    _entry(lib, "other", "Other.")
+    library.count_use(lib, ["demo"])
+    library.count_use(lib, ["demo", "missing"])  # a name with no card is skipped
+    cards = {c["name"]: c for c in library.read_cards(lib)}
+    assert cards["demo"]["times_used"] == 2 and cards["other"]["times_used"] == 0
+    assert "- **demo** (v1, used 2 times): Demo." in (lib / "index.md").read_text(encoding="utf-8")
+    assert "**Times used:** 2" in (lib / "demo" / "card.md").read_text(encoding="utf-8")
 
 
 def test_validating_a_save_request_writes_nothing(out_dir: Path, root: Path, master: Path) -> None:
     payload, errors = export.prepare_export(root, _final(root, master), TEXTS, save_to_library=SPEC)
-    assert errors == [] and payload is not None and payload["library"]["entry"] == "yacht-scenes"
+    assert errors == [] and payload is not None and payload["library"][0]["entry"] == "yacht-scenes"
     assert not (out_dir / "library").exists()  # validation writes nothing
 
 
@@ -164,7 +207,9 @@ def test_validating_a_save_request_writes_nothing(out_dir: Path, root: Path, mas
     ({"components": []}, "save_to_library.components"),
     ({"components": ["Missing"]}, "file not found: components/Missing.tsx"),
     ({"components": ["bad name"]}, "is not a component name"),
-    ({"replace": "yes"}, "save_to_library.replace"),
+    ({"replace": True}, "save_to_library.replace: unknown field"),
+    ({"changed": "x" * 201}, "at most 200"),
+    ({"props": 3}, "save_to_library.props: must be a string"),
     ({"poster_time": -1}, "outside the video"),
     ({"poster_time": 99}, "outside the video"),
     ({"poster_time": "soon"}, "not a number"),
@@ -188,7 +233,7 @@ def test_saving_refuses_components_that_break_the_contract_or_use_the_library(ou
     clean, errors = library.validate_save({**SPEC, "components": ["Wrap"]}, root, lib)
     assert clean is None and any("comes from the library" in e for e in errors)
     clean, errors = library.validate_save(SPEC, root, lib)
-    assert errors == [] and clean["files"] == ["Art.tsx", "Dot.tsx"] and clean["source"] == "project-1"
+    assert errors == [] and clean[0]["files"] == ["Art.tsx", "Dot.tsx"] and clean[0]["source"] == "project-1"
 
 
 # ------------------------------------------------------------------ reading
@@ -210,7 +255,7 @@ def test_studio_guide_lists_entries_and_returns_their_posters_as_images(out_dir:
     assert data["library"]["entries"] == 3
     index = data["library"]["index"]
     assert len([ln for ln in index.splitlines() if ln.startswith("- ")]) == 3
-    assert "- **yacht-scenes**: Night harbour. Fits when: when yacht-scenes fits." in index
+    assert "- **yacht-scenes** (v1, used 0 times): Night harbour. Fits when: when yacht-scenes fits." in index
     posters = data["library"]["posters"]
     assert [p["entry"] for p in posters] == ["plain-card", "yacht-scenes"]  # newest first, entries without a poster skipped
     images = result[1:]

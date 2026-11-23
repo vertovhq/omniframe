@@ -10,8 +10,9 @@ The job (kind `export`, `run_job`):
    is not black.
 4. `final/post.md`: the texts per platform. A text over its platform limit is marked under
    its field.
-4b. With `save_to_library` (task 20.3, only after the user agreed): the listed components go to the
-   style library with a card and a 512 px poster taken from the final (`tools/library.py`).
+4b. With `save_to_library` (task 20.11: a list, one item per reusable element, saved without asking after
+   a final passes QA): each item's components go to the style library with a card and a 512 px poster
+   taken from the final. A name that exists makes the next version (`tools/library.py`).
 5. `<project>/.work/` is removed. Covers come back as images from small copies in
    `<project>/cache/export/`, so `final/` holds only the deliverables.
 
@@ -496,21 +497,26 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
         })
 
     library_out: dict | None = None
-    request = payload.get("library")
-    if request:
+    requests = payload.get("library")
+    if requests:
         report(0.92, "saving to the style library")
         fmt = _poster_format(videos)
         assert fmt is not None  # a request has at least one video
-        at = request["poster_time"] if request.get("poster_time") is not None else covers_out[fmt]["t"]
-        try:
-            library_out = {"saved": True, **library.save_entry(
-                request, root, library.project_library_dir(root), videos[fmt], float(at))}
+        entries: list[dict] = []
+        for request in requests:
+            at = request["poster_time"] if request.get("poster_time") is not None else covers_out[fmt]["t"]
+            try:
+                entries.append({"saved": True, **library.save_entry(
+                    request, root, library.project_library_dir(root), videos[fmt], float(at))})
+            except (OSError, FFmpegError, ValueError) as exc:
+                # The export itself worked; say that only this library step failed.
+                entries.append({"saved": False, "entry": request["entry"], "error": _first_line(exc)})
+        library_out = {"saved": all(e["saved"] for e in entries), "entries": entries}
+        first = next((e for e in entries if e["saved"]), None)
+        if first is not None:  # one poster picture confirms the saved frame; the others are listed by name
             view = root / "cache" / "export" / f"{base}_library_poster.view.jpg"
-            _write_view(Path(library_out["poster"]), view)
-            images.append({"path": str(view), "t": round(float(at), 3), "reason": f"library poster of {request['entry']}"})
-        except (OSError, FFmpegError, ValueError) as exc:
-            # The export itself worked; say that only the library step failed.
-            library_out = {"saved": False, "entry": request["entry"], "error": _first_line(exc)}
+            _write_view(Path(first["poster"]), view)
+            images.append({"path": str(view), "t": first["poster_t"], "reason": f"library poster of {first['entry']}"})
 
     report(0.95, "writing post.md")
     violations = text_violations(texts)

@@ -350,3 +350,10 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Verified: `test_voiceover.py`, `test_voice_project.py`, `test_voice_options.py`, `test_guide_sections.py`, `test_tool_surface.py`: 92 passed, and the surface test failed until the limit change. After it, `test_tool_surface.py`: 4 passed. Full pytest not run.
 - Not verified: a voice file made before this change has no text record, so a repeat of its text is refused until one `overwrite=true` call. Not run against octopus-hearts.
 - Credits: <author fills>
+
+## Task 20.11 — Library grows from every final (2026-11-23, Haiku 5.5 high)
+- Built: `export_package(save_to_library=[...])` saves up to 12 elements after QA passes; a name that exists makes the next version (`<entry>/versions/v<n>/` keeps the old files, `card.md` lists the versions); `times used` counts renders that import an entry; the `studio_guide` index shows version and times used; the reuse rule is in the guide core.
+- Bugs & fixes: (1) a list with the same name twice, where the other item lacked `changed`, did not say "appears twice" → the duplicate check ran only on items that passed the other checks → every item's name is checked first. (2) `studio_guide` poster order differed from the test → the code orders by poster mtime, the test aged only `card.md` → the test ages the poster as well. (3) an index line test expected a shortened `what` → test updated.
+- Kiro: none beyond the steering rule for detached runs (output to files, read back).
+- Verified: `test_library.py` 31 passed; `test_library`, `test_guide_sections`, `test_tool_surface`, `test_export`, `test_components`, `test_studio_guide` 104 passed, exit 0 (217 s). Seeded `OMNIFRAME_OUTPUT/library` with `neon-octopus` (Octopus.tsx) and `neon-bg` (Bg.tsx) from octopus-neon, posters from the final at 1.9 s. The author's Verify is not run; the task stays `[ ]`.
+- Credits: <author fills>

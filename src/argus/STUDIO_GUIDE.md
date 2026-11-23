@@ -13,7 +13,9 @@ gave no reference, propose 2 or 3 looks in one message, recommend one, and ask t
 Order: plan, then stills sheet, then fixes, then preview, then final once.
 Show the subject. A video about a thing shows that thing on screen in most scenes: the user's footage, a clip, or a figure you draw in plain React/SVG in the chosen look. Text-only scenes are for the hook and the captions, not the whole video.
 
-Before a new video, check studio_guide(project=...) and the style library; reuse your own scenes from a past video in the same series instead of rewriting them.
+Reuse first. The `library` block of studio_guide lists the style library before you write code: one line per entry (name, what, fits when, versions, times used). If the library has an element that fits, import it and change only props, text and timing. Write a new one only when the user asks for something different, the reference shows a different look, or no entry fits. An entry is the user's own past work, never a built-in look.
+
+Transitions, bursts, shake, flashes and HUD: set them by kit name in the plan instead of writing your own code.
 
 Budget, a "do not" list (no code enforces it):
 - Do not re-read files you wrote.
@@ -126,14 +128,13 @@ video to the end on your own.
   rewrite a file, and do not read back a file you have just written.
 - Keep images as files in the project and point to them by path. Never paste image data
   into code: it costs characters on every turn and makes the file hard to edit.
-- **Style library.** The `library` block of this guide lists scenes, characters, plates and
-  caption styles that the user saved from earlier videos, with a poster for each. Before you
-  write custom code for a new reference, look at the posters next to the reference's frames
-  and decide for yourself whether an entry fits (read its `card.md` for props and for when
-  it fits). If one does, import its files (`import X from './library/<entry>/<File>'`) from
-  your own component and change the look through props. If nothing fits, write new code and
-  do not bend the video toward an old entry because it exists: a reference in another style
-  gets its own look.
+- **Style library.** The `library` block lists the elements the user saved from earlier finals
+  (name, what, fits when, versions, times used) and a poster for each of the newest eight. Compare
+  the posters with the reference's frames, read an entry's `card.md` for its props and for when it
+  fits, and decide for yourself. Import the newest version (`import X from './library/<entry>/<File>'`)
+  from your own component and change the look through props. Older versions sit in
+  `<entry>/versions/` and cannot be imported; copy their files into the project if you need one.
+  If nothing fits, write new code. Do not bend a reference in another style toward an old entry.
 - Let important things hold still long enough to read them. Give every motion a
   reason: emphasis, transition, reveal.
 - Save strong effects (shakes, flashes, hard zooms) for the strongest moments.
@@ -238,11 +239,16 @@ problems, then stills of those scenes only, then a preview, then the final once.
    the title, description and hashtags in the meantime.
 4. `export_package` with texts written for each platform and its viewers: a title that
    makes people click honestly, a description, hashtags.
-   After a final the user likes, offer to keep its custom scenes, characters, plates or
-   caption styles in their style library for the next video. Save only after they agree:
-   call `export_package` with `save_to_library` (name, the component names, what it is,
-   when it fits). Never save on your own. If the export is already done, call it again
-   with the same arguments plus `save_to_library`; it rewrites the same files.
+   Save the reusable elements of every final that passes QA, in this same `export_package` call,
+   without asking. Split components so that each element (a character, a background, a chrome
+   number, a HUD panel) is its own file, and pass one `save_to_library` item per element:
+   {name, components, what, fits_when, props, changed, poster_time}. A name that exists makes the
+   next version: `changed` says in one line what is new, so a reused entry you improved is saved
+   this way. Tell the user the saved names and versions in one line. If the user says "do not
+   save", leave `save_to_library` out. If the user says "delete <name>", remove the folder
+   `<library dir>/<name>/` (`library.dir` in studio_guide) and name that folder in your reply; the
+   index follows on the next studio_guide call. If the export is already done, call
+   `export_package` once more with the same arguments plus `save_to_library`.
 
 Show the user the finished video. When they state something lasting ("always…",
 "never…", "my handle is…"), save it with `learn_and_record_memory`. Do not save
@@ -272,7 +278,7 @@ Still run `qa_verify_video` on the final.
 
 Reference for the arguments and reply fields. The tool descriptions only say what a tool does.
 
-- studio_guide: `kit_group` names one motion-kit group: core, backgrounds, transitions, energy, type, bursts, depth, camera, info, hud, sfx. `library` lists saved scenes and posters (512 px). `project` adds a resume of at most 5 lines from `<project>/.work/state.json`.
+- studio_guide: `kit_group` names one motion-kit group: core, backgrounds, transitions, energy, type, bursts, depth, camera, info, hud, sfx. `library` lists saved elements (name, what, fits when, versions, times used) and posters (512 px). `project` adds a resume of at most 5 lines from `<project>/.work/state.json`.
 - job_status: returns `summary`, `state` (queued, running, done or error), `progress` (0..1 or null), `eta_s` (rough, while running), `note`, then `result` (pictures come as images) or `error` with the fix. Starting the same operation again while it runs returns the same job.
 - generate_veo_clip: `provider` "flow" uses your Google Flow session (free monthly credits). Run `login=true` once: it opens a visible browser; log in by hand and wait for Flow to load. The profile is saved in ~/.argus/flow_profile. One own account only; multi-account credit farming gets accounts banned. Default provider: ARGUS_VEO_PROVIDER, then "api". provider "api" is refused: Veo 3.1 Preview was shut down in the Gemini API on 2026-10-22. Use "flow" until the Omni route ships.
 - synthesize_voiceover: files go to `<project>/audio/<name>.mp3` and `<name>.words.json`. Provider: elevenlabs (default with a key), edge (default without), gemini (only when asked). `settings`: stability, speed, language_code (ElevenLabs); rate, pitch (edge). Delivery: on ElevenLabs v3/v4, audio tags such as `[whispers]` or `[excited]` go before the words they colour; `...` is a pause, a dash is a break, CAPITALS are stress. SSML breaks work only on the v2 models. Edge voices cannot act tags out, so they are removed. Reply fields: `words_path` ({w, s, e} in seconds, tags removed), `duration`, `words_source` ("provider", "faster-whisper" or "none"; `captions_note` says what to install), `project_note` when the project holds another video's work. A 429 from ElevenLabs is retried; the summary then says how long to wait.
@@ -281,7 +287,7 @@ Reference for the arguments and reply fields. The tool descriptions only say wha
 - get_frames: at most 8 times per call; the extra ones are listed in `skipped_times`. `crop` is [x, y, w, h] as fractions of the frame, with x+w <= 1 and y+h <= 1; the crop is shown enlarged. `max_side` is 64 to 2048, default 1024. The summary lists each image's time and path, and `full_path` of the full-resolution file.
 - render_video: `plan` is the plan object or the path of a .json file. The plan keys are in section 5: format ("9:16" or "16:9"), style, scenes, captions (`mode` phrase, word or headline; `style.case` "upper" or "as_is"), audio, cues. Relative file paths are looked up in the project folder first. Custom scenes are {"kind": "custom", "component": "<Name>"} with `<project>/components/<Name>.tsx`; see section 5. Stills: `times` up to 12 seconds, default 6 spread over the video; `compare` = {"video", "times"} puts each reference frame left of its render; unchanged frames are not sent again. Final: saves `<project>/plan.json` and normalises loudness to -14 LUFS. Audio: returns the timeline image and `warnings`; `save_sounds` saves approved sounds to the library. `then: ["qa", "export"]`: QA runs in the same job, then the export with the `export` arguments; the export reads the final files of this render. Results have `summary`, `timing` (seconds per stage), `warnings`. Files go to `<project>/renders/<name>-<mode>-<format>.mp4` (stills: .jpg). Compile errors of a component return `valid: false` with `errors`.
 - qa_verify_video: hard failures: frame size, frame rate, progressive scan, audio present, loudness -14 LUFS +/- 1.5, true peak at most -1.0 dBTP, audio and video lengths within 0.5 s, black of 1.0 s or more in the middle. Warnings (`passed` stays true): shorter black, a frozen picture of 3 s or more, silence of 2 s or more, a duration above the `target` platform limit (tiktok, shorts, youtube). A `-preview-` file reports size and loudness as warnings only. `images` holds at most 8 frames, including the black and frozen moments: look at them. Each entry has `check`, `message`, and `start`/`end` when they apply.
-- export_package: `videos` maps "9:16" and/or "16:9" to final mp4 files. `texts` per platform: tiktok {caption, hashtags}; shorts {title, description, hashtags} (uses the 9:16 video); youtube {title, description, tags} (uses the 16:9 video). `cover_times` ({"9:16": seconds, "16:9": seconds}) picks the cover frame. Files go to `<project>/final/`: the videos (copied), covers as jpg and post.md. The covers come back as images. A text over a platform's limit is listed in `violations` and marked in post.md; the files are still written. `save_to_library` (only when the user agrees): {name, components, what, fits_when, props, replace, poster_time}. The reply has `economy`: the project's totals of the reply-size log.
+- export_package: `videos` maps "9:16" and/or "16:9" to final mp4 files. `texts` per platform: tiktok {caption, hashtags}; shorts {title, description, hashtags} (uses the 9:16 video); youtube {title, description, tags} (uses the 16:9 video). `cover_times` ({"9:16": seconds, "16:9": seconds}) picks the cover frame. Files go to `<project>/final/`: the videos (copied), covers as jpg and post.md. The covers come back as images. A text over a platform's limit is listed in `violations` and marked in post.md; the files are still written. `save_to_library`: a list of items {name, components, what, fits_when, props, changed, poster_time} (section 8; `changed` is required when the name exists). The reply has `library` ({saved, entries}) and `economy`: the project's totals of the reply-size log.
 - calculate_beat_grid: `snap_times` are candidate cut seconds; they come back snapped to the nearest beat with the shift. With `project`, the full beat list goes to that project's audio folder. The reply has `bpm`, `confidence`, `beat_count`, the first beats and `beats_path`. Offline.
 - search_sfx: describe the SOURCE of the sound ("paper slide", "short cinematic impact"), not a mood. Results have id, title, author, duration, license, downloads, rating and page URL. Audio rule: one sound at most once per 3 beats; variations instead of copies. No API key. `download` (list of ids such as "fs:12345") with `out_dir` saves the files: it checks the license page again, writes audio-manifest.json and FREESOUND-CREDITS.md (CC-BY needs credit in the description). `license_policy` "cc0" (default) or "by".
 - learn_and_record_memory: record only what stays true across videos: standing preferences ("always...", "never...", the handle, language, voice, brand colours) and corrections to the general approach. Never record a tweak to the video in progress ("make the title bigger"). `lesson_title` is a short name; `user_directive` is close to the user's words; `technical_rule` says how you will apply it.

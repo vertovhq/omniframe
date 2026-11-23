@@ -10,9 +10,14 @@ Where: `<OMNIFRAME_OUTPUT_DIR>/library/<entry>/`, per user, never in the repo. O
 truth: the index is rebuilt from them on every save and on every `studio_guide` call, so an entry
 that is deleted or edited by hand is reflected the next time.
 
-Saving has no tool of its own: `export_package(save_to_library=...)` calls `validate_save` before
-the export starts and `save_entry` when the export succeeded (design: the poster comes from the
-final). The model offers it after a good final and passes it only after the user agreed.
+Saving has no tool of its own: `export_package(save_to_library=[...])` calls `validate_save` before
+the export starts and `save_entry` for each item when the export succeeded (the poster comes from
+the final). The model saves the reusable elements of every final that passes QA, without asking.
+
+Versions: saving a name that exists makes the next version. `<entry>/` always holds the newest
+files; older files move to `<entry>/versions/v<n>/`, and `card.md` lists every version with one
+line on what changed. `card.md` also counts `times used`: `count_use` adds one each time a render
+imports the entry.
 
 Using an entry: a project component imports one of its files as
 `import Boat from './library/<entry>/<File>'` (`tools/components.py` copies the files a render
@@ -22,10 +27,12 @@ needs). Whether an entry fits a new reference is the model's call; nothing here 
 from __future__ import annotations
 
 import datetime
+import json
 import math
 import os
 import re
 import shutil
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +45,8 @@ from .components import COMPONENTS_DIR, LIBRARY_DIR, NAME_RE, collect_files
 CARD = "card.md"
 POSTER = "poster.jpg"
 INDEX = "index.md"
+USAGE = "usage.json"          # `library/usage.json`: {entry: how many renders imported it}
+VERSIONS = "versions"         # `<entry>/versions/v<n>/`: the files of the older versions
 POSTER_SIDE = 512             # longest side of a poster, in px
 POSTER_QUALITY = 85
 MAX_POSTERS = 8               # posters that `studio_guide` returns as images
@@ -45,8 +54,12 @@ MAX_POSTERS = 8               # posters that `studio_guide` returns as images
 RESERVED_ENTRIES = frozenset({"style", "kit"})
 
 # Characters. `what` and `fits_when` form the one-line index entry that `studio_guide` returns.
-FIELD_LIMITS = {"what": 200, "fits_when": 250, "props": 600}
-SAVE_KEYS = ("name", "components", "what", "fits_when", "props", "replace", "poster_time")
+FIELD_LIMITS = {"what": 200, "fits_when": 250, "props": 600, "changed": 200}
+SAVE_KEYS = ("name", "components", "what", "fits_when", "props", "changed", "poster_time")
+MAX_SAVES = 12                # items in one `save_to_library` list
+VERSIONS = "versions"         # folder inside an entry that keeps the older versions
+FIRST_SAVE = "first save"
+OPTIONAL_FIELDS = frozenset({"props", "changed"})
 
 _CARD_FIELDS = {
     "What": "what",
@@ -55,8 +68,11 @@ _CARD_FIELDS = {
     "Source project": "source",
     "Files": "files",
     "Saved": "saved",
+    "Version": "version",
+    "Times used": "times_used",
 }
 _CARD_LINE = re.compile(r"^\*\*(?P<label>[^*:]+):\*\*[ \t]*(?P<value>.*)$", re.M)
+_HISTORY_LINE = re.compile(r"^- v(?P<version>\d+) \((?P<when>[^,]*), from (?P<source>[^)]*)\): (?P<what>.*)$", re.M)
 
 
 # ------------------------------------------------------------------ paths
@@ -78,26 +94,35 @@ def _one_line(text: str) -> str:
 
 
 def card_text(entry: str, fields: dict[str, Any]) -> str:
-    """The text of `card.md` for an entry."""
-    files: list[str] = fields["files"]
-    first = Path(files[0]).stem
+    """The text of `card.md` for an entry. `history` lists the versions; the newest is the current files."""
+    files: list[str] = fields.get("files") or []
+    first = Path(files[0]).stem if files else entry
+    history = fields.get("history") or [
+        {"version": 1, "when": fields.get("saved", ""), "source": fields.get("source", ""), "what": FIRST_SAVE}
+    ]
     lines = [
         f"# {entry}",
         "",
-        f"**What:** {_one_line(fields['what'])}",
-        f"**Fits when:** {_one_line(fields['fits_when'])}",
+        f"**What:** {_one_line(fields.get('what', ''))}",
+        f"**Fits when:** {_one_line(fields.get('fits_when', ''))}",
         f"**Props:** {_one_line(fields.get('props') or '(none given)')}",
-        f"**Source project:** {fields['source']}",
+        f"**Source project:** {fields.get('source', '')}",
         f"**Files:** {', '.join(files)}",
-        f"**Saved:** {fields['saved']}",
+        f"**Version:** {fields.get('version', 1)}",
+        f"**Times used:** {fields.get('times_used', 0)}",
+        f"**Saved:** {fields.get('saved', '')}",
         "",
-        "Use it from a project component:",
+        "## Versions",
+        "",
+        *[f"- v{h['version']} ({h['when']}, from {h['source']}): {_one_line(h['what'])}" for h in history],
+        "",
+        "Use it from a project component (the newest version):",
         "",
         "```tsx",
         f"import {first} from './{LIBRARY_DIR}/{entry}/{first}';",
         "```",
         "",
-        f"`poster.jpg` is a frame of the final video of `{fields['source']}`.",
+        f"`poster.jpg` is a frame of the final video of `{fields.get('source', '')}`.",
         "",
     ]
     return "\n".join(lines)
@@ -110,15 +135,30 @@ def read_card(folder: Path) -> dict[str, Any] | None:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return None
-    fields: dict[str, Any] = {"name": folder.name, "mtime": path.stat().st_mtime_ns}
+    fields: dict[str, Any] = {"name": folder.name}
     for match in _CARD_LINE.finditer(text):
         key = _CARD_FIELDS.get(match["label"].strip())
         if key:
             fields[key] = match["value"].strip()
     fields["files"] = [f.strip() for f in str(fields.get("files", "")).split(",") if f.strip()]
+    fields["version"] = _number(fields.get("version"), 1)
+    fields["times_used"] = _number(fields.get("times_used"), 0)
+    fields["history"] = [
+        {"version": int(m["version"]), "when": m["when"].strip(), "source": m["source"].strip(), "what": m["what"].strip()}
+        for m in _HISTORY_LINE.finditer(text)
+    ] or [{"version": 1, "when": fields.get("saved", ""), "source": fields.get("source", ""), "what": FIRST_SAVE}]
     poster = folder / POSTER
     fields["poster"] = poster if poster.is_file() else None
+    # Ordering for `studio_guide` posters: the poster changes on every save, the card also on every use.
+    fields["mtime"] = (poster if poster.is_file() else path).stat().st_mtime_ns
     return fields
+
+
+def _number(value: Any, default: int) -> int:
+    try:
+        return int(str(value).strip())
+    except ValueError:
+        return default
 
 
 def read_cards(library_root: Path) -> list[dict[str, Any]]:
@@ -130,7 +170,9 @@ def read_cards(library_root: Path) -> list[dict[str, Any]]:
 
 
 def index_line(card: dict[str, Any]) -> str:
-    parts = [f"- **{card['name']}**: {card.get('what', '')}", f"Fits when: {card.get('fits_when', '')}"]
+    times = card.get("times_used", 0)
+    head = f"- **{card['name']}** (v{card.get('version', 1)}, used {times} {'time' if times == 1 else 'times'}): "
+    parts = [head + card.get("what", ""), f"Fits when: {card.get('fits_when', '')}"]
     if card.get("files"):
         parts.append("Files: " + ", ".join(Path(f).stem for f in card["files"]))
     return " ".join(p if p.endswith((".", "!", "?")) else p + "." for p in parts)
@@ -184,14 +226,56 @@ def validate_save(
     project_root: Path,
     library_root: Path,
     poster_duration: float | None = None,
-) -> tuple[dict | None, list[str]]:
-    """Check a `save_to_library` request. Returns `(clean request, [])` or `(None, errors)`. Writes nothing.
+) -> tuple[list[dict] | None, list[str]]:
+    """Check a `save_to_library` request: one item, or a list of items (at most `MAX_SAVES`).
 
-    The clean request has `entry`, `components` (the names asked for), `files` (those plus every
-    file they import, as file names in `<project>/components/`), `what`, `fits_when`, `props`,
-    `replace`, `poster_time` and `source` (the project name).
+    Returns `(clean items, [])` or `(None, errors)`. Writes nothing. Each clean item has `entry`,
+    `components` (the names asked for), `files` (those plus every file they import, as file names in
+    `<project>/components/`), `what`, `fits_when`, `props`, `changed`, `poster_time`, `exists` (the
+    entry is already in the library, so this save makes a new version) and `source` (the project name).
     """
-    where = "save_to_library"
+    if isinstance(spec, list):
+        if not spec or len(spec) > MAX_SAVES:
+            return None, [f"save_to_library: give a list of 1 to {MAX_SAVES} items"]
+        items, numbered = spec, True
+    else:
+        items, numbered = [spec], False
+    clean: list[dict] = []
+    errors: list[str] = []
+    entries: set[str] = set()
+    for i, item in enumerate(items):
+        where = f"save_to_library[{i}]" if numbered else "save_to_library"
+        # checked before the item's other fields, so a clash is listed even when that item has other errors
+        name = _entry_name(item)
+        if name is not None:
+            if name in entries:
+                errors.append(f"{where}.name: {name!r} appears twice in one save")
+            entries.add(name)
+        request, item_errors = _validate_one(item, project_root, library_root, poster_duration, where)
+        errors += item_errors
+        if request is not None:
+            clean.append(request)
+    return (None, errors) if errors else (clean, [])
+
+
+def _entry_name(item: Any) -> str | None:
+    """The entry name a save item asks for (slugged), or None when the name is missing or not a valid name."""
+    if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+        return None
+    try:
+        return slugify(item["name"])
+    except ValueError:
+        return None
+
+
+def _validate_one(
+    spec: Any,
+    project_root: Path,
+    library_root: Path,
+    poster_duration: float | None,
+    where: str,
+) -> tuple[dict | None, list[str]]:
+    """Check one save item; `where` prefixes every message (`save_to_library` or `save_to_library[2]`)."""
     if not isinstance(spec, dict) or not spec:
         return None, [f"{where}: give {{name, components, what, fits_when}}"]
     errors = [f"{where}.{key}: unknown field (expected {', '.join(SAVE_KEYS)})" for key in spec if key not in SAVE_KEYS]
@@ -211,20 +295,18 @@ def validate_save(
     texts: dict[str, str] = {}
     for key, limit in FIELD_LIMITS.items():
         value = spec.get(key)
-        if key == "props" and value is None:
+        if key in OPTIONAL_FIELDS and value is None:
             texts[key] = ""
-        elif not isinstance(value, str) or (key != "props" and not value.strip()):
-            errors.append(f"{where}.{key}: required, a short text" if key != "props" else f"{where}.props: must be a string")
+        elif not isinstance(value, str) or (key not in OPTIONAL_FIELDS and not value.strip()):
+            errors.append(f"{where}.{key}: must be a string" if key in OPTIONAL_FIELDS else f"{where}.{key}: required, a short text")
         elif len(_one_line(value)) > limit:
             errors.append(f"{where}.{key}: {len(_one_line(value))} characters; at most {limit}")
         else:
             texts[key] = _one_line(value)
 
-    replace = spec.get("replace", False)
-    if not isinstance(replace, bool):
-        errors.append(f"{where}.replace: true or false")
-    if entry and (library_root / entry).exists() and replace is not True:
-        errors.append(f"{where}.name: the library already has {entry!r}; set replace=true to overwrite it or pick another name")
+    exists = bool(entry) and (library_root / entry).exists()
+    if exists and not texts.get("changed"):
+        errors.append(f"{where}.changed: required, one line on what changed from the saved {entry!r} (it becomes the next version)")
 
     at: float | None = None
     poster_time = spec.get("poster_time")
@@ -264,7 +346,7 @@ def validate_save(
         "entry": entry,
         "components": list(names),
         "files": files,
-        "replace": replace is True,
+        "exists": exists,
         "poster_time": at,
         "source": project_root.name,
         **texts,
@@ -291,6 +373,17 @@ def write_poster(video: Path, at: float, out: Path, scratch: Path) -> None:
         frame.unlink(missing_ok=True)
 
 
+def _keep_previous_version(dest: Path, previous: dict, staging: Path) -> None:
+    """Copy the older versions and the files of the newest version into `staging/versions/`."""
+    if (dest / VERSIONS).is_dir():
+        shutil.copytree(dest / VERSIONS, staging / VERSIONS)
+    archive = staging / VERSIONS / f"v{previous['version']}"
+    archive.mkdir(parents=True, exist_ok=True)
+    for name in [*previous["files"], POSTER, CARD]:
+        if (dest / name).is_file():
+            shutil.copy2(dest / name, archive / name)
+
+
 def save_entry(request: dict, project_root: Path, library_root: Path, video: Path, at: float) -> dict:
     """Write one entry (the files, `card.md`, `poster.jpg` from `video` at `at` s) and rebuild `index.md`.
 
@@ -303,14 +396,25 @@ def save_entry(request: dict, project_root: Path, library_root: Path, video: Pat
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir()
     try:
+        previous = read_card(dest)  # None for a new entry
+        history = list(previous["history"]) if previous else []
+        version = previous["version"] + 1 if previous else 1
+        times_used = previous["times_used"] if previous else 0
+        if previous:
+            _keep_previous_version(dest, previous, staging)
         for name in request["files"]:
             shutil.copy2(project_root / COMPONENTS_DIR / name, staging / name)
         write_poster(video, at, staging / POSTER, staging)
         saved = datetime.date.today().isoformat()
-        (staging / CARD).write_text(
-            card_text(entry, {**request, "saved": saved}), encoding="utf-8", newline="\n"
-        )
-        replaced = dest.exists()
+        history.append({
+            "version": version,
+            "when": saved,
+            "source": request["source"],
+            "what": FIRST_SAVE if version == 1 else request["changed"],
+        })
+        fields = {**request, "saved": saved, "version": version, "times_used": times_used, "history": history}
+        (staging / CARD).write_text(card_text(entry, fields), encoding="utf-8", newline="\n")
+        replaced = previous is not None
         if replaced:
             shutil.rmtree(dest)
         os.replace(staging, dest)
@@ -326,4 +430,23 @@ def save_entry(request: dict, project_root: Path, library_root: Path, video: Pat
         "poster_t": round(at, 3),
         "index": str(index),
         "replaced": replaced,
+        "version": version,
+        "times_used": times_used,
     }
+
+
+def count_use(library_root: Path, entries: list[str]) -> None:
+    """Add one to `times used` in the card of each entry a render imported, then rebuild `index.md`.
+
+    Called once per render job (components.py), so a render that uses an entry counts once.
+    """
+    changed = False
+    for entry in entries:
+        card = read_card(library_root / entry)
+        if card is None:
+            continue
+        card["times_used"] += 1
+        (library_root / entry / CARD).write_text(card_text(entry, card), encoding="utf-8", newline="\n")
+        changed = True
+    if changed:
+        write_index(library_root)

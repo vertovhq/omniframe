@@ -384,9 +384,14 @@ class EngineHold:
             target = self.job_dir / src.rel
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src.path, target)
-        if any(src.rel.startswith(f"{LIBRARY_DIR}/") for src in files):
+        used = sorted({src.rel.split("/")[1] for src in files if src.rel.startswith(f"{LIBRARY_DIR}/")})
+        if used:
             for shim, text in LIBRARY_SHIMS.items():
                 (self.job_dir / LIBRARY_DIR / shim).write_text(text, encoding="utf-8", newline="\n")
+            if self.library_root is not None:
+                from . import library  # local import: library.py imports this module
+
+                library.count_use(self.library_root, used)  # `times used` in each entry's card
         by_name = {Path(f.rel).stem: f for f in files if "/" not in f.rel}
         missing = [n for n in self.names if n not in by_name]
         if missing:

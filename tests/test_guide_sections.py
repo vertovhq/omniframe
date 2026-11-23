@@ -40,6 +40,16 @@ def test_core_is_under_the_limit_and_keeps_the_rules() -> None:
     assert "With \"no checks\", go straight to the preview." in core
 
 
+def test_core_holds_the_reuse_rule_and_the_kit_line() -> None:  # task 20.11
+    core = studio.core_text(studio.read_guide())
+    assert (
+        "If the library has an element that fits, import it and change only props, text and timing. "
+        "Write a new one only when the user asks for something different, the reference shows a different look, "
+        "or no entry fits."
+    ) in core
+    assert "Transitions, bursts, shake, flashes and HUD: set them by kit name in the plan instead of writing your own code." in core
+
+
 def test_core_lists_every_other_section() -> None:
     text = studio.read_guide()
     core = studio.core_text(text)
