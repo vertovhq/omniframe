@@ -50,7 +50,6 @@ def out_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     cfg = dataclasses.replace(CONFIG, knowledge_base=tmp_path / "KB.md", output_dir=output)
     for module in (studio, memory):
         monkeypatch.setattr(module, "CONFIG", cfg)
-    monkeypatch.setenv("ARGUS_FLOW_PROFILE", str(tmp_path / "no-flow-profile"))
     return output
 
 

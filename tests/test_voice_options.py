@@ -23,7 +23,6 @@ GEMINI_LISTED = [
     {"id": "gemini-3.8-flash-lite-tts", "name": "Gemini 3.8 Flash-Lite TTS"},
     {"id": "gemini-3.8-flash", "name": "Gemini 3.8 Flash"},
     {"id": "gemini-3.8-flash-tts", "name": "Gemini 3.8 Flash TTS"},
-    {"id": "veo-4.0-test-video", "name": "Veo test"},
 ]
 
 OWN = {"voices": [
@@ -139,7 +138,6 @@ def _config(monkeypatch: pytest.MonkeyPatch, **changes) -> None:
     """Replace the config in both modules that read it. Model ids are empty unless a test sets them."""
     changes.setdefault("eleven_model", "")
     changes.setdefault("tts_model", "")
-    changes.setdefault("veo_model", "")
     monkeypatch.setattr(voiceover, "CONFIG", dataclasses.replace(CONFIG, **changes))
     monkeypatch.setattr(model_catalog, "CONFIG", dataclasses.replace(CONFIG, **changes))
 
@@ -498,17 +496,7 @@ def test_gemini_models_come_newest_first_with_a_default_for_each_use(monkeypatch
     # 3.8 before 3.1; the plain flash beats its lite sibling; the preview id loses to the final one
     assert tts == [("gemini-3.8-flash-tts", True), ("gemini-3.8-flash-lite-tts", False),
                    ("gemini-3.1-flash-tts-preview", False)]
-    assert [(m["id"], m["default"]) for m in rows if m["use"] == "video"] == [("veo-4.0-test-video", True)]
     assert "gemini_models" not in result.get("errors", {})
-
-
-def test_no_veo_model_in_the_list_is_said_with_the_shutdown_note(monkeypatch, keyed, gemini_list) -> None:
-    _config(monkeypatch, elevenlabs_api_key="", gemini_api_key="g")
-    gemini_list["value"] = [m for m in GEMINI_LISTED if not m["id"].startswith("veo")]
-    monkeypatch.setattr("urllib.request.urlopen", _no_elevenlabs_call)
-    result = voiceover.voice_options()
-    assert not any(m["use"] == "video" for m in result["models"]["gemini"])
-    assert any("shut down" in note and "2026-10-22" in note for note in result["notes"])
 
 
 def test_a_failed_gemini_list_is_reported_and_no_model_is_guessed(monkeypatch, keyed) -> None:
@@ -525,8 +513,6 @@ def test_a_failed_gemini_list_is_reported_and_no_model_is_guessed(monkeypatch, k
 
     with pytest.raises(RuntimeError, match="ARGUS_TTS_MODEL"):
         model_catalog.tts_model_id()
-    with pytest.raises(RuntimeError, match="ARGUS_VEO_MODEL"):
-        model_catalog.veo_model_id()
 
 
 def test_no_key_means_no_elevenlabs_delivery_guide_even_with_details(no_keys) -> None:

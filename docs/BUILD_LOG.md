@@ -364,3 +364,10 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Kiro: none.
 - Verified: `test_library.py` + `test_tail.py` 40 passed; `test_clips.py` + `test_render.py` 42 passed, exit 0 (128 s); engine `tsc --noEmit` exit 0. Full pytest not run. `octopus-color` not re-rendered with `clock`.
 - Credits: <author fills>
+
+## Veo removed from main until after the contest (2026-11-24, Haiku 5.5 high; commit by Opus)
+- Built: branch `veo-wip` keeps Veo whole (at `abc9911`). On main: `generate_veo_clip`, `tools/veo.py`, `tools/flow_browser.py`, `tests/test_veo.py`, the `flow` extra, `ARGUS_VEO_*` / `ARGUS_FLOW_PROFILE` and the doctor playwright check are gone; docs and README say "Coming soon: Google Flow (Veo)". google-genai and Gemini TTS stay.
+- Bugs & fixes: the Haiku chat was cancelled while the full pytest ran, so nothing was committed → Opus read the result file and committed.
+- Kiro: steering rule for detached runs (output to files, read back) let the cancelled run be read afterwards.
+- Verified: `git grep -i "veo|flow_login|playwright" -- src tests kiro-power` empty; full pytest 531 passed in 866 s, exit 0.
+- Credits: <author fills>

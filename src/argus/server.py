@@ -1,7 +1,7 @@
 """ARGUS MCP server.
 
 Exposes the video production pipeline as MCP tools: watching footage, voiceover,
-Veo clips, rendering, QA, export and the user's own scripts.
+rendering, QA, export and the user's own scripts.
 
 Tool descriptions are sent to the model on every turn, so they stay short. Details live in
 the guide sections (`studio_guide(section=...)`, see `STUDIO_GUIDE.md` section 10).
@@ -33,8 +33,8 @@ mcp = MCPServer(
         "ARGUS turns you into a video editor and producer for TikTok, Shorts and YouTube. "
         "Call `studio_guide` at the start of every session: it holds the working method and "
         "the user's saved preferences. You make every creative decision. ARGUS tools watch "
-        "(`watch_video`, `get_frames`), speak (`synthesize_voiceover`), generate "
-        "(`generate_veo_clip`), render (`render_video`), check (`qa_verify_video`) and package "
+        "(`watch_video`, `get_frames`), speak (`synthesize_voiceover`), render (`render_video`), "
+        "check (`qa_verify_video`) and package "
         "(`export_package`). Operations that take long return a `job_id`; poll `job_status`."
     ),
 )
@@ -99,39 +99,6 @@ def job_status(job_id: str, wait_s: float = jobs.DEFAULT_WAIT_S) -> list[str | I
     Returns `summary`, `state`, `progress`, `note`, and `result` (pictures come as images) or `error`.
     """
     return jobs.job_status(job_id, wait_s)
-
-
-@_tool
-def generate_veo_clip(
-    prompt: str = "",
-    output_path: str = "",
-    aspect_ratio: str = "9:16",
-    model: str | None = None,
-    negative_prompt: str | None = None,
-    max_wait_s: float = 600.0,
-    provider: str | None = None,
-    login: bool = False,
-) -> dict:
-    """Make a Veo clip for an AI scene (1080x1920 by default). Takes 1-3 minutes.
-
-    `provider="flow"` uses the logged-in Google Flow session. `login=true` opens the one-time Flow
-    login window instead and generates nothing. Prompts are sent unchanged.
-    """
-    if login:
-        from .tools.flow_browser import flow_login as login_impl
-
-        return login_impl()
-    from .tools.veo import generate_veo_clip as impl
-
-    return impl(
-        prompt,
-        output_path,
-        aspect_ratio=aspect_ratio,
-        model=model,
-        negative_prompt=negative_prompt,
-        max_wait_s=max_wait_s,
-        provider=provider,
-    )
 
 
 @_tool
@@ -329,14 +296,14 @@ def run_script(
 
 
 @_tool
-def doctor(check_flow: bool = False) -> dict:
+def doctor() -> dict:
     """Check the environment: the same report as the argus-doctor command.
 
     Returns `checks`, `critical_failures` and `ok`. Optional checks only warn.
     """
     from .doctor import run_checks
 
-    return run_checks(flow=True if check_flow else None)
+    return run_checks()
 
 
 def startup_banner() -> str:

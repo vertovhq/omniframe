@@ -15,7 +15,7 @@ from argus import server  # noqa: E402
 from argus.config import CONFIG  # noqa: E402
 from argus.tools import kit_preview, memory, studio  # noqa: E402
 
-PROVIDER_KEYS = {"elevenlabs", "gemini", "edge", "faster_whisper", "veo_api", "flow_session"}
+PROVIDER_KEYS = {"elevenlabs", "gemini", "edge", "faster_whisper"}
 HEADER = "# ARGUS — user preferences"
 
 
@@ -28,7 +28,6 @@ def kb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(studio, "CONFIG", cfg)
     monkeypatch.setattr(memory, "CONFIG", cfg)
     monkeypatch.setattr(kit_preview, "CONFIG", cfg)  # the strip cache lives under output_dir too
-    monkeypatch.setenv("ARGUS_FLOW_PROFILE", str(tmp_path / "no-flow-profile"))
     return path
 
 
@@ -52,22 +51,15 @@ def test_guide_text_has_no_percentage_rules() -> None:
     assert "%" not in studio.read_guide()
 
 
-def test_providers_follow_config_imports_and_flow_profile(
-    kb: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    flow_dir = tmp_path / "flow"
-    flow_dir.mkdir()
-    monkeypatch.setenv("ARGUS_FLOW_PROFILE", str(flow_dir))
+def test_providers_follow_config_and_imports(kb: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(studio, "_importable", lambda module: module == "edge_tts")
 
     keyed = studio.providers(dataclasses.replace(CONFIG, elevenlabs_api_key="e", gemini_api_key="g"))
-    assert all(keyed[name]["available"] for name in ("elevenlabs", "gemini", "edge", "flow_session"))
+    assert all(keyed[name]["available"] for name in ("elevenlabs", "gemini", "edge"))
     assert not keyed["faster_whisper"]["available"]
-    # the Gemini API route for Veo is shut down (task 20.8); the key alone does not make it available
-    assert not keyed["veo_api"]["available"] and "2026-10-22" in keyed["veo_api"]["note"]
 
     keyless = studio.providers(dataclasses.replace(CONFIG, elevenlabs_api_key="", gemini_api_key=""))
-    assert not any(keyless[name]["available"] for name in ("elevenlabs", "gemini", "veo_api"))
+    assert not any(keyless[name]["available"] for name in ("elevenlabs", "gemini"))
     assert keyless["edge"]["available"]
     assert "ELEVENLABS_API_KEY" in keyless["elevenlabs"]["note"]
 

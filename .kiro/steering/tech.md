@@ -5,8 +5,8 @@
 - Python >= 3.11 MCP server in `src/argus` (mcp SDK `MCPServer`, FastMCP-style decorators).
 - ffmpeg / ffprobe for probing, cutting, proxies, frame extraction, loudness, QA.
 - Remotion 4.0.540 engine in `engine/` (React 18, TypeScript) — the only video renderer.
-- Optional: faster-whisper (transcripts), edge-tts (free voice), playwright (Veo via Flow),
-  google-genai (Veo API, Gemini TTS). ElevenLabs is called over REST with `urllib`.
+- Optional: faster-whisper (transcripts), edge-tts (free voice),
+  google-genai (Gemini TTS). Veo is not on main until after the contest (branch `veo-wip`). ElevenLabs is called over REST with `urllib`.
 
 ## Commands (Windows, run from repo root)
 
@@ -47,7 +47,7 @@
 - Anything that can take longer than ~20 s goes through `argus.jobs.run_or_detach`.
 - Core dependencies: mcp, google-genai, python-dotenv, numpy, Pillow (pydantic comes
   with mcp). Optional extras: `voice` (edge-tts), `asr` (faster-whisper),
-  `flow` (playwright), `pretty` (rich), `dev` (pytest). Ask before adding others.
+  `pretty` (rich), `dev` (pytest). Ask before adding others.
 - Secrets come only from env / `.env`. Never print or log keys.
 - Tests are offline: synthetic media via ffmpeg `lavfi`, network mocked. Tests that
   need the engine skip when `engine/node_modules` is missing.

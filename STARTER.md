@@ -10,7 +10,7 @@ me each checkpoint before the next step.
 
 **Setup:** The `argus` server is connected. Start with `studio_guide`: it lists the tools, the working
 order and my saved preferences. The main tools are `watch_video`, `get_frames`, `voice_options`,
-`synthesize_voiceover`, `generate_veo_clip`, `render_video`, `job_status`, `qa_verify_video` and
+`synthesize_voiceover`, `render_video`, `job_status`, `qa_verify_video` and
 `export_package`. Use one project name for the whole video. Outputs go to the ARGUS output folder.
 
 **Goal:** A vertical video, 1080x1920, for TikTok or YouTube Shorts.
@@ -18,9 +18,8 @@ order and my saved preferences. The main tools are `watch_video`, `get_frames`, 
 **Steps:**
 1. Write the script: a hook in the first 1.5 seconds, the promise, three to five beats, and a call to
    action. Show it to me and wait for my approval before you voice it.
-2. Choose the picture: kinetic graphics from a plan for `render_video` (free, local), Veo clips
-   (`generate_veo_clip`, with `provider="flow"` after its `login=true` run), or a mix. Tell me which one you
-   chose and why.
+2. Build the picture from kinetic graphics: a plan for `render_video` (free, local). Tell me what the
+   plan shows and why.
 3. Choose the voice. Use `voice_options`, pick one yourself, and tell me which one. Without keys, use
    edge (free). With the ElevenLabs or Gemini keys, you can use their voices too. Write the delivery
    into the text.

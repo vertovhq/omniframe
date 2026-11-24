@@ -113,12 +113,12 @@ def test_all_critical_ok(tmp_path, monkeypatch):
     _fake_engine(tmp_path, monkeypatch)
     cfg = _make_cfg(tmp_path)
 
-    report = doctor.run_checks(flow=False, live=False, config=cfg)
+    report = doctor.run_checks(live=False, config=cfg)
 
     assert report["ok"] is True
     assert report["critical_failures"] == []
     ids = {c["id"] for c in report["checks"]}
-    optional = {"faster_whisper", "edge_tts", "playwright", "gemini_key", "elevenlabs_key", "render_browser"}
+    optional = {"faster_whisper", "edge_tts", "gemini_key", "elevenlabs_key", "render_browser"}
     assert ids == set(doctor.CRITICAL_IDS) | optional
     assert not {i for i in ids if "ass" in i}  # no ASS subtitle check any more
     assert {"numpy", "pillow"} <= set(doctor.CRITICAL_IDS)
@@ -140,7 +140,7 @@ def test_output_dir_created_deep(tmp_path, monkeypatch):
         ffmpeg=_fake_exe(tmp_path, "ffmpeg.exe"),
         ffprobe=_fake_exe(tmp_path, "ffprobe.exe"),
     )
-    check = next(c for c in doctor.run_checks(flow=False, live=False, config=cfg)["checks"]
+    check = next(c for c in doctor.run_checks(live=False, config=cfg)["checks"]
                  if c["id"] == "output_dir")
     assert check["status"] == "ok"
     assert "created" in check["detail"]
@@ -159,7 +159,7 @@ def test_ffmpeg_missing_fails_with_hint(tmp_path, monkeypatch):
         ffmpeg="no-such-ffmpeg-anywhere",
         ffprobe="no-such-ffprobe-anywhere",
     )
-    report = doctor.run_checks(flow=False, live=False, config=cfg)
+    report = doctor.run_checks(live=False, config=cfg)
 
     assert report["ok"] is False
     assert set(report["critical_failures"]) == {"ffmpeg", "ffprobe"}
@@ -175,7 +175,7 @@ def test_node_too_old(tmp_path, monkeypatch):
     _mock_run_ok(monkeypatch, node_version="v16.14.0")
     _pin_which(monkeypatch, tmp_path)
     _fake_engine(tmp_path, monkeypatch)
-    report = doctor.run_checks(flow=False, live=False, config=_make_cfg(tmp_path))
+    report = doctor.run_checks(live=False, config=_make_cfg(tmp_path))
 
     node = next(c for c in report["checks"] if c["id"] == "node")
     assert node["status"] == "fail"
@@ -188,7 +188,7 @@ def test_core_python_packages_are_critical(tmp_path, monkeypatch, module, check_
     _run_failing_import(monkeypatch, module)
     _pin_which(monkeypatch, tmp_path)
     _fake_engine(tmp_path, monkeypatch)
-    report = doctor.run_checks(flow=False, live=False, config=_make_cfg(tmp_path))
+    report = doctor.run_checks(live=False, config=_make_cfg(tmp_path))
 
     check = next(c for c in report["checks"] if c["id"] == check_id)
     assert check["status"] == "fail" and "pip install" in check["hint"]
@@ -201,7 +201,7 @@ def test_optional_python_packages_only_warn(tmp_path, monkeypatch, module, check
     _run_failing_import(monkeypatch, module)
     _pin_which(monkeypatch, tmp_path)
     _fake_engine(tmp_path, monkeypatch)
-    report = doctor.run_checks(flow=False, live=False, config=_make_cfg(tmp_path))
+    report = doctor.run_checks(live=False, config=_make_cfg(tmp_path))
 
     check = next(c for c in report["checks"] if c["id"] == check_id)
     assert check["status"] == "warn" and check["hint"]
@@ -213,7 +213,7 @@ def test_engine_missing_renderer_packages(tmp_path, monkeypatch):
     _mock_run_ok(monkeypatch)
     _pin_which(monkeypatch, tmp_path)
     eng = _fake_engine(tmp_path, monkeypatch, skip=("@remotion/renderer",))
-    report = doctor.run_checks(flow=False, live=False, config=_make_cfg(tmp_path))
+    report = doctor.run_checks(live=False, config=_make_cfg(tmp_path))
 
     engine = next(c for c in report["checks"] if c["id"] == "engine")
     assert engine["status"] == "fail"
@@ -226,7 +226,7 @@ def test_engine_needs_npm_install(tmp_path, monkeypatch):
     _mock_run_ok(monkeypatch)
     _pin_which(monkeypatch, tmp_path)
     eng = _fake_engine(tmp_path, monkeypatch, with_modules=False)
-    report = doctor.run_checks(flow=False, live=False, config=_make_cfg(tmp_path))
+    report = doctor.run_checks(live=False, config=_make_cfg(tmp_path))
 
     engine = next(c for c in report["checks"] if c["id"] == "engine")
     assert engine["status"] == "fail"
@@ -238,7 +238,7 @@ def test_gemini_key_absent_is_status_not_error(tmp_path, monkeypatch):
     _pin_which(monkeypatch, tmp_path)
     _fake_engine(tmp_path, monkeypatch)
     cfg = _make_cfg(tmp_path, key="")
-    report = doctor.run_checks(flow=False, live=False, config=cfg)
+    report = doctor.run_checks(live=False, config=cfg)
 
     key = next(c for c in report["checks"] if c["id"] == "gemini_key")
     assert key["status"] == "warn"
@@ -251,7 +251,7 @@ def test_elevenlabs_key_optional(tmp_path, monkeypatch):
     _pin_which(monkeypatch, tmp_path)
     _fake_engine(tmp_path, monkeypatch)
 
-    with_key = doctor.run_checks(flow=False, live=False, config=_make_cfg(tmp_path))
+    with_key = doctor.run_checks(live=False, config=_make_cfg(tmp_path))
     key = next(c for c in with_key["checks"] if c["id"] == "elevenlabs_key")
     assert key["status"] == "ok"
 
@@ -262,42 +262,11 @@ def test_elevenlabs_key_optional(tmp_path, monkeypatch):
         ffmpeg=_fake_exe(tmp_path, "ffmpeg.exe"),
         ffprobe=_fake_exe(tmp_path, "ffprobe.exe"),
     )
-    without = doctor.run_checks(flow=False, live=False, config=cfg)
+    without = doctor.run_checks(live=False, config=cfg)
     key = next(c for c in without["checks"] if c["id"] == "elevenlabs_key")
     assert key["status"] == "warn"  # optional: absence is a status, not an error
     assert "elevenlabs_key" not in without["critical_failures"]
     assert without["ok"] is True
-
-
-def test_playwright_optional_vs_flow(tmp_path, monkeypatch):
-    _mock_run_ok(monkeypatch)
-    _pin_which(monkeypatch, tmp_path)
-    _fake_engine(tmp_path, monkeypatch)
-
-    def fake_run(cmd, timeout=20.0, cwd=None):
-        argv = " ".join(cmd)
-        if cmd[-1] == "--version":
-            return SimpleNamespace(returncode=0, stdout="v20.11.1\n" if "node" in Path(cmd[0]).name else "10.2.4\n", stderr="")
-        if "-version" in argv:
-            return SimpleNamespace(returncode=0, stdout="x version 1", stderr="")
-        if cmd[:2] == [sys.executable, "-c"]:
-            if "import playwright" in cmd[2]:  # playwright is not installed
-                return SimpleNamespace(returncode=1, stdout="", stderr="No module named playwright")
-            return SimpleNamespace(returncode=0, stdout="", stderr="")  # import edge_tts
-        raise AssertionError(f"unexpected probe: {argv}")
-
-    monkeypatch.setattr(doctor, "_run", fake_run)
-    cfg = _make_cfg(tmp_path)
-
-    offline = doctor.run_checks(flow=False, live=False, config=cfg)
-    pw = next(c for c in offline["checks"] if c["id"] == "playwright")
-    assert pw["status"] == "warn"  # marked optional
-    assert offline["ok"] is True
-
-    flow = doctor.run_checks(flow=True, live=False, config=cfg)
-    pw_flow = next(c for c in flow["checks"] if c["id"] == "playwright")
-    assert pw_flow["status"] == "fail"  # critical in flow mode
-    assert flow["ok"] is False and "playwright" in flow["critical_failures"]
 
 
 # ------------------------------------------------------------ edge live probe
@@ -343,14 +312,14 @@ def test_edge_probe_reports_last_error(tmp_path, monkeypatch):
 
 def test_main_json_exit_codes(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(doctor, "run_checks", lambda **kw: {
-        "argus": "test", "platform": "test", "flow_mode": False, "live": False,
+        "argus": "test", "platform": "test", "live": False,
         "checks": [], "critical_failures": [], "ok": True,
     })
     assert doctor.main(["--json"]) == 0
     assert json.loads(capsys.readouterr().out)["ok"] is True
 
     monkeypatch.setattr(doctor, "run_checks", lambda **kw: {
-        "argus": "test", "platform": "test", "flow_mode": False, "live": False,
+        "argus": "test", "platform": "test", "live": False,
         "checks": [{"id": "node", "label": "node", "status": "fail", "detail": "x", "hint": "y"}],
         "critical_failures": ["node"], "ok": False,
     })

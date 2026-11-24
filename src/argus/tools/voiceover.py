@@ -1200,16 +1200,13 @@ def _eleven_tier(errors: dict[str, str]) -> str | None:
     return tier
 
 
-def _model_options(errors: dict[str, str], notes: list[str]) -> dict[str, list[dict]]:
+def _model_options(errors: dict[str, str]) -> dict[str, list[dict]]:
     """Models per provider the keys can use, newest first; `default` marks the id ARGUS uses without a choice."""
     options: dict[str, list[dict]] = {}
     if PROVIDERS["elevenlabs"].available():
         options["elevenlabs"] = _eleven_tts_models(errors)
     if CONFIG.gemini_api_key:
-        rows = model_catalog.options(errors)
-        options["gemini"] = rows
-        if "gemini_models" not in errors and not any(row["use"] == "video" for row in rows):
-            notes.append(model_catalog.VEO_SHUTDOWN_NOTE)
+        options["gemini"] = model_catalog.options(errors)
     return {provider: rows for provider, rows in options.items() if rows}
 
 
@@ -1233,7 +1230,7 @@ def voice_options(
     `plan.note` says so and no voice is marked.
     `edge_voices`, `gemini_voices`: free defaults and Gemini names. Every list is capped at `limit`,
     and the whole answer at VOICE_RESPONSE_MAX_CHARS (the longest lists lose voices first).
-    `models`: per provider, the text-to-speech models (and for Gemini the video models) the keys can use,
+    `models`: per provider, the text-to-speech models the keys can use,
     newest first, with `id`, `name`, `use`, `default`. `default: true` is the model ARGUS uses when none is
     given. A failed list is in `errors`. `details=True` adds `delivery` (audio tags and pacing rules), which
     leaves room for fewer voices.
@@ -1293,7 +1290,7 @@ def voice_options(
             f"no voice matches language={language!r}, gender={gender!r}, query={query!r}: gender takes male or "
             "female, and query words must occur in a voice's name, description or labels (mostly English)"
         )
-    models = _model_options(errors, notes)
+    models = _model_options(errors)
     result: dict = {
         "engine": f"ARGUS {__version__}",
         "default_provider": default_provider(),

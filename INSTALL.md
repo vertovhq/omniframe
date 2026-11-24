@@ -30,7 +30,7 @@ below (sections 2 to 4) apply only to Option A, the clone.
 | Python 3.11 or newer | ARGUS server | `python --version` |
 | ffmpeg on PATH | probing, cutting, loudness, frames | `ffmpeg -version` |
 | Node.js 18 or newer | Remotion render engine (kinetic graphics) | `node --version` |
-| Internet | voices (edge-tts), Veo (Flow), Freesound | — |
+| Internet | voices (edge-tts), Freesound | — |
 
 ffmpeg on Windows: download a build from https://www.gyan.dev/ffmpeg/builds/ (the "essentials"
 zip), unpack it to `C:\ffmpeg`, and add `C:\ffmpeg\bin` to PATH. Open a new terminal afterwards so
@@ -53,14 +53,12 @@ With the venv activated, from the repository folder:
 powershell -ExecutionPolicy Bypass -File install.ps1     # macOS/Linux: bash install.sh
 ```
 
-The script does four things:
+The script does three things:
 
 1. `pip install -e ".[dev,pretty,voice]"`: the ARGUS package, tests, `rich` output and the free
    edge-tts voice.
-2. Tries to install Chromium through Playwright for the optional Flow route. A failure here is safe to
-   ignore; Flow is optional.
-3. `npm install` in `engine/`: the Remotion engine.
-4. Copies `.env.example` to `.env` if there is no `.env` yet.
+2. `npm install` in `engine/`: the Remotion engine.
+3. Copies `.env.example` to `.env` if there is no `.env` yet.
 
 If you prefer manual steps, run the same commands yourself:
 
@@ -71,11 +69,11 @@ copy .env.example .env
 ```
 
 Optional extras: `pip install -e ".[asr]"` adds faster-whisper for transcripts in `watch_video`
-(the model downloads on first use). `pip install -e ".[flow]"` adds Playwright for the Flow route.
+(the model downloads on first use).
 
 ## 4. Keys (optional)
 
-Everything in the quickstart works without keys. Add keys when you want better voices or Veo.
+Everything in the quickstart works without keys. Add keys when you want better voices.
 Edit `.env` in the repository folder. Never paste keys into a chat.
 
 | Variable | Get it at | Used for |
@@ -85,10 +83,6 @@ Edit `.env` in the repository folder. Never paste keys into a chat.
 
 ElevenLabs keys start with `sk_`. The key is shown once, when you create it. A long hex string
 without `sk_` is a key ID, and the API rejects it with `api_key_id_used_as_api_key`.
-
-Veo: the Gemini API shut Veo 3.1 Preview down on 2026-10-22, so `provider="api"` is refused. For Veo
-clips, use the Flow route: set `ARGUS_VEO_PROVIDER=flow` in `.env`, then run `generate_veo_clip` with `login=true` once from the
-chat and sign in with your own Google account. The Flow route is experimental.
 
 Other settings are documented in `.env.example`. `OMNIFRAME_OUTPUT_DIR` sets where projects are written.
 
@@ -155,7 +149,6 @@ Files go to `<OMNIFRAME_OUTPUT_DIR>/projects/demo/`. Long jobs return a `job_id`
 |---|---|
 | `api_key_id_used_as_api_key` | You pasted a key ID. The ElevenLabs key starts with `sk_`. |
 | `argus-doctor` reports ffmpeg or Node missing | PATH did not update. Open a new terminal. |
-| `provider api` error mentioning 2026-10-22 | Veo API is shut down. Use `provider="flow"`. |
 | New tools are not in the chat | The MCP server was not reloaded after the config change. |
 | Render says the engine is installing or not installed (uvx or Kiro Power) | The background install is still running or failed. The `doctor` tool shows the step, and `~/.argus/engine-setup.log` has the output. |
 | Tool call timed out | Not an error in most cases. Long work runs in the background; check `job_status`. |

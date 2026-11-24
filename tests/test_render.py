@@ -347,7 +347,7 @@ def test_server_registers_render_video() -> None:
 
 
 REGISTERED_TOOLS = {
-    "studio_guide", "job_status", "generate_veo_clip", "synthesize_voiceover",
+    "studio_guide", "job_status", "synthesize_voiceover",
     "voice_options", "watch_video", "get_frames", "render_video", "qa_verify_video",
     "export_package", "calculate_beat_grid", "search_sfx",
     "learn_and_record_memory", "run_script", "doctor",

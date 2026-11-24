@@ -21,11 +21,8 @@ Read it, then approve or ask for changes. Nothing is voiced or rendered before y
 
 ## Step 3. Choose the picture
 
-For graphics, the model writes a plan: scenes such as `words`, `title`, `counter` and `cta`, with
-times in seconds. For AI clips, it calls `generate_veo_clip`, which needs the Flow route
-(see INSTALL.md). A mix of both is allowed.
-
-Ask for the picture choice with a reason, then approve it.
+The model writes a plan: scenes such as `words`, `title`, `counter` and `cta`, with times in
+seconds. Show the plan and the reason for it, then get approval.
 
 ## Step 4. Voice
 

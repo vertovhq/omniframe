@@ -268,17 +268,3 @@ def test_stream_info(master_video: Path) -> None:
     assert run_ffmpeg  # import sanity
 
 
-# --------------------------------------------------------------------- flow
-
-def test_flow_requires_saved_session(tmp_path: Path) -> None:
-    from argus.tools import flow_browser
-
-    with pytest.raises(RuntimeError, match="flow_login"):
-        flow_browser.flow_generate("тест", str(tmp_path / "out.mp4"), profile=str(tmp_path / "nope"))
-
-
-def test_veo_provider_validation(tmp_path: Path) -> None:
-    from argus.tools import veo
-
-    with pytest.raises(ValueError, match="provider"):
-        veo.generate_veo_clip("тест", str(tmp_path / "o.mp4"), provider="warp")

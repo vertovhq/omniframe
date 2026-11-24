@@ -1,7 +1,7 @@
-"""Which Gemini models the key can use: Gemini text-to-speech and Veo video (task 20.8).
+"""Which Gemini models the key can use: Gemini text-to-speech (task 20.8).
 
 ARGUS does not type model ids into code. An id comes from the provider's own list, unless the
-user set one in `.env` (ARGUS_TTS_MODEL, ARGUS_VEO_MODEL). ElevenLabs models are listed in
+user set one in `.env` (ARGUS_TTS_MODEL). ElevenLabs models are listed in
 `voiceover.py`, next to the ElevenLabs HTTP helper. "Newest" means the highest version numbers in the id
 (gemini-3.8 > gemini-3.1 > gemini-2.5), because neither API returns a release date.
 """
@@ -16,13 +16,6 @@ from ..config import CONFIG
 # google-genai: `client.models.list()` iterates over every page of models
 #   https://googleapis.github.io/python-genai/
 # Model ids and what each is for: https://aistudio.google.com/docs/models
-# Video: https://aistudio.google.com/docs/video says Veo 3.1 Preview (`veo-3.1-*-generate-preview`) was shut
-# down in the Gemini API on 2026-10-22.
-VEO_SHUTDOWN_NOTE = "Veo 3.1 Preview in the Gemini API was shut down on 2026-10-22 (https://aistudio.google.com/docs/video)."
-VEO_API_SHUTDOWN_MESSAGE = (
-    "Veo 3.1 Preview in the Gemini API was shut down on 2026-10-22 (https://aistudio.google.com/docs/video). "
-    "Use the Flow route or wait for the Omni update."
-)
 
 _NUMBER = re.compile(r"\d+")
 
@@ -40,10 +33,6 @@ def newest_first(models: list[dict]) -> list[dict]:
 
 def is_tts(model: dict) -> bool:
     return "tts" in model["id"] and "live" not in model["id"]
-
-
-def is_veo(model: dict) -> bool:
-    return model["id"].startswith("veo-")
 
 
 def gemini_model_list() -> list[dict]:
@@ -82,18 +71,8 @@ def tts_model_id() -> str:
     return _pick(CONFIG.tts_model, is_tts, "ARGUS_TTS_MODEL", "text-to-speech")
 
 
-def veo_model_id() -> str:
-    """The Veo video model: ARGUS_VEO_MODEL when set, else the newest Veo model listed."""
-    try:
-        return _pick(CONFIG.veo_model, is_veo, "ARGUS_VEO_MODEL", "Veo video")
-    except RuntimeError as exc:
-        if CONFIG.veo_model:
-            raise
-        raise RuntimeError(f"{exc}. {VEO_SHUTDOWN_NOTE}") from exc
-
-
 def options(errors: dict[str, str]) -> list[dict]:
-    """Gemini TTS and Veo models the key lists, newest first within each kind.
+    """Gemini TTS models the key lists, newest first.
 
     Each row is `{id, name, use, default}`; `default` marks the id ARGUS uses when the user picks none.
     A failed list goes into `errors["gemini_models"]` and returns no rows.
@@ -103,12 +82,6 @@ def options(errors: dict[str, str]) -> list[dict]:
     except RuntimeError as exc:
         errors["gemini_models"] = str(exc)[:300]
         return []
-    rows: list[dict] = []
-    for use, keep, configured in (
-        ("text to speech", is_tts, CONFIG.tts_model),
-        ("video", is_veo, CONFIG.veo_model),
-    ):
-        kind = [model for model in listed if keep(model)]
-        default = configured or (kind[0]["id"] if kind else None)
-        rows += [{"id": m["id"], "name": m["name"], "use": use, "default": m["id"] == default} for m in kind]
-    return rows
+    kind = [model for model in listed if is_tts(model)]
+    default = CONFIG.tts_model or (kind[0]["id"] if kind else None)
+    return [{"id": m["id"], "name": m["name"], "use": "text to speech", "default": m["id"] == default} for m in kind]

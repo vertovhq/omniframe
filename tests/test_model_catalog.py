@@ -17,7 +17,7 @@ from argus.tools import model_catalog  # noqa: E402
 @pytest.fixture
 def cfg(monkeypatch: pytest.MonkeyPatch):
     """Config with no pinned model ids, so each test decides what is set."""
-    config = dataclasses.replace(CONFIG, gemini_api_key="g", tts_model="", veo_model="")
+    config = dataclasses.replace(CONFIG, gemini_api_key="g", tts_model="")
     monkeypatch.setattr(model_catalog, "CONFIG", config)
     return config
 
@@ -78,33 +78,13 @@ def test_a_failed_list_names_the_variable_and_adds_no_id(monkeypatch, cfg) -> No
     assert "401" in message and "ARGUS_TTS_MODEL" in message and "gemini-" not in message
 
 
-def test_veo_is_the_newest_listed_veo_model(monkeypatch, cfg) -> None:
-    _listing(monkeypatch, [{"id": "veo-3.0-generate", "name": "a"}, {"id": "veo-4.0-generate", "name": "b"},
-                           {"id": "gemini-3.8-flash", "name": "chat"}])
-    assert model_catalog.veo_model_id() == "veo-4.0-generate"
-
-
-def test_no_veo_model_says_the_shutdown_and_the_variable(monkeypatch, cfg) -> None:
-    _listing(monkeypatch, [{"id": "gemini-3.8-flash", "name": "chat"}])
-    with pytest.raises(RuntimeError) as raised:
-        model_catalog.veo_model_id()
-    assert "ARGUS_VEO_MODEL" in str(raised.value) and "2026-10-22" in str(raised.value)
-
-
-def test_a_pinned_veo_model_wins(monkeypatch, cfg) -> None:
-    monkeypatch.setattr(model_catalog, "CONFIG", dataclasses.replace(cfg, veo_model="pinned-video"))
-    _refuse(monkeypatch)
-    assert model_catalog.veo_model_id() == "pinned-video"
-
-
-def test_options_mark_the_default_only_once_per_use(monkeypatch, cfg) -> None:
+def test_options_mark_the_default_only_once(monkeypatch, cfg) -> None:
     _listing(monkeypatch, [{"id": "gemini-3.8-flash-tts", "name": "t"}, {"id": "gemini-3.1-flash-tts", "name": "u"},
-                           {"id": "veo-4.0-generate", "name": "v"}])
+                           {"id": "gemini-3.8-flash", "name": "chat"}])
     rows = model_catalog.options({})
     assert [(r["id"], r["use"], r["default"]) for r in rows] == [
         ("gemini-3.8-flash-tts", "text to speech", True),
         ("gemini-3.1-flash-tts", "text to speech", False),
-        ("veo-4.0-generate", "video", True),
     ]
 
 

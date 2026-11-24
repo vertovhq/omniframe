@@ -4,11 +4,11 @@ Verifies everything the pipeline needs before a new user hits "nothing works".
 Critical: python, ffmpeg, ffprobe, Node.js + npx, the engine (node_modules with remotion
 and the renderer/bundler packages), numpy, Pillow and OMNIFRAME_OUTPUT_DIR. Optional (a
 warning, never an error): faster-whisper, edge-tts (installed + service alive),
-playwright+chromium (critical only in flow mode), a Chrome or Edge for the renderer
-(otherwise Remotion downloads its own browser), the Gemini key and the ElevenLabs key.
+a Chrome or Edge for the renderer (otherwise Remotion downloads its own browser), the Gemini key
+and the ElevenLabs key.
 
-Console:  argus-doctor [--json] [--flow] [--no-live]
-MCP:      doctor(check_flow=False) -> the same report as JSON.
+Console:  argus-doctor [--json] [--no-live]
+MCP:      doctor() -> the same report as JSON.
 Exit code 0 when every critical check passed (warnings are fine).
 """
 
@@ -40,7 +40,6 @@ HINT_FFMPEG = "install ffmpeg: winget install Gyan.FFmpeg (or choco install ffmp
 HINT_CORE = 'pip install -e .  (numpy and Pillow are core dependencies)'
 HINT_EDGE = 'pip install edge-tts  (or pip install -e ".[voice]")'
 HINT_ASR = 'pip install -e ".[asr]"  (faster-whisper)'
-HINT_FLOW = 'pip install -e ".[flow]" && playwright install chromium'
 
 # 1-word live synthesis probe for edge-tts (runs in a child python, 15s budget)
 _EDGE_PROBE = (
@@ -271,42 +270,11 @@ def check_edge_tts(live: bool) -> dict:
     )
 
 
-def _playwright_browsers_dir() -> Path:
-    env = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "").strip()
-    if env:
-        return Path(env)
-    if sys.platform == "win32":
-        local = os.environ.get("LOCALAPPDATA", "").strip()
-        if local:
-            return Path(local) / "ms-playwright"
-    return Path.home() / ".cache" / "ms-playwright"
-
-
-def check_playwright(flow: bool) -> dict:
-    try:
-        p = _run([sys.executable, "-c", "import playwright"], timeout=30)
-        importable = p.returncode == 0
-        err = (p.stderr or "").strip()[:120]
-    except (OSError, subprocess.TimeoutExpired) as e:
-        importable, err = False, str(e)
-    if importable:
-        chromiums = sorted(_playwright_browsers_dir().glob("chromium-*"))
-        if chromiums:
-            return _check("playwright", "playwright+chromium", "ok", f"chromium: {chromiums[-1].name}")
-        missing, hint = "chromium not downloaded", "playwright install chromium"
-    else:
-        missing, hint = f"not installed ({err})", HINT_FLOW
-    # missing = a note "optional"; critical only in flow mode
-    status = "fail" if flow else "warn"
-    note = 'optional, only for provider="flow"' if not flow else 'needed for provider="flow"'
-    return _check("playwright", "playwright+chromium", status, f"{missing}; {note}", hint)
-
-
 def check_gemini_key(cfg: ArgusConfig) -> dict:
     if cfg.gemini_api_key:
-        return _check("gemini_key", "Gemini key", "ok", "set (Veo API and Gemini TTS available)")
+        return _check("gemini_key", "Gemini key", "ok", "set (Gemini TTS available)")
     return _check(
-        "gemini_key", "Gemini key", "warn", "not set; offline tools work, Veo API and Gemini TTS do not",
+        "gemini_key", "Gemini key", "warn", "not set; offline tools work, Gemini TTS does not",
         "copy .env.example to .env and set ARGUS_GEMINI_API_KEY (or export the variable)",
     )
 
@@ -336,11 +304,9 @@ def check_output_dir(cfg: ArgusConfig) -> dict:
 
 # ------------------------------------------------------------------- report
 
-def run_checks(flow: bool | None = None, live: bool = True, config: ArgusConfig | None = None) -> dict:
+def run_checks(live: bool = True, config: ArgusConfig | None = None) -> dict:
     """Run every check and return the report dict (same shape for CLI and MCP)."""
     cfg = config if config is not None else load_config()
-    if flow is None:
-        flow = os.environ.get("ARGUS_VEO_PROVIDER", "").strip().lower() == "flow"
 
     checks = [
         check_python(),
@@ -354,20 +320,14 @@ def run_checks(flow: bool | None = None, live: bool = True, config: ArgusConfig 
         check_pillow(),
         check_faster_whisper(),
         check_edge_tts(live),
-        check_playwright(flow),
         check_gemini_key(cfg),
         check_elevenlabs_key(cfg),
         check_output_dir(cfg),
     ]
-    # playwright becomes critical only in flow mode (otherwise it is an optional warning)
-    critical_failures = [
-        c["id"] for c in checks
-        if c["status"] == "fail" and (c["id"] in CRITICAL_IDS or (c["id"] == "playwright" and flow))
-    ]
+    critical_failures = [c["id"] for c in checks if c["status"] == "fail" and c["id"] in CRITICAL_IDS]
     return {
         "argus": __version__,
         "platform": sys.platform,
-        "flow_mode": flow,
         "live": live,
         "checks": checks,
         "critical_failures": critical_failures,
@@ -380,7 +340,6 @@ def render_text(report: dict) -> str:
     lines = [
         f"ARGUS doctor v{report['argus']} — {report['platform']}, "
         f"python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-        + (" | flow mode" if report["flow_mode"] else "")
         + (" | no live probes" if not report["live"] else ""),
         "",
     ]
@@ -401,7 +360,6 @@ def render_text(report: dict) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="argus-doctor", description="ARGUS environment self-check")
     ap.add_argument("--json", action="store_true", help="print the report as JSON")
-    ap.add_argument("--flow", action="store_true", help="treat playwright+chromium as critical (provider=flow)")
     ap.add_argument("--no-live", action="store_true", help="skip network probes (edge-tts service)")
     args = ap.parse_args(argv)
 
@@ -410,7 +368,7 @@ def main(argv: list[str] | None = None) -> int:
     except (AttributeError, OSError):
         pass
 
-    report = run_checks(flow=True if args.flow else None, live=not args.no_live)
+    report = run_checks(live=not args.no_live)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=1))
     else:

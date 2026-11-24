@@ -69,9 +69,7 @@ class ArgusConfig:
     gemini_api_key: str = ""
     # optional; only needed for the ElevenLabs voice provider
     elevenlabs_api_key: str = ""
-    veo_provider: str = "api"  # "api" (official, paid) | "flow" (browser session, free credits)
-    # Model ids are empty by default: ARGUS takes the newest model the key lists (tools/model_catalog.py).
-    veo_model: str = ""
+    # Model id is empty by default: ARGUS takes the newest model the key lists (tools/model_catalog.py).
     tts_model: str = ""  # Gemini TTS model id
     default_voice: str = "Charon"
     width: int = 1080
@@ -122,8 +120,6 @@ def load_config() -> ArgusConfig:
     return ArgusConfig(
         gemini_api_key=api_key,
         elevenlabs_api_key=eleven_key,
-        veo_provider=os.environ.get("ARGUS_VEO_PROVIDER", "").strip().lower() or ArgusConfig.veo_provider,
-        veo_model=os.environ.get("ARGUS_VEO_MODEL", "").strip() or ArgusConfig.veo_model,
         tts_model=os.environ.get("ARGUS_TTS_MODEL", "").strip() or ArgusConfig.tts_model,
         default_voice=os.environ.get("ARGUS_DEFAULT_VOICE", "").strip() or ArgusConfig.default_voice,
         width=int(os.environ.get("ARGUS_WIDTH", "1080")),

@@ -20,7 +20,6 @@ from .. import __version__, state
 from ..config import CONFIG, ArgusConfig
 from ..media_out import Image
 from . import kit_preview, library, sounds
-from .flow_browser import _profile_dir as _flow_profile_dir
 
 # Upper bound for the preferences text, in characters, so a long file cannot flood the context.
 PREFERENCES_LIMIT = 4000
@@ -100,7 +99,6 @@ def providers(cfg: ArgusConfig) -> dict:
     gemini = bool(cfg.gemini_api_key)
     edge = _importable("edge_tts")
     whisper = _importable("faster_whisper")
-    flow = _flow_profile_dir(None).exists()
     return {
         "elevenlabs": _provider(
             eleven,
@@ -109,7 +107,7 @@ def providers(cfg: ArgusConfig) -> dict:
         ),
         "gemini": _provider(
             gemini,
-            "voice (Gemini TTS) and Veo API" if gemini else "no key: set ARGUS_GEMINI_API_KEY in .env",
+            "voice (Gemini TTS)" if gemini else "no key: set ARGUS_GEMINI_API_KEY in .env",
         ),
         "edge": _provider(
             edge,
@@ -119,15 +117,6 @@ def providers(cfg: ArgusConfig) -> dict:
             whisper,
             f"transcripts and word timings, model {cfg.whisper_model}" if whisper
             else "not installed: pip install 'argus-studio[asr]'; no transcripts until then",
-        ),
-        "veo_api": _provider(
-            False,
-            "Veo 3.1 Preview was shut down in the Gemini API on 2026-10-22; use generate_veo_clip provider=flow",
-        ),
-        "flow_session": _provider(
-            flow,
-            "logged-in Google Flow profile found (generate_veo_clip provider=flow)" if flow
-            else "no session: run flow_login once to use provider=flow",
         ),
     }
 

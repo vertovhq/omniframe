@@ -1,6 +1,5 @@
 """Task 20.10 item 20: the tool surface sent on every turn (descriptions plus input schemas) stays small,
-and the two merged tools are gone: `flow_login` is `generate_veo_clip(login=true)`, `download_sfx` is
-`search_sfx(download=[...], out_dir=...)`.
+and the merged tool is gone: `download_sfx` is `search_sfx(download=[...], out_dir=...)`.
 
 Offline: reads the registered tools of the server, no calls.
 """
@@ -40,9 +39,7 @@ def test_descriptions_and_schemas_stay_under_the_limit() -> None:
 
 def test_merged_tools_are_gone_and_their_options_exist() -> None:
     names = {tool.name for tool in _tools()}
-    assert "flow_login" not in names
     assert "download_sfx" not in names
-    assert "login" in inspect.signature(server.generate_veo_clip).parameters
     assert "download" in inspect.signature(server.search_sfx).parameters
 
 

@@ -41,6 +41,6 @@ applies to each. The ARGUS license itself is in [LICENSE](LICENSE).
 
 - Freesound sound effects (`search_sfx`, `download_sfx`). CC0 sounds need no attribution. CC-BY
   sounds need attribution, which `download_sfx` writes to `FREESOUND-CREDITS.md` in the project.
-- Python packages (`mcp`, `google-genai`, `numpy`, `Pillow`, `edge-tts`, `faster-whisper`, `playwright`)
+- Python packages (`mcp`, `google-genai`, `numpy`, `Pillow`, `edge-tts`, `faster-whisper`)
   and their licenses, as listed in `pyproject.toml`.
 - ffmpeg and ffprobe, which ARGUS calls as external programs.

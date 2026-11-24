@@ -21,7 +21,7 @@ ARGUS covers three scenarios:
    continuation, an analog, or your own idea in the same style.
 2. **Your footage to edited video.** Cut stumbles, repeats and long pauses from your recording.
    Add captions, zooms, graphics, sound effects and music.
-3. **Idea to video from scratch.** Kinetic graphics from a JSON plan, Veo AI clips, or both.
+3. **Idea to video from scratch.** Kinetic graphics from a JSON plan.
 
 Every scenario ends with the same output: a 9:16 and/or 16:9 file ready to upload, a cover image,
 and a `post.md` with title, description and hashtags. Publishing stays manual. ARGUS calls no
@@ -42,7 +42,7 @@ N credits and takes M min. These numbers will be filled in after the demo.
 ## Quickstart without keys
 
 Without any API key you get kinetic graphics, the free edge-tts voices, video watching and framing,
-QA and export. Veo clips need a Flow login or an API key (see [Honest notes](#honest-notes)).
+QA and export.
 
 1. Install (see [Install](#install)).
 2. Run `argus-doctor`. It prints a table: ✓ ready, ✗ missing with the install command, ⚠ optional.
@@ -73,8 +73,7 @@ bash install.sh     # Windows: powershell -ExecutionPolicy Bypass -File install.
 ```
 
 The install script installs the Python package, the edge-tts voice, the Node packages of the engine
-and a `.env` copy of `.env.example`. It also tries to install Chromium for the optional Flow route.
-Run it inside the activated venv. Step by step: [INSTALL.md](INSTALL.md).
+and a `.env` copy of `.env.example`. Run it inside the activated venv. Step by step: [INSTALL.md](INSTALL.md).
 
 ### Without cloning: uvx or Kiro Power
 
@@ -125,8 +124,6 @@ Any other MCP client works the same way: start `python -m argus` from the venv, 
 | `get_frames` | Exact frames of a video as pictures, optionally cropped | none |
 | `voice_options` | Voices, models and providers available now | optional |
 | `synthesize_voiceover` | Voice audio and word timings (`{w, s, e}`), mastered to -14 LUFS. Providers: edge (free), ElevenLabs, Gemini | none (edge); keys improve quality |
-| `generate_veo_clip` | Veo 3.1 clip through your Flow session (`provider="flow"`). The API route is refused (see Honest notes) | Flow login |
-| `generate_veo_clip` with `login=true` | One-time Flow login: opens a browser window, you sign in, the profile is saved | Google account |
 | `render_video` | Plan to stills, preview or final in 9:16 or 16:9: graphics, footage clips, captions, music, sound effects | none |
 | `job_status` | State and result of a long job that returned a `job_id` | none |
 | `qa_verify_video` | Technical checks (size, fps, loudness, true peak, black gaps, audio length) and frames to look at | none |
@@ -173,17 +170,14 @@ The working order for every plan: `synthesize_voiceover` when the video has a vo
 `render_video` in `stills` mode (the model looks at each frame), then `preview`, then `final`, then
 `qa_verify_video`, then `export_package`.
 
+## Coming soon
+
+AI video clips through Google Flow (Veo) are coming in the next update. The current code is on branch `veo-wip`.
+
 ## Honest notes
 
-- **Veo API is shut down.** Google shut Veo 3.1 Preview down in the Gemini API on 2026-10-22
-  (https://aistudio.google.com/docs/video). `generate_veo_clip` with `provider="api"` returns that
-  message and makes no call.
-- **Flow is opt-in and fragile.** `provider="flow"` drives your own flow.google session with
-  Playwright. It needs one `generate_veo_clip` with `login=true`, uses one account per person, and depends on Google's
-  interface. The selectors are in `src/argus/tools/flow_browser.py`.
 - **Captions come from the plan.** The engine draws them from the plan's `captions` block. ARGUS
   writes no `.ass` files.
-- **Prompts go to Veo as written.** ARGUS does not rewrite them to get around content rules.
 - **Free ElevenLabs plans** may not reach library voices through the API. `voice_options` says so
   when that happens.
 
@@ -191,7 +185,7 @@ The working order for every plan: `synthesize_voiceover` when the video has a vo
 
 - The model calls `studio_guide` first. It returns the working order, the tools and providers
   available, and the user's saved preferences.
-- Long work (renders, Veo, QA of long files) returns a `job_id`. The model polls `job_status`.
+- Long work (renders, QA of long files) returns a `job_id`. The model polls `job_status`.
 - The build used Claude Opus 5.5 for planning and audits, Claude Sonnet 5.5 for the core tasks, and
   Claude Haiku 5.5 for smaller tasks, all inside Kiro. The edit is only as good as the direction the
   model gives ARGUS, so each step ends with pictures the user can check.
@@ -221,7 +215,7 @@ rebuilt spec-first in Kiro; the spec, steering, hooks and build log are in `.kir
 The Kiroween rules ask for a project that will "stitch together a chimera of technologies into one
 app" (https://kiroween.devpost.com/rules). ARGUS does that. A chat model directs a frame-exact React
 renderer (Remotion), ffmpeg audio and video processing, speech recognition (faster-whisper), voices
-(edge-tts, ElevenLabs, Gemini), video generation (Veo through Flow) and Freesound sounds. The model
+(edge-tts, ElevenLabs, Gemini) and Freesound sounds. The model
 sees the video through contact sheets and stills.
 
 ## Third-party code and assets
