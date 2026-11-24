@@ -393,3 +393,10 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Kiro: none.
 - Verified: full pytest 557 passed in 680 s, exit 0 (includes `test_legacy_names.py`); `git grep -i argus` in src, tests, kiro-power, README, INSTALL, pyproject, install scripts: 4 lines (2 compatibility comments, 2 links to `.kiro/specs/argus-v2/`).
 - Credits: <author fills>
+
+## Task 20.16 — starter recipes (Haiku 5.5 high)
+- Built: 12 Markdown recipes in `src/omniframe/recipes/` (10 fixed sections, 52 to 57 lines each); `tools/recipes.py` (list, read one); `studio_guide` returns a `recipes` list (slug and "What it is") and takes `recipe="<slug>"` (an unknown slug returns an error with the valid slugs); `tests/test_recipes.py` (77 tests).
+- Bugs & fixes: the wheel build with `--no-build-isolation` failed (`Cannot import 'hatchling.build'`, the venv has no hatchling) → built with the default isolated build. No code bug.
+- Kiro: none.
+- Verified: full `pytest -q` 634 passed in 977.80 s (0:16:17), exit 0. Targeted run (recipes, studio_guide, tool surface, guide sections, economy) 117 passed in 2.81 s. Wheel `omniframe-3.0.0.dev0` holds the 12 `omniframe/recipes/*.md` files; no `pyproject.toml` change.
+- Credits: <author fills>

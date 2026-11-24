@@ -19,7 +19,7 @@ from pathlib import Path
 from .. import __version__, state
 from ..config import CONFIG, OmniFrameConfig
 from ..media_out import Image
-from . import kit_preview, library, sounds
+from . import kit_preview, library, recipes, sounds
 
 # Upper bound for the preferences text, in characters, so a long file cannot flood the context.
 PREFERENCES_LIMIT = 4000
@@ -195,7 +195,8 @@ def studio_guide(
 
     With `custom_scenes` the result also has `motion_kit`, the index of the kit groups
     (one group's text and strip: `kit_group_result`). With `project` it has `resume`, at most
-    5 lines of the project's stage (`state.resume_lines`).
+    5 lines of the project's stage (`state.resume_lines`). `recipes` lists the starter recipes
+    (slug and "What it is" line); `recipes.recipe_for_model` returns one in full.
     """
     cfg = CONFIG if config is None else config
     preferences, truncated = read_preferences(cfg.knowledge_base)
@@ -207,6 +208,7 @@ def studio_guide(
         },
         "preferences": preferences,
         "preferences_truncated": truncated,
+        "recipes": recipes.index(),
     }
     out["library"] = library.overview(library.library_dir(cfg.output_dir))
     sfx_lines = sounds.library_lines(library.library_dir(cfg.output_dir))

@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover
 from . import __version__, economy, engine_setup, jobs
 from .config import CONFIG
 from .media_out import Image
-from .tools import beats, export, memory, qa, render, scripts_runner, sfx, studio, watch
+from .tools import beats, export, memory, qa, recipes, render, scripts_runner, sfx, studio, watch
 
 mcp = MCPServer(
     "omniframe",
@@ -76,14 +76,18 @@ def studio_guide(
     custom_scenes: bool = False,
     kit_group: str | None = None,
     full: bool = False,
+    recipe: str | None = None,
 ) -> list[str | Image] | dict:
     """Start every session here: the working method, the saved preferences, the budget rules.
 
-    Without arguments: the core guide and an index of sections. `section="5"` (or a name) returns one
-    section. `project` adds a resume of at most 5 lines from that project's state. `kit_group="hud"`
+    Without arguments: the core guide, an index of sections, and `recipes` (starter formats with
+    what each is). `recipe="<slug>"` returns one recipe in full. `section="5"` (or a name) returns
+    one section. `project` adds a resume of at most 5 lines from that project's state. `kit_group="hud"`
     returns one motion-kit group with its strip image. A repeated read with the same content is one
     line; `full=true` gives the text again.
     """
+    if recipe is not None:
+        return recipes.recipe_for_model(recipe)
     if kit_group:
         return studio.kit_group_for_model(kit_group, full=full)
     if section:
