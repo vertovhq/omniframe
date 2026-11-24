@@ -1,6 +1,6 @@
 # Tutorial: one video from start to upload
 
-This walkthrough makes one vertical video with ARGUS in the Kiro chat. It uses the graphics path,
+This walkthrough makes one vertical video with OmniFrame in the Kiro chat. It uses the graphics path,
 which needs no AI keys. Install first: [INSTALL.md](../INSTALL.md).
 
 Each step names the tool, what to check, and what you decide. The model proposes; you approve at the
@@ -59,4 +59,4 @@ above the limit or a black gap longer than one second in the middle) stops the e
 Ask: `Run export_package for tutorial.`
 
 The upload folder holds the video, the covers and `post.md` with the title, description and
-hashtags. Publishing is manual: ARGUS does not call any platform API.
+hashtags. Publishing is manual: OmniFrame does not call any platform API.

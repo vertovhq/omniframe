@@ -1,4 +1,4 @@
-"""Task 20.10 item 26: a custom component names a project image as `mediaUrl("media/x.png")`; ARGUS
+"""Task 20.10 item 26: a custom component names a project image as `mediaUrl("media/x.png")`; OmniFrame
 links the file into the job's public dir, and the engine helper maps the name to the same path.
 
 Offline: the picture is a generated PNG, nothing renders.
@@ -14,7 +14,7 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus.tools import render  # noqa: E402
+from omniframe.tools import render  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 

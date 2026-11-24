@@ -1,6 +1,6 @@
-# ARGUS Studio Guide
+# OmniFrame Studio Guide
 
-You are the director and the editor. ARGUS tools are your eyes, ears and hands.
+You are the director and the editor. OmniFrame tools are your eyes, ears and hands.
 They never make creative decisions. You do. Talk to the user in their language.
 
 ## 0. Core rules: look, order, budget
@@ -92,7 +92,7 @@ video to the end on your own.
   and why; they can override.
 - Models: `voice_options` lists the text-to-speech models (ElevenLabs, Gemini) and the
   video models your keys can use, newest first, each with `default: true` for the one
-  ARGUS uses. Ask the user which one they want, or use the default when they say "you
+  OmniFrame uses. Ask the user which one they want, or use the default when they say "you
   choose". Keep a choice the user wants again with `learn_and_record_memory`.
 - Write the script as a performance. With ElevenLabs v3 and v4 (the audio-tag models)
   use audio tags where the delivery changes (`[whispers]`, `[excited]`, `[sighs]`,
@@ -202,11 +202,11 @@ video to the end on your own.
   does not land mid-gesture or mid-blink.
 - Write the plan: one entry in `clips` per kept range, all with the same `src`, laid back
   to back (`at` of a clip = `at` + `out` - `in` of the one before). Set the plan's
-  `duration` to the kept ranges added together: without it ARGUS adds a 0.3 s hold
+  `duration` to the kept ranges added together: without it OmniFrame adds a 0.3 s hold
   after the last clip. When the user asks for a length, set `duration` to that length, so the final is never longer. `zoom` keys are in seconds from the start of
   that clip on the timeline; put a punch-in on a key phrase. `clean_audio: true`
   filters a noisy room (high-pass and noise reduction).
-- Captions: `captions.words = {"source": <words_path>, "remap": "clips"}`. ARGUS keeps
+- Captions: `captions.words = {"source": <words_path>, "remap": "clips"}`. OmniFrame keeps
   the words that fall inside the kept ranges and moves them to the new timeline;
   do not retype or shift words by hand. Add `"media": <recording>` when the first clip
   is not the recording.
@@ -273,7 +273,7 @@ Still run `qa_verify_video` on the final.
 
 - ElevenLabs spends the user's money. Settle the look on stills and previews
   first; run final renders and paid generations once the plan is settled.
-- Use only media the user provided, media ARGUS generated, or CC0 / licensed sounds
+- Use only media the user provided, media OmniFrame generated, or CC0 / licensed sounds
   with their credits kept in the project.
 
 ## 10. Tool details
@@ -283,7 +283,7 @@ Reference for the arguments and reply fields. The tool descriptions only say wha
 - studio_guide: `kit_group` names one motion-kit group: core, backgrounds, transitions, energy, type, bursts, depth, camera, info, hud, sfx. `library` lists saved elements (name, what, fits when, versions, times used) and posters (512 px). `project` adds a resume of at most 5 lines from `<project>/.work/state.json`.
 - job_status: returns `summary`, `state` (queued, running, done or error), `progress` (0..1 or null), `eta_s` (rough, while running), `note`, then `result` (pictures come as images) or `error` with the fix. Starting the same operation again while it runs returns the same job.
 - synthesize_voiceover: files go to `<project>/audio/<name>.mp3` and `<name>.words.json`. Provider: elevenlabs (default with a key), edge (default without), gemini (only when asked). `settings`: stability, speed, language_code (ElevenLabs); rate, pitch (edge). Delivery: on ElevenLabs v3/v4, audio tags such as `[whispers]` or `[excited]` go before the words they colour; `...` is a pause, a dash is a break, CAPITALS are stress. SSML breaks work only on the v2 models. Edge voices cannot act tags out, so they are removed. Reply fields: `words_path` ({w, s, e} in seconds, tags removed), `duration`, `words_source` ("provider", "faster-whisper" or "none"; `captions_note` says what to install), `project_note` when the project holds another video's work. A 429 from ElevenLabs is retried; the summary then says how long to wait.
-- voice_options: `provider_choice` gives the providers that work, `recommended` (ElevenLabs when its key is set) and `ask_user`. Ask the user once, in their language, and keep the answer for the project. Lists: `own_voices`, `library_voices`, `library_voices_paid_plan_only` (do not pick these without asking; on the free plan every library voice and every non-premade own voice is here), `edge_voices`, `gemini_voices`. `plan` is the ElevenLabs tier. `models` are the usable models, newest first; `default: true` marks the one ARGUS uses. `providers` says what works and why not. `errors` gives the cause of a failed list (HTTP code, missing key permission). An empty list comes with a `notes` line. Each voice has id, name, gender, age, accent, language and a description of 80 characters. `details=true` adds `delivery` (the tag and pacing rules) and leaves room for fewer voices. Pass a voice `id` as `voice` to synthesize_voiceover.
+- voice_options: `provider_choice` gives the providers that work, `recommended` (ElevenLabs when its key is set) and `ask_user`. Ask the user once, in their language, and keep the answer for the project. Lists: `own_voices`, `library_voices`, `library_voices_paid_plan_only` (do not pick these without asking; on the free plan every library voice and every non-premade own voice is here), `edge_voices`, `gemini_voices`. `plan` is the ElevenLabs tier. `models` are the usable models, newest first; `default: true` marks the one OmniFrame uses. `providers` says what works and why not. `errors` gives the cause of a failed list (HTTP code, missing key permission). An empty list comes with a `notes` line. Each voice has id, name, gender, age, accent, language and a description of 80 characters. `details=true` adds `delivery` (the tag and pacing rules) and leaves room for fewer voices. Pass a voice `id` as `voice` to synthesize_voiceover.
 - watch_video: `shots` are [start, end] in seconds; `sound_events`; `transcript_head`; `segments_path` (sentences {s, e, text}); `words_path` ({w, s, e}). Words and sentences are never listed inline. `max_frames` defaults to 12 and goes up to 120. `pages_total` says how many more sheets exist; `page=2` gives them. Fillers and repeats are kept for English and Russian. The transcript needs faster-whisper (`transcript_note` says when it is missing). A repeated call on the same file returns the cache (`cache_hit`). Long files run in the background.
 - get_frames: at most 8 times per call; the extra ones are listed in `skipped_times`. `crop` is [x, y, w, h] as fractions of the frame, with x+w <= 1 and y+h <= 1; the crop is shown enlarged. `max_side` is 64 to 2048, default 1024. The summary lists each image's time and path, and `full_path` of the full-resolution file.
 - render_video: `plan` is the plan object or the path of a .json file. The plan keys are in section 5: format ("9:16" or "16:9"), style, scenes, captions (`mode` phrase, word or headline; `style.case` "upper" or "as_is"), audio, cues. Relative file paths are looked up in the project folder first. Custom scenes are {"kind": "custom", "component": "<Name>"} with `<project>/components/<Name>.tsx`; see section 5. Stills: `times` up to 12 seconds, default 6 spread over the video; `compare` = {"video", "times"} puts each reference frame left of its render; unchanged frames are not sent again. Final: saves `<project>/plan.json` and normalises loudness to -14 LUFS. Audio: returns the timeline image and `warnings`; `save_sounds` saves approved sounds to the library. `then: ["qa", "export"]`: QA runs in the same job, then the export with the `export` arguments; the export reads the final files of this render. Results have `summary`, `timing` (seconds per stage), `warnings`. Files go to `<project>/renders/<name>-<mode>-<format>.mp4` (stills: .jpg). Compile errors of a component return `valid: false` with `errors`.
@@ -292,6 +292,6 @@ Reference for the arguments and reply fields. The tool descriptions only say wha
 - calculate_beat_grid: `snap_times` are candidate cut seconds; they come back snapped to the nearest beat with the shift. With `project`, the full beat list goes to that project's audio folder. The reply has `bpm`, `confidence`, `beat_count`, the first beats and `beats_path`. Offline.
 - search_sfx: describe the SOURCE of the sound ("paper slide", "short cinematic impact"), not a mood. Results have id, title, author, duration, license, downloads, rating and page URL. Audio rule: one sound at most once per 3 beats; variations instead of copies. No API key. `download` (list of ids such as "fs:12345") with `out_dir` saves the files: it checks the license page again, writes audio-manifest.json and FREESOUND-CREDITS.md (CC-BY needs credit in the description). `license_policy` "cc0" (default) or "by".
 - learn_and_record_memory: record only what stays true across videos: standing preferences ("always...", "never...", the handle, language, voice, brand colours) and corrections to the general approach. Never record a tweak to the video in progress ("make the title bigger"). `lesson_title` is a short name; `user_directive` is close to the user's words; `technical_rule` says how you will apply it.
-- run_script: without `name` it lists the scripts in the repo's `scripts/` folder and in ARGUS_SCRIPTS_DIR, each with a summary and an args example. With `name` (lowercase letters, digits, underscore) it returns the script's JSON as `result`. A result may list `images` (paths), which come back as pictures. `timeout_s` (default 120) stops a long script with `timed_out: true`. Run only scripts the user wrote or trusts.
-- doctor: critical checks (a failure makes `ok` false): Python 3.11 or newer; ffmpeg and ffprobe on PATH (or ARGUS_FFMPEG / ARGUS_FFPROBE); Node 18 or newer with npx; the engine (engine/node_modules; hint: cd engine, npm install); numpy and Pillow; OMNIFRAME_OUTPUT_DIR. Optional (warnings only): faster-whisper, edge-tts with a live probe, the Gemini and ElevenLabs key presence.
+- run_script: without `name` it lists the scripts in the repo's `scripts/` folder and in OMNIFRAME_SCRIPTS_DIR, each with a summary and an args example. With `name` (lowercase letters, digits, underscore) it returns the script's JSON as `result`. A result may list `images` (paths), which come back as pictures. `timeout_s` (default 120) stops a long script with `timed_out: true`. Run only scripts the user wrote or trusts.
+- doctor: critical checks (a failure makes `ok` false): Python 3.11 or newer; ffmpeg and ffprobe on PATH (or OMNIFRAME_FFMPEG / OMNIFRAME_FFPROBE); Node 18 or newer with npx; the engine (engine/node_modules; hint: cd engine, npm install); numpy and Pillow; OMNIFRAME_OUTPUT_DIR. Optional (warnings only): faster-whisper, edge-tts with a live probe, the Gemini and ElevenLabs key presence.
 

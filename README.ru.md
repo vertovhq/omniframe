@@ -1,21 +1,21 @@
-# ARGUS
+# OmniFrame
 
 MCP-студия вертикального видео (TikTok, YouTube Shorts, YouTube). ИИ-модель в твоём клиенте
-режиссирует монтаж. ARGUS даёт ей глаза, уши и руки: смотрит и слушает футаж, делает озвучку,
+режиссирует монтаж. OmniFrame даёт ей глаза, уши и руки: смотрит и слушает футаж, делает озвучку,
 рендерит, проверяет техническое качество и упаковывает выгрузку.
 
-Автор: VertovHQ. Сделано в Kiro для Kiroween 2026. Репозиторий: https://github.com/vertovhq/argus
+Автор: VertovHQ. Сделано в Kiro для Kiroween 2026. Репозиторий: https://github.com/vertovhq/omniframe
 
 English version: [README.md](README.md).
 
-## Что делает ARGUS
+## Что делает OmniFrame
 
-Все творческие решения принимает модель. ARGUS не оценивает и не ранжирует историю, стиль или
+Все творческие решения принимает модель. OmniFrame не оценивает и не ранжирует историю, стиль или
 оригинальность. Он возвращает материал, который модель может воспринять (картинки, таймкоды,
 транскрипт, звуковые события), и запускает детерминированные проверки только технических дефектов:
 размер, частоту кадров, громкость, пики, чёрные провалы и длину аудио.
 
-ARGUS покрывает три сценария:
+OmniFrame покрывает три сценария:
 
 1. **Референс → новое видео.** Даёшь референсный клип. Модель его смотрит и делает продолжение,
    аналог или твою идею в той же манере.
@@ -24,15 +24,15 @@ ARGUS покрывает три сценария:
 3. **Идея → видео с нуля.** Кинетическая графика из JSON-плана.
 
 Каждый сценарий заканчивается одним и тем же: файл 9:16 и/или 16:9, готовый к загрузке, обложка и
-`post.md` с заголовком, описанием и хэштегами. Публикация остаётся ручной: ARGUS не вызывает API
+`post.md` с заголовком, описанием и хэштегами. Публикация остаётся ручной: OmniFrame не вызывает API
 платформ.
 
-## Чем ARGUS отличается от video-shotcraft и OpenFilm
+## Чем OmniFrame отличается от video-shotcraft и OpenFilm
 
 [video-shotcraft](https://github.com/Vincentwei1021/video-shotcraft) (Apache 2.0) — скилл для
 Claude Code и Codex. Он делает промо продукта из скриншотов и текста, рисует через Remotion.
 [OpenFilm](https://github.com/openfilm/openfilm) превращает кодинг-агента в режиссёра фильма: фильм —
-папка HTML-страниц, есть свой редактор на десктопе. ARGUS — MCP-сервер, поэтому любой MCP-клиент
+папка HTML-страниц, есть свой редактор на десктопе. OmniFrame — MCP-сервер, поэтому любой MCP-клиент
 может им управлять, в том числе Kiro. Он стартует с референсного видео и делает его продолжение.
 Он монтирует твою собственную съёмку, затем проверяет результат (размер кадра, громкость, true peak,
 чёрные провалы, длину аудио) и экспортирует пакет для загрузки. Звуковые эффекты синтезируются в коде
@@ -45,7 +45,7 @@ N credits и занимает M min. Цифры появятся после де
 видео, QA и экспорт.
 
 1. Установи (см. [Установка](#установка)).
-2. Запусти `argus-doctor`. Он выводит таблицу: ✓ готово, ✗ не хватает (с командой установки),
+2. Запусти `omniframe-doctor`. Он выводит таблицу: ✓ готово, ✗ не хватает (с командой установки),
    ⚠ необязательно.
 3. Подключи MCP-клиент (см. [Подключение клиента](#подключение-клиента)) и перезагрузи MCP-серверы.
 4. Напиши в чат, по порядку (файлы лежат в [`examples/media/`](examples/media/README.md)):
@@ -57,24 +57,24 @@ N credits и занимает M min. Цифры появятся после де
    Потом попроси preview, final, `qa_verify_video` и `export_package`. План читает
    `audio/voice.words.json` из папки проекта, поэтому озвучка и рендер должны идти в один проект.
 
-   For production-quality voice, add your ElevenLabs API key to .env (ELEVENLABS_API_KEY). Without a key ARGUS falls back to a free voice so the example still runs.
+   For production-quality voice, add your ElevenLabs API key to .env (ELEVENLABS_API_KEY). Without a key OmniFrame falls back to a free voice so the example still runs.
 
 ## Установка
 
 Требования: Python 3.11+, ffmpeg в PATH, Node.js 18+ (для движка Remotion). Windows, macOS и Linux.
 
 ```bash
-git clone https://github.com/vertovhq/argus.git
-cd argus
+git clone https://github.com/vertovhq/omniframe.git
+cd omniframe
 bash install.sh     # Windows: powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 Скрипт установки создаёт `.venv`, ставит Python-пакет, голос edge-tts, Node-пакеты движка и создаёт
-`.env` из `.env.example`. В конце он запускает `argus-install`: тот добавляет ARGUS во все найденные
+`.env` из `.env.example`. В конце он запускает `omniframe-install`: тот добавляет OmniFrame во все найденные
 AI IDE (Kiro, Cursor, Claude Code, VS Code с Copilot, Antigravity), JSON руками не нужен. Меняется
-только запись `argus`; уже существующая остаётся (`--update` заменяет её), перед первой правкой
-пишется `<файл>.argus-backup`. Посмотреть без изменений: `argus-install --dry-run`. Только одна IDE:
-`argus-install --client cursor`. Пошагово и другие MCP-клиенты: [INSTALL.md](INSTALL.md).
+только запись `omniframe`; уже существующая остаётся (`--update` заменяет её), перед первой правкой
+пишется `<файл>.omniframe-backup`. Посмотреть без изменений: `omniframe-install --dry-run`. Только одна IDE:
+`omniframe-install --client cursor`. Пошагово и другие MCP-клиенты: [INSTALL.md](INSTALL.md).
 
 ### Без клонирования: uvx или Kiro Power
 
@@ -82,12 +82,12 @@ AI IDE (Kiro, Cursor, Claude Code, VS Code с Copilot, Antigravity), JSON рук
 подходит как MCP-команда:
 
 ```bash
-uvx --from git+https://github.com/vertovhq/argus argus-studio
+uvx --from git+https://github.com/vertovhq/omniframe omniframe
 ```
 
-При первом запуске сервер ставит движок графики в `~/.argus/engine` в фоне. Нужны Node.js 18 или новее
+При первом запуске сервер ставит движок графики в `~/.omniframe/engine` в фоне. Нужны Node.js 18 или новее
 и ffmpeg в PATH. Ход установки видно в инструменте `doctor` или в
-`uvx --from git+https://github.com/vertovhq/argus argus-doctor`. Ключи лежат в `~/.argus/.env`.
+`uvx --from git+https://github.com/vertovhq/omniframe omniframe-doctor`. Ключи лежат в `~/.omniframe/.env`.
 
 Папка [`kiro-power/`](kiro-power/README.md) — power для Kiro. Она ставит тот же сервер и рабочий гид
 одним действием.
@@ -99,9 +99,9 @@ Kiro читает `.kiro/settings/mcp.json` в рабочей папке или 
 ```json
 {
   "mcpServers": {
-    "argus": {
+    "omniframe": {
       "command": ".venv/Scripts/python.exe",
-      "args": ["-m", "argus"],
+      "args": ["-m", "omniframe"],
       "env": { "OMNIFRAME_OUTPUT_DIR": "./output" }
     }
   }
@@ -112,8 +112,8 @@ Kiro читает `.kiro/settings/mcp.json` в рабочей папке или 
 Python из venv. Ключи держи в `.env`, а не в этом файле. Другие варианты:
 [`examples/mcp-config.example.json`](examples/mcp-config.example.json).
 
-Любой другой MCP-клиент подключается так же: запускай `python -m argus` из venv или команду
-`argus-studio` после установки.
+Любой другой MCP-клиент подключается так же: запускай `python -m omniframe` из venv или команду
+`omniframe` после установки.
 
 ## Инструменты
 
@@ -136,7 +136,7 @@ Python из venv. Ключи держи в `.env`, а не в этом файл�
 
 ## Пример плана
 
-План — JSON-описание сцен. Этот пример проверен моделью плана из `src/argus/plan.py`:
+План — JSON-описание сцен. Этот пример проверен моделью плана из `src/omniframe/plan.py`:
 
 ```json
 {
@@ -176,18 +176,18 @@ Python из venv. Ключи держи в `.env`, а не в этом файл�
 
 ## Честные примечания
 
-- **Субтитры берутся из плана.** Движок рисует их из блока `captions` плана. Файлов `.ass` ARGUS не пишет.
+- **Субтитры берутся из плана.** Движок рисует их из блока `captions` плана. Файлов `.ass` OmniFrame не пишет.
 - **Бесплатный тариф ElevenLabs** может не давать библиотечные голоса через API. `voice_options`
   сообщает об этом.
 
-## Как модель работает с ARGUS
+## Как модель работает с OmniFrame
 
 - Модель первым делом вызывает `studio_guide`. Он возвращает рабочий порядок, доступные инструменты
   и провайдеры и сохранённые предпочтения пользователя.
 - Долгая работа (рендеры, QA длинных файлов) возвращает `job_id`. Модель опрашивает `job_status`.
 - В сборке использовались Claude Opus 5.5 для планирования и аудита, Claude Sonnet 5.5 для основных
   задач и Claude Haiku 5.5 для мелких задач, всё внутри Kiro. Монтаж настолько хорош, насколько хорошо
-  модель направляет ARGUS, поэтому каждый шаг заканчивается кадрами, которые пользователь может
+  модель направляет OmniFrame, поэтому каждый шаг заканчивается кадрами, которые пользователь может
   проверить.
 
 ## Как проект сделан с Kiro
@@ -199,21 +199,21 @@ Python из venv. Ключи держи в `.env`, а не в этом файл�
   работа идёт задачами) и правила движка.
 - **Хуки.** `.kiro/hooks/`: проверка типов движка при каждом сохранении файла исходников движка и
   запуск тестов, когда задача спецификации отмечена выполненной.
-- **MCP.** `.kiro/settings/mcp.json` подключает ARGUS к Kiro. После перезагрузки чат вызывает его
+- **MCP.** `.kiro/settings/mcp.json` подключает OmniFrame к Kiro. После перезагрузки чат вызывает его
   инструменты.
 - **Журнал сборки.** [`docs/BUILD_LOG.md`](docs/BUILD_LOG.md): запись на каждую задачу — модель,
   что сделано, ошибки и их исправления, что проверено.
 
 ## Раскрытие
 
-ARGUS вырос из ATLAS, личного скрипта автора, написанного до хакатона. Первый MCP-прототип (v1) собран
+OmniFrame вырос из ATLAS, личного скрипта автора, написанного до хакатона. Первый MCP-прототип (v1) собран
 в ZCode в период подачи (первый коммит 2026-11-04). v2 переписан по спецификации в Kiro; спецификация,
 steering, хуки и журнал сборки лежат в `.kiro/` и `docs/BUILD_LOG.md`.
 
 ## Категория: Frankenstein
 
 Правила Kiroween просят проект, который «stitch together a chimera of technologies into one app»
-(https://kiroween.devpost.com/rules). ARGUS это делает. Чат-модель управляет покадровым React-рендером
+(https://kiroween.devpost.com/rules). OmniFrame это делает. Чат-модель управляет покадровым React-рендером
 (Remotion), обработкой аудио и видео в ffmpeg, распознаванием речи (faster-whisper), голосами
 (edge-tts, ElevenLabs, Gemini) и звуками Freesound. Модель видит
 видео через контактные листы и стоп-кадры.
@@ -228,5 +228,5 @@ Remotion (собственная лицензия).
 
 Copyright (C) 2026 vertovhq
 
-ARGUS — свободный проект с открытым кодом под лицензией [AGPL-3.0-or-later](LICENSE). Автор: VertovHQ.
+OmniFrame — свободный проект с открытым кодом под лицензией [AGPL-3.0-or-later](LICENSE). Автор: VertovHQ.
 Коммерческая лицензия: напишите VertovHQ.

@@ -2,14 +2,14 @@
 
 The engine is chosen in this order:
 
-1. `ARGUS_ENGINE_DIR`, when it is set.
+1. `OMNIFRAME_ENGINE_DIR`, when it is set.
 2. The `engine/` folder of a repository checkout (development).
-3. A package install (`uvx`, Kiro Power). The wheel carries the engine as `argus/_engine`.
-   On the first server start it is copied to `~/.argus/engine`, and `npm install` plus
+3. A package install (`uvx`, Kiro Power). The wheel carries the engine as `omniframe/_engine`.
+   On the first server start it is copied to `~/.omniframe/engine`, and `npm install` plus
    `remotion browser ensure` run there in a detached process. The state is kept in
-   `~/.argus/engine-setup.json`, the output in `~/.argus/engine-setup.log`. `argus-doctor` shows both.
+   `~/.omniframe/engine-setup.json`, the output in `~/.omniframe/engine-setup.log`. `omniframe-doctor` shows both.
 
-The installer can also run in the foreground: `python -m argus.engine_setup`.
+The installer can also run in the foreground: `python -m omniframe.engine_setup`.
 """
 
 from __future__ import annotations
@@ -23,21 +23,17 @@ import time
 from pathlib import Path
 
 from . import __version__
+from ._compat import omniframe_home
 from .ffmpeg import NO_WINDOW
 
-# Version of the files copied from the package. A new ARGUS version copies them again.
-PACKAGE_MARKER = ".argus-engine-version"
+# Version of the files copied from the package. A new OmniFrame version copies them again.
+PACKAGE_MARKER = ".omniframe-engine-version"
 # Version whose Node packages and Remotion browser were installed. Written only for package installs.
-READY_MARKER = ".argus-engine-ready"
-
-
-def argus_home() -> Path:
-    """`~/.argus`: state, the engine copy and the optional `.env` for package installs."""
-    return Path.home() / ".argus"
+READY_MARKER = ".omniframe-engine-ready"
 
 
 def repo_engine() -> Path:
-    # src/argus/engine_setup.py -> parents[2] is the repository root
+    # src/omniframe/engine_setup.py -> parents[2] is the repository root
     return Path(__file__).resolve().parents[2] / "engine"
 
 
@@ -46,23 +42,23 @@ def packaged_engine() -> Path:
 
 
 def user_engine() -> Path:
-    return argus_home() / "engine"
+    return omniframe_home() / "engine"
 
 
 def status_path() -> Path:
-    return argus_home() / "engine-setup.json"
+    return omniframe_home() / "engine-setup.json"
 
 
 def log_path() -> Path:
-    return argus_home() / "engine-setup.log"
+    return omniframe_home() / "engine-setup.log"
 
 
 def _override() -> str:
-    return os.environ.get("ARGUS_ENGINE_DIR", "").strip()
+    return os.environ.get("OMNIFRAME_ENGINE_DIR", "").strip()
 
 
 def is_packaged() -> bool:
-    """True when ARGUS runs from an installed package, not from a repository checkout."""
+    """True when OmniFrame runs from an installed package, not from a repository checkout."""
     return not _override() and not (repo_engine() / "package.json").is_file()
 
 
@@ -83,7 +79,7 @@ def _read_text(path: Path) -> str:
 
 
 def sync_packaged_engine() -> Path:
-    """Copy the engine that comes with the package into `~/.argus/engine`, if missing or from another version."""
+    """Copy the engine that comes with the package into `~/.omniframe/engine`, if missing or from another version."""
     dst = user_engine()
     src = packaged_engine()
     if not (src / "package.json").is_file():
@@ -121,7 +117,7 @@ def _write_status(**fields) -> None:
     current = read_status()
     current.update(fields)
     current["updated"] = time.time()
-    argus_home().mkdir(parents=True, exist_ok=True)
+    omniframe_home().mkdir(parents=True, exist_ok=True)
     tmp = status_path().with_suffix(".tmp")
     tmp.write_text(json.dumps(current, indent=2), encoding="utf-8")
     os.replace(tmp, status_path())
@@ -164,13 +160,13 @@ def ensure_started() -> dict:
     """Start the background installer when a package install has no ready engine. Never waits."""
     if not is_packaged() or engine_ready() or installer_running():
         return read_status()
-    argus_home().mkdir(parents=True, exist_ok=True)
+    omniframe_home().mkdir(parents=True, exist_ok=True)
     with open(log_path(), "a", encoding="utf-8") as log:
         kwargs: dict = {} if os.name == "nt" else {"start_new_session": True}
         proc = subprocess.Popen(
-            [sys.executable, "-m", "argus.engine_setup"],
+            [sys.executable, "-m", "omniframe.engine_setup"],
             stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-            cwd=str(argus_home()),
+            cwd=str(omniframe_home()),
             creationflags=NO_WINDOW | (subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0),
             **kwargs,
         )
@@ -187,16 +183,16 @@ def not_ready_message() -> str:
     if state == "installing" and _pid_alive(int(status.get("pid") or 0)):
         return (
             f"The render engine is still installing in the background (step: {status.get('step') or 'starting'}). "
-            f"Wait, then run argus-doctor. Log: {log_path()}"
+            f"Wait, then run omniframe-doctor. Log: {log_path()}"
         )
     if state == "error":
         return (
             f"The render engine could not be installed: {status.get('error')}. "
-            f"Fix it, then restart the argus-studio MCP server. Log: {log_path()}"
+            f"Fix it, then restart the omniframe MCP server. Log: {log_path()}"
         )
     return (
-        "The render engine is not installed yet. Restart the argus-studio MCP server, which installs it "
-        "in the background, or run `python -m argus.engine_setup`."
+        "The render engine is not installed yet. Restart the omniframe MCP server, which installs it "
+        "in the background, or run `python -m omniframe.engine_setup`."
     )
 
 

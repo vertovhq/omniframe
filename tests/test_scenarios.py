@@ -29,10 +29,10 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs, project  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.media_out import Image  # noqa: E402
-from argus.tools import export, qa, render, voiceover, watch  # noqa: E402
+from omniframe import jobs, project  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.media_out import Image  # noqa: E402
+from omniframe.tools import export, qa, render, voiceover, watch  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLES = ROOT / "examples" / "plans"
@@ -52,7 +52,7 @@ EDGE_FIRST_WORD_S = 0.2
 EDGE_WORD_STEP_S = 0.45
 EDGE_WORD_LENGTH_S = 0.4
 EDGE_TICKS = 10_000_000  # WordBoundary offset and duration are in 100 ns units
-NARRATION = "one json plan is all it takes describe the video and argus makes it follow for more"
+NARRATION = "one json plan is all it takes describe the video and omniframe makes it follow for more"
 
 # scenario 2: a 20 s recording. The sample plan keeps 1.2-7.8 s and 10.4-16.0 s of it. The words
 # are in seconds of the recording: fillers before the first range, a stumble between the two
@@ -208,7 +208,7 @@ def _tiktok_plan() -> dict:
                 "kind": "chip", "at": 3.6,
                 "items": [{"text": "Retention", "value": "92%"}, {"text": "Watch time", "value": "18s"}],
             },
-            {"kind": "cta", "at": 4.8, "text": "part two tomorrow", "handle": "@argus.studio"},
+            {"kind": "cta", "at": 4.8, "text": "part two tomorrow", "handle": "@omniframe.studio"},
         ],
         "captions": {
             "words": [{"w": w, "s": s, "e": e} for w, s, e in _schedule(REFERENCE_NARRATION)],
@@ -286,14 +286,14 @@ def test_reference_to_tiktok(tmp_path: Path) -> None:
 
     # export: the video, a cover at 2 s, and the TikTok text
     caption = "A hook in one second, no warm-up"
-    texts = {"tiktok": {"caption": caption, "hashtags": ["argus", "#shorts"]}}
+    texts = {"tiktok": {"caption": caption, "hashtags": ["omniframe", "#shorts"]}}
     exported, covers = _summary_and_images(export.export_package(
         "tiktok-ref", {"9:16": str(video)}, texts, cover_times={"9:16": 2.0}, name=name, wait_s=WAIT,
     ))
     assert exported["exported"] is True and exported["removed_work"] is True
     assert len(covers) == 1
     _assert_tiktok_folder(root, name, caption)
-    assert "#argus #shorts" in (root / "final" / "post.md").read_text(encoding="utf-8")
+    assert "#omniframe #shorts" in (root / "final" / "post.md").read_text(encoding="utf-8")
 
 
 # ------------------------------------------------------------------ scenario 2: footage
@@ -397,7 +397,7 @@ def test_idea_with_graphics_and_an_edge_voice(monkeypatch: pytest.MonkeyPatch, t
 
     # export: QA runs again inside the export and refuses on a hard failure
     caption = "One JSON plan is all it takes"
-    texts = {"tiktok": {"caption": caption, "hashtags": ["argus"]}}
+    texts = {"tiktok": {"caption": caption, "hashtags": ["omniframe"]}}
     exported, covers = _summary_and_images(export.export_package(
         "idea-graphics", {"9:16": str(video)}, texts, cover_times={"9:16": 1.0}, name=name, wait_s=WAIT,
     ))

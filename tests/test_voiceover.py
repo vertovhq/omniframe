@@ -22,10 +22,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs, project  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.ffmpeg import stream_info  # noqa: E402
-from argus.tools import voiceover, watch  # noqa: E402
+from omniframe import jobs, project  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.ffmpeg import stream_info  # noqa: E402
+from omniframe.tools import voiceover, watch  # noqa: E402
 
 TAGGED = "[whispers] Hello, brave world. [excited] We start now!"
 
@@ -41,7 +41,7 @@ def voice_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     )
     for module in (jobs, project, voiceover, watch):
         monkeypatch.setattr(module, "CONFIG", cfg)
-    monkeypatch.delenv("ARGUS_TTS_PROVIDER", raising=False)
+    monkeypatch.delenv("OMNIFRAME_TTS_PROVIDER", raising=False)
     monkeypatch.setattr(voiceover, "_model_limits", {})
     return {"cfg": cfg, "monkeypatch": monkeypatch}
 
@@ -330,7 +330,7 @@ def test_without_any_key_the_default_provider_is_edge(voice_env, fake_edge) -> N
 
 def test_elevenlabs_key_makes_elevenlabs_the_default_and_the_env_can_override(voice_env) -> None:
     assert voiceover.default_provider() == "elevenlabs"
-    voice_env["monkeypatch"].setenv("ARGUS_TTS_PROVIDER", "gemini")
+    voice_env["monkeypatch"].setenv("OMNIFRAME_TTS_PROVIDER", "gemini")
     assert voiceover.default_provider() == "gemini"
 
 
@@ -398,7 +398,7 @@ def test_failing_whisper_keeps_the_voiceover_and_says_why(voice_env, gemini) -> 
 # ------------------------------------------------------------------ provider layer
 
 def test_unavailable_or_unknown_provider_is_an_error_not_a_silent_switch() -> None:
-    with pytest.raises(RuntimeError, match="ARGUS_GEMINI_API_KEY"):
+    with pytest.raises(RuntimeError, match="OMNIFRAME_GEMINI_API_KEY"):
         voiceover.resolve_provider("gemini")
     with pytest.raises(ValueError, match="unknown voice provider"):
         voiceover.resolve_provider("siri")

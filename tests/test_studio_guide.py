@@ -11,12 +11,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import server  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.tools import kit_preview, memory, studio  # noqa: E402
+from omniframe import server  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.tools import kit_preview, memory, studio  # noqa: E402
 
 PROVIDER_KEYS = {"elevenlabs", "gemini", "edge", "faster_whisper"}
-HEADER = "# ARGUS — user preferences"
+HEADER = "# OmniFrame — user preferences"
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def test_returns_guide_capabilities_and_preferences(kb: Path) -> None:
 
     result = server.studio_guide()
 
-    assert result["guide"].startswith("# ARGUS Studio Guide")
+    assert result["guide"].startswith("# OmniFrame Studio Guide")
     tools = result["capabilities"]["tools"]
     assert "studio_guide" in tools and "learn_and_record_memory" in tools
     assert "story_guide" not in tools and "validate_beats" not in tools

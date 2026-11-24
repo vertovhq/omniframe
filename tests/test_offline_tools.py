@@ -12,12 +12,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.ffmpeg import detect_pauses, measure_loudness, run_ffmpeg, stream_info  # noqa: E402
-from argus.media_out import Image  # noqa: E402
-from argus.tools import memory, qa  # noqa: E402
-from argus.tools.render import finalize_video  # noqa: E402
+from omniframe import jobs  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.ffmpeg import detect_pauses, measure_loudness, run_ffmpeg, stream_info  # noqa: E402
+from omniframe.media_out import Image  # noqa: E402
+from omniframe.tools import memory, qa  # noqa: E402
+from omniframe.tools.render import finalize_video  # noqa: E402
 
 
 def _ffmpeg(args: list[str]) -> None:

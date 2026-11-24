@@ -16,10 +16,10 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import economy, jobs, project  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.media_out import Image  # noqa: E402
-from argus.tools import export, qa  # noqa: E402
+from omniframe import economy, jobs, project  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.media_out import Image  # noqa: E402
+from omniframe.tools import export, qa  # noqa: E402
 
 from test_export import TEXTS, _master, _stage  # noqa: E402
 
@@ -96,7 +96,7 @@ def test_a_failed_log_write_does_not_fail_the_tool(tmp_path: Path, monkeypatch: 
 
 
 def test_server_tools_are_wrapped_and_keep_their_names() -> None:
-    from argus import server
+    from omniframe import server
 
     names = server._registered_tool_names()
     assert "render_video" in names and "export_package" in names

@@ -1,4 +1,4 @@
-"""Every child process ARGUS starts passes NO_WINDOW, so Windows opens no console window."""
+"""Every child process OmniFrame starts passes NO_WINDOW, so Windows opens no console window."""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from argus import ffmpeg  # noqa: E402
+from omniframe import ffmpeg  # noqa: E402
 
-SRC = ROOT / "src" / "argus"
+SRC = ROOT / "src" / "omniframe"
 SPAWNERS = {"run", "Popen", "call", "check_call", "check_output"}
 CREATE_NO_WINDOW = 0x08000000
 

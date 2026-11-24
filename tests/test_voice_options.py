@@ -14,8 +14,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus.config import CONFIG  # noqa: E402
-from argus.tools import model_catalog, voiceover  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.tools import model_catalog, voiceover  # noqa: E402
 
 # Gemini models as the google-genai list returns them (test data; ids are chosen to exercise the sort)
 GEMINI_LISTED = [
@@ -162,7 +162,7 @@ def _no_elevenlabs_call(*args, **kwargs):
 @pytest.fixture
 def no_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     _config(monkeypatch, elevenlabs_api_key="", gemini_api_key="")
-    monkeypatch.delenv("ARGUS_TTS_PROVIDER", raising=False)
+    monkeypatch.delenv("OMNIFRAME_TTS_PROVIDER", raising=False)
 
     def no_network(*args, **kwargs):
         raise AssertionError("no key: voice_options must not call ElevenLabs")
@@ -173,7 +173,7 @@ def no_keys(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def keyed(monkeypatch: pytest.MonkeyPatch) -> FakeApi:
     _config(monkeypatch, elevenlabs_api_key="sk_test", gemini_api_key="")
-    monkeypatch.delenv("ARGUS_TTS_PROVIDER", raising=False)
+    monkeypatch.delenv("OMNIFRAME_TTS_PROVIDER", raising=False)
     api = FakeApi()
     monkeypatch.setattr("urllib.request.urlopen", api)
     return api
@@ -405,7 +405,7 @@ def test_delivery_vocabulary_matches_the_model(monkeypatch, keyed) -> None:
     delivery = voiceover.voice_options(details=True)["delivery"]
     assert any("stability" in rule for rule in delivery["rules"])
 
-    # a pinned model (ARGUS_ELEVEN_MODEL) is the default and drives the delivery rules
+    # a pinned model (OMNIFRAME_ELEVEN_MODEL) is the default and drives the delivery rules
     _config(monkeypatch, elevenlabs_api_key="sk_test", eleven_model="eleven_multilingual_v2")
     result = voiceover.voice_options(details=True)
     assert [m["default"] for m in result["models"]["elevenlabs"]] == [False, True]
@@ -435,7 +435,7 @@ def test_a_failed_elevenlabs_model_list_names_the_variable_and_no_old_id(monkeyp
 
     with pytest.raises(RuntimeError) as raised:
         voiceover.eleven_model_id()
-    assert "ARGUS_ELEVEN_MODEL" in str(raised.value) and "HTTP 401" in str(raised.value)
+    assert "OMNIFRAME_ELEVEN_MODEL" in str(raised.value) and "HTTP 401" in str(raised.value)
     assert "eleven_v3" not in str(raised.value)
 
     result = voiceover.voice_options()
@@ -511,7 +511,7 @@ def test_a_failed_gemini_list_is_reported_and_no_model_is_guessed(monkeypatch, k
     assert "models" not in result
     assert "403" in result["errors"]["gemini_models"]
 
-    with pytest.raises(RuntimeError, match="ARGUS_TTS_MODEL"):
+    with pytest.raises(RuntimeError, match="OMNIFRAME_TTS_MODEL"):
         model_catalog.tts_model_id()
 
 
@@ -598,7 +598,7 @@ def test_an_installed_local_provider_shows_up_as_a_choice(monkeypatch, keyed) ->
 
 def test_env_override_decides_the_recommendation(monkeypatch, keyed) -> None:
     _config(monkeypatch, elevenlabs_api_key="sk_test", gemini_api_key="g")
-    monkeypatch.setenv("ARGUS_TTS_PROVIDER", "gemini")
+    monkeypatch.setenv("OMNIFRAME_TTS_PROVIDER", "gemini")
     assert voiceover.voice_options()["provider_choice"]["recommended"] == "gemini"
 
 
@@ -608,7 +608,7 @@ def test_the_decision_stays_with_the_model(no_keys) -> None:
 
 
 def test_the_tool_passes_details_through(monkeypatch: pytest.MonkeyPatch) -> None:
-    from argus import server
+    from omniframe import server
 
     seen: dict = {}
 

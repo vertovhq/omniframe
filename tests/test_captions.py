@@ -2,14 +2,14 @@ import json
 
 import pytest
 
-from argus.captions import (
+from omniframe.captions import (
     clean_word_timings,
     group_phrases,
     load_words,
     parse_words,
     remap_words_to_clips,
 )
-from argus.plan import validate_plan
+from omniframe.plan import validate_plan
 
 
 def _w(word, start, end):
@@ -115,14 +115,14 @@ SPOKEN = [
 
 
 def test_cues_keep_numbers_and_find_words_ignoring_case_and_punctuation():
-    from argus.captions import resolve_cues
+    from omniframe.captions import resolve_cues
 
     out, errors = resolve_cues({"a": 7.5, "b": {"word": "МИЛЛИОНОВ", "nth": 1, "offset": 0.0}}, SPOKEN)
     assert errors == [] and out == {"a": 7.5, "b": 1.7}
 
 
 def test_cue_takes_the_nth_place_a_phrase_and_a_prefix_and_applies_the_offset():
-    from argus.captions import resolve_cues
+    from omniframe.captions import resolve_cues
 
     cues = {
         "second": {"word": "пятнадцать", "nth": 2},
@@ -136,7 +136,7 @@ def test_cue_takes_the_nth_place_a_phrase_and_a_prefix_and_applies_the_offset():
 
 
 def test_cue_that_cannot_be_found_is_an_error_naming_the_cue():
-    from argus.captions import resolve_cues
+    from omniframe.captions import resolve_cues
 
     out, errors = resolve_cues(
         {"x": {"word": "пятнадцать", "nth": 3}, "y": {"word": "яхта"}, "z": {"word": "..."}, "ok": 1.0}, SPOKEN

@@ -1,4 +1,4 @@
-"""argus-install writes only the argus entry, into temporary homes only."""
+"""omniframe-install writes only the omniframe entry, into temporary homes only."""
 
 import json
 from pathlib import Path
@@ -7,10 +7,10 @@ import sys
 
 import pytest
 
-from argus import install
-from argus.install import local_server, main
+from omniframe import install
+from omniframe.install import local_server, main
 
-ARGS = ["--from", "git+https://github.com/vertovhq/argus", "argus-studio"]
+ARGS = ["--from", "git+https://github.com/vertovhq/omniframe", "omniframe"]
 
 
 @pytest.fixture(autouse=True)
@@ -20,7 +20,7 @@ def _no_local_script(monkeypatch):
 
 
 def test_local_script_is_used_when_present(tmp_path):
-    name = "argus-studio.exe" if sys.platform == "win32" else "argus-studio"
+    name = "omniframe.exe" if sys.platform == "win32" else "omniframe"
     (tmp_path / name).write_text("", encoding="utf-8")
     command, args = local_server(tmp_path)
     assert Path(command) == (tmp_path / name).resolve()
@@ -32,11 +32,11 @@ def test_no_local_script_falls_back_to_uvx(tmp_path):
 
 
 def test_main_writes_the_local_script(tmp_path, monkeypatch):
-    script = str(tmp_path / "venv" / "argus-studio.exe")
+    script = str(tmp_path / "venv" / "omniframe.exe")
     monkeypatch.setattr(install, "local_server", lambda: (script, []))
     (tmp_path / ".cursor").mkdir()
     assert main(["--client", "cursor"], home=tmp_path, env={}) == 0
-    entry = _read(tmp_path / ".cursor" / "mcp.json")["mcpServers"]["argus"]
+    entry = _read(tmp_path / ".cursor" / "mcp.json")["mcpServers"]["omniframe"]
     assert entry == {"type": "stdio", "command": script, "args": []}
 
 
@@ -71,7 +71,7 @@ def test_adds_entry_for_each_installed_client(tmp_path, key, marker, config):
 
     assert main(["--client", key], home=tmp_path, env={}) == 0
 
-    entry = _read(tmp_path / config)["mcpServers"]["argus"]
+    entry = _read(tmp_path / config)["mcpServers"]["omniframe"]
     assert entry["command"] == "uvx"
     assert entry["args"] == ARGS
 
@@ -82,8 +82,8 @@ def test_empty_file_gets_entry_and_no_backup(tmp_path):
 
     assert main(["--client", "kiro"], home=tmp_path, env={}) == 0
 
-    assert _read(kiro) == {"mcpServers": {"argus": {"command": "uvx", "args": ARGS}}}
-    assert not kiro.with_name("mcp.json.argus-backup").exists()
+    assert _read(kiro) == {"mcpServers": {"omniframe": {"command": "uvx", "args": ARGS}}}
+    assert not kiro.with_name("mcp.json.omniframe-backup").exists()
 
 
 def test_other_servers_and_fields_are_kept(tmp_path):
@@ -97,34 +97,34 @@ def test_other_servers_and_fields_are_kept(tmp_path):
     data = _read(kiro)
     assert data["mcpServers"]["fetch"] == fetch
     assert data["theme"] == "dark"
-    assert data["mcpServers"]["argus"]["args"] == ARGS
+    assert data["mcpServers"]["omniframe"]["args"] == ARGS
 
 
-def test_old_argus_entry_is_updated_and_env_kept(tmp_path):
+def test_old_omniframe_entry_is_updated_and_env_kept(tmp_path):
     (tmp_path / ".kiro").mkdir()
     kiro = _kiro_file(tmp_path)
-    old = {"command": "python", "args": ["-m", "argus"], "env": {"OMNIFRAME_OUTPUT_DIR": "./output"}}
-    _write(kiro, {"mcpServers": {"argus": old}})
+    old = {"command": "python", "args": ["-m", "omniframe"], "env": {"OMNIFRAME_OUTPUT_DIR": "./output"}}
+    _write(kiro, {"mcpServers": {"omniframe": old}})
 
     assert main(["--client", "kiro", "--update"], home=tmp_path, env={}) == 0
 
-    entry = _read(kiro)["mcpServers"]["argus"]
+    entry = _read(kiro)["mcpServers"]["omniframe"]
     assert entry["command"] == "uvx"
     assert entry["args"] == ARGS
     assert entry["env"] == {"OMNIFRAME_OUTPUT_DIR": "./output"}
 
 
-def test_existing_argus_entry_is_kept_without_update(tmp_path, capsys):
+def test_existing_omniframe_entry_is_kept_without_update(tmp_path, capsys):
     (tmp_path / ".kiro").mkdir()
     kiro = _kiro_file(tmp_path)
-    text = json.dumps({"mcpServers": {"argus": {"command": "python", "args": ["-m", "argus"]}}})
+    text = json.dumps({"mcpServers": {"omniframe": {"command": "python", "args": ["-m", "omniframe"]}}})
     kiro.parent.mkdir(parents=True)
     kiro.write_text(text, encoding="utf-8")
 
     assert main(["--client", "kiro"], home=tmp_path, env={}) == 0
 
     assert kiro.read_text(encoding="utf-8") == text
-    assert not kiro.with_name("mcp.json.argus-backup").exists()
+    assert not kiro.with_name("mcp.json.omniframe-backup").exists()
     assert "--update" in capsys.readouterr().out
 
 
@@ -134,13 +134,13 @@ def test_backup_is_written_once_and_holds_the_original(tmp_path):
     original = json.dumps({"mcpServers": {"fetch": {"command": "uvx"}}})
     kiro.parent.mkdir(parents=True)
     kiro.write_text(original, encoding="utf-8")
-    backup = kiro.with_name("mcp.json.argus-backup")
+    backup = kiro.with_name("mcp.json.omniframe-backup")
 
     assert main(["--client", "kiro"], home=tmp_path, env={}) == 0
     assert backup.read_text(encoding="utf-8") == original
 
     # A later change must not overwrite the backup of the original file.
-    _write(kiro, {"mcpServers": {"argus": {"command": "python"}}})
+    _write(kiro, {"mcpServers": {"omniframe": {"command": "python"}}})
     assert main(["--client", "kiro", "--update"], home=tmp_path, env={}) == 0
     assert backup.read_text(encoding="utf-8") == original
 
@@ -148,14 +148,14 @@ def test_backup_is_written_once_and_holds_the_original(tmp_path):
 def test_dry_run_writes_nothing_and_hides_env_values(tmp_path, capsys):
     (tmp_path / ".kiro").mkdir()
     kiro = _kiro_file(tmp_path)
-    text = json.dumps({"mcpServers": {"argus": {"command": "python", "env": {"K": "SECRET123"}}}})
+    text = json.dumps({"mcpServers": {"omniframe": {"command": "python", "env": {"K": "SECRET123"}}}})
     kiro.parent.mkdir(parents=True)
     kiro.write_text(text, encoding="utf-8")
 
     assert main(["--dry-run", "--update"], home=tmp_path, env={}) == 0
 
     assert kiro.read_text(encoding="utf-8") == text
-    assert not kiro.with_name("mcp.json.argus-backup").exists()
+    assert not kiro.with_name("mcp.json.omniframe-backup").exists()
     out = capsys.readouterr().out
     assert "dry run" in out
     assert "SECRET123" not in out
@@ -169,11 +169,11 @@ def test_dry_run_creates_no_folders(tmp_path):
     assert not (tmp_path / ".kiro" / "settings").exists()
 
 
-def test_remove_deletes_only_argus(tmp_path):
+def test_remove_deletes_only_omniframe(tmp_path):
     (tmp_path / ".kiro").mkdir()
     kiro = _kiro_file(tmp_path)
     fetch = {"command": "uvx", "args": ["mcp-server-fetch"]}
-    _write(kiro, {"mcpServers": {"fetch": fetch, "argus": {"command": "uvx"}}})
+    _write(kiro, {"mcpServers": {"fetch": fetch, "omniframe": {"command": "uvx"}}})
 
     assert main(["--remove", "--client", "kiro"], home=tmp_path, env={}) == 0
 
@@ -200,7 +200,7 @@ def test_invalid_json_fails_without_writing(tmp_path, capsys):
     assert main(["--client", "kiro"], home=tmp_path, env={}) == 1
 
     assert kiro.read_text(encoding="utf-8") == "{ not json"
-    assert not kiro.with_name("mcp.json.argus-backup").exists()
+    assert not kiro.with_name("mcp.json.omniframe-backup").exists()
     assert "Nothing was written" in capsys.readouterr().err
 
 
@@ -216,7 +216,7 @@ def test_default_run_touches_only_installed_clients(tmp_path):
 
     assert main([], home=tmp_path, env={}) == 0
 
-    assert "argus" in _read(_kiro_file(tmp_path))["mcpServers"]
+    assert "omniframe" in _read(_kiro_file(tmp_path))["mcpServers"]
     assert not (tmp_path / ".cursor").exists()
     assert not (tmp_path / ".gemini").exists()
 
@@ -227,8 +227,8 @@ def test_autoapprove_only_for_kiro_with_trust(tmp_path):
 
     assert main(["--trust"], home=tmp_path, env={}) == 0
 
-    assert _read(_kiro_file(tmp_path))["mcpServers"]["argus"]["autoApprove"] == ["*"]
-    cursor = _read(tmp_path / ".cursor" / "mcp.json")["mcpServers"]["argus"]
+    assert _read(_kiro_file(tmp_path))["mcpServers"]["omniframe"]["autoApprove"] == ["*"]
+    cursor = _read(tmp_path / ".cursor" / "mcp.json")["mcpServers"]["omniframe"]
     assert "autoApprove" not in cursor
 
 
@@ -237,7 +237,7 @@ def test_kiro_without_trust_has_no_autoapprove(tmp_path):
 
     assert main(["--client", "kiro"], home=tmp_path, env={}) == 0
 
-    assert "autoApprove" not in _read(_kiro_file(tmp_path))["mcpServers"]["argus"]
+    assert "autoApprove" not in _read(_kiro_file(tmp_path))["mcpServers"]["omniframe"]
 
 
 def test_vscode_uses_copilot_home_when_set(tmp_path):
@@ -246,7 +246,7 @@ def test_vscode_uses_copilot_home_when_set(tmp_path):
 
     assert main(["--client", "vscode"], home=tmp_path, env={"COPILOT_HOME": str(copilot)}) == 0
 
-    entry = _read(copilot / "mcp-config.json")["mcpServers"]["argus"]
+    entry = _read(copilot / "mcp-config.json")["mcpServers"]["omniframe"]
     assert entry["type"] == "stdio"
     assert not (tmp_path / ".copilot").exists()
 
@@ -260,4 +260,4 @@ def test_claude_user_file_keeps_other_state(tmp_path):
     data = _read(claude)
     assert data["numStartups"] == 5
     assert data["projects"] == {"C:/work": {"allowedTools": []}}
-    assert data["mcpServers"]["argus"]["type"] == "stdio"
+    assert data["mcpServers"]["omniframe"]["type"] == "stdio"

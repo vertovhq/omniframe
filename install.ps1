@@ -1,4 +1,4 @@
-# ARGUS Studio: one-step install for Windows.
+# OmniFrame Studio: one-step install for Windows.
 #   powershell -ExecutionPolicy Bypass -File install.ps1
 # Needs Python 3.11+, Node.js 18+ and ffmpeg on PATH (see INSTALL.md). Creates .venv if it is missing.
 $ErrorActionPreference = "Stop"
@@ -25,7 +25,7 @@ if ($npmExit -ne 0) { throw "npm install failed" }
 Write-Host "[3/4] .env file..."
 if (-not (Test-Path ".env")) { Copy-Item ".env.example" ".env" }
 
-Write-Host "[4/4] Adding ARGUS to your AI IDEs (an existing argus entry is kept)..."
-& (Join-Path $PSScriptRoot ".venv\Scripts\argus-install.exe")
+Write-Host "[4/4] Adding OmniFrame to your AI IDEs (an existing omniframe entry is kept)..."
+& (Join-Path $PSScriptRoot ".venv\Scripts\omniframe-install.exe")
 
 Write-Host "Done. Restart your IDE. Optional: add keys to .env (ElevenLabs or Gemini voice); the free edge voice works without keys."

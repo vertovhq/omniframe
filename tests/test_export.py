@@ -19,12 +19,12 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs, project, server  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.ffmpeg import stream_info  # noqa: E402
-from argus.media_out import Image  # noqa: E402
-from argus.tools import export, qa  # noqa: E402
-from argus.tools.render import finalize_video  # noqa: E402
+from omniframe import jobs, project, server  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.ffmpeg import stream_info  # noqa: E402
+from omniframe.media_out import Image  # noqa: E402
+from omniframe.tools import export, qa  # noqa: E402
+from omniframe.tools.render import finalize_video  # noqa: E402
 
 MB = 1024 * 1024
 PICTURE = {

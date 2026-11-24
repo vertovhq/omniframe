@@ -16,9 +16,9 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs, project  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.tools import render, studio, watch  # noqa: E402
+from omniframe import jobs, project  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.tools import render, studio, watch  # noqa: E402
 
 TOOL_TEXT_LIMIT = 14000  # all tool descriptions together (was 23,296 before task 20.10 item 14)
 
@@ -33,7 +33,7 @@ def economy_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 # ------------------------------------------------------------------ item 14: tool texts
 
 def test_tool_descriptions_stay_under_the_limit() -> None:
-    from argus import server
+    from omniframe import server
 
     total = sum(len(inspect.getdoc(getattr(server, name)) or "") for name in server._registered_tool_names())
     assert total <= TOOL_TEXT_LIMIT, total
@@ -110,7 +110,7 @@ def test_unchanged_picture_is_listed_by_hash_and_drawn_as_a_grey_cell(tmp_path: 
 
 def _plan() -> dict:
     return {"version": 2, "format": "9:16", "duration": 3, "style": "dark",
-            "scenes": [{"kind": "big", "at": 0, "text": "ARGUS"}]}
+            "scenes": [{"kind": "big", "at": 0, "text": "OmniFrame"}]}
 
 
 def test_then_accepts_only_qa_and_only_on_a_final() -> None:

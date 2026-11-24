@@ -4,10 +4,10 @@
 Python standard library; get/analyze also require ffmpeg and ffprobe.
 No API key, global cache, login, or proxy configuration changes.
 
-Ported into the ARGUS studio core from video-shotcraft
+Ported into the OmniFrame studio core from video-shotcraft
 (https://github.com/vincentwei1021/video-shotcraft, Apache License 2.0):
 CC0/CC-BY Freesound sourcing for motivated, non-repeating sound effects
-(ARGUS audio rule: SFX only on motivated events, variations instead of copies).
+(OmniFrame audio rule: SFX only on motivated events, variations instead of copies).
 Exposed via the MCP tools search_sfx / download_sfx.
 """
 
@@ -87,7 +87,7 @@ class Document(HTMLParser):
 
 
 def request(url):
-    req = Request(url, headers={"User-Agent": f"ARGUS/{__version__} (Freesound SFX sourcing)"})
+    req = Request(url, headers={"User-Agent": f"OmniFrame/{__version__} (Freesound SFX sourcing)"})
     with urlopen(req, timeout=30) as response:
         data = response.read(MAX_BYTES + 1)
         if len(data) > MAX_BYTES:

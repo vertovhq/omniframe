@@ -115,5 +115,5 @@ def tool_result(
         base = given[i] if isinstance(given, list) and len(given) == len(views) and isinstance(given[i], dict) else {}
         entries.append({**base, "path": str(view)})
 
-    out = {"engine": f"ARGUS {__version__}", **summary, "images": entries}
+    out = {"engine": f"OmniFrame {__version__}", **summary, "images": entries}
     return [json.dumps(out, ensure_ascii=False, indent=2, default=str), *[Image(path=v) for v in views]]

@@ -16,10 +16,10 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs, project, server  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.media_out import Image  # noqa: E402
-from argus.tools import scripts_runner  # noqa: E402
+from omniframe import jobs, project, server  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.media_out import Image  # noqa: E402
+from omniframe.tools import scripts_runner  # noqa: E402
 
 RED_CARD = '''"""Draw one red picture and list it.
 

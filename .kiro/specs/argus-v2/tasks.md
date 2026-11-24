@@ -388,6 +388,8 @@ own TikTok work (milestone M1), **P1** = universality (freeze Nov 30), **P2** = 
   - Tests: the line is in the guide core; core length test passes.
   - Verify (author): next video in the octopus series on Haiku; credits from the Kiro footer against 2.03.
 
+- [x] 20.15 Renamed to OmniFrame (2026-11-24): the name Argus is used by many projects
+
 - [ ] 20.4 Kiro extras for the write-up — dropped, not built (P2, after 20.3) — model: Sonnet high. Set back to `[ ]` on 2026-11-21 (20.9 item 2): the owner marked it `[x]` on 2026-11-20 without building it. Not built: no `.kiro/agents/`, no `hypothesis` tests or dependency, no BUILD_LOG entry. Do not describe it in the write-up as done.
   - Property-based tests: add `hypothesis` to the `dev` extra (approved by the author). Cover invariants that example tests can miss: caption times after footage cuts are remapped (monotonic, inside the kept ranges, no word lost or duplicated), and plan timing (scenes do not overlap, cues stay inside the video). Record in `docs/BUILD_LOG.md` whether PBT found a bug.
   - Custom agents in `.kiro/agents/` for the roles the author already uses: `auditor` (Opus: plans, reviews diffs and videos, does not edit engine code), `implementer` (Sonnet: core tasks from `tasks.md`), `assistant` (Haiku: small tasks, docs, translation; stops after two failed Verify runs). Check the agent file format in the official Kiro docs and put the URL in a comment.

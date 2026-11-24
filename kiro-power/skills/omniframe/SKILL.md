@@ -1,20 +1,20 @@
 ---
-name: argus
-description: Make a vertical video (TikTok, YouTube Shorts, Reels) with the ARGUS MCP server. Use for editing footage, making a video from a reference, kinetic graphics, voiceovers with captions, rendering, quality checks and export.
+name: omniframe
+description: Make a vertical video (TikTok, YouTube Shorts, Reels) with the OmniFrame MCP server. Use for editing footage, making a video from a reference, kinetic graphics, voiceovers with captions, rendering, quality checks and export.
 ---
 
-# ARGUS studio
+# OmniFrame studio
 
-ARGUS gives you tools to watch, cut, voice, render, check and export a 9:16 or 16:9 video. You make
+OmniFrame gives you tools to watch, cut, voice, render, check and export a 9:16 or 16:9 video. You make
 every creative decision. The tools return pictures and timecodes so you can look before you act.
 
 ## Before the first video
 
-1. `uv` must be installed (https://docs.astral.sh/uv/). ARGUS starts with `uvx`.
+1. `uv` must be installed (https://docs.astral.sh/uv/). OmniFrame starts with `uvx`.
 2. `ffmpeg` and `ffprobe` must be on PATH. Node.js 18 or newer is needed for the graphics engine.
 3. The first start of the server installs the graphics engine in the background. Call the `doctor`
    tool and wait for the `engine` line to show ok before any render.
-4. Optional keys go in `~/.argus/.env`: `ELEVENLABS_API_KEY` for better voices, `ARGUS_GEMINI_API_KEY`
+4. Optional keys go in `~/.omniframe/.env`: `ELEVENLABS_API_KEY` for better voices, `OMNIFRAME_GEMINI_API_KEY`
    for Gemini voices. Without keys, the free edge voice is used.
 
 ## Working order

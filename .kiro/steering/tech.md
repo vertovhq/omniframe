@@ -1,8 +1,8 @@
-# ARGUS — tech steering
+# OmniFrame — tech steering
 
 ## Stack
 
-- Python >= 3.11 MCP server in `src/argus` (mcp SDK `MCPServer`, FastMCP-style decorators).
+- Python >= 3.11 MCP server in `src/omniframe` (mcp SDK `MCPServer`, FastMCP-style decorators).
 - ffmpeg / ffprobe for probing, cutting, proxies, frame extraction, loudness, QA.
 - Remotion 4.0.540 engine in `engine/` (React 18, TypeScript) — the only video renderer.
 - Optional: faster-whisper (transcripts), edge-tts (free voice),
@@ -12,7 +12,7 @@
 
 - Tests: `.venv\Scripts\python.exe -m pytest -q`
 - Engine typecheck: `node engine/node_modules/typescript/bin/tsc --noEmit -p engine`
-- Environment check: `.venv\Scripts\argus-doctor`
+- Environment check: `.venv\Scripts\omniframe-doctor`
 - Renders are started by the tools themselves (node scripts in `engine/scripts/`).
 
 ## Terminal on this machine (Kiro IDE, Windows)
@@ -20,11 +20,11 @@
 - `execute_pwsh` often returns before the command ends and shows only the echoed
   command, with exit code -1. The command still runs. Never trust its printed output.
 - Pattern that works: send all output to a file, then read the file with `read_file`.
-  `& { <commands> } 2>&1 | Out-File -Encoding utf8 "$env:TEMP\argus_out.txt"`
+  `& { <commands> } 2>&1 | Out-File -Encoding utf8 "$env:TEMP\omniframe_out.txt"`
   If the file is missing on the first read, read it once more (the command may still run).
 - Long runs (pytest, renders): write output and the exit code to files, then poll.
-  `& { .venv\Scripts\python.exe -m pytest -q 2>&1 | Out-File -Encoding utf8 "$env:TEMP\argus_pytest.txt"; "exit=$LASTEXITCODE" | Out-File -Encoding utf8 "$env:TEMP\argus_pytest_exit.txt" }`
-  Read `argus_pytest_exit.txt` until it exists; then read the tail of `argus_pytest.txt`.
+  `& { .venv\Scripts\python.exe -m pytest -q 2>&1 | Out-File -Encoding utf8 "$env:TEMP\omniframe_pytest.txt"; "exit=$LASTEXITCODE" | Out-File -Encoding utf8 "$env:TEMP\omniframe_pytest_exit.txt" }`
+  Read `omniframe_pytest_exit.txt` until it exists; then read the tail of `omniframe_pytest.txt`.
   For a run longer than a minute start it detached (`Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',<script>`), so the shell stays free.
 - Never wait inside the shell (`Start-Sleep` loops): the next commands queue behind the loop and look dead. Poll by reading the exit file again in a later step.
 - Never start a second pytest or render while one runs: they share `engine/` and lock files. Before starting one, check for running ones:
@@ -34,17 +34,17 @@
 
 ## Code conventions
 
-- Tool logic lives in `src/argus/tools/<name>.py`. `server.py` only declares
+- Tool logic lives in `src/omniframe/tools/<name>.py`. `server.py` only declares
   `@mcp.tool()` wrappers whose docstrings are written for the model: what the tool
   does, when to use it, what it returns.
-- Tools return a dict that includes `"engine": f"ARGUS {__version__}"`, or, when they
+- Tools return a dict that includes `"engine": f"OmniFrame {__version__}"`, or, when they
   return pictures, a list `[summary_json_text, Image, Image, ...]` built with
-  `argus.media_out.tool_result()`.
-- All ffmpeg calls go through `argus.ffmpeg`. On Windows close temp file handles
+  `omniframe.media_out.tool_result()`.
+- All ffmpeg calls go through `omniframe.ffmpeg`. On Windows close temp file handles
   before ffmpeg touches them (`temp_sibling`).
 - Paths: accept `str`, resolve with `Path(...).resolve()`. Write only inside the
-  project directory (`argus.project.project_dir`) or `OMNIFRAME_OUTPUT_DIR`.
-- Anything that can take longer than ~20 s goes through `argus.jobs.run_or_detach`.
+  project directory (`omniframe.project.project_dir`) or `OMNIFRAME_OUTPUT_DIR`.
+- Anything that can take longer than ~20 s goes through `omniframe.jobs.run_or_detach`.
 - Core dependencies: mcp, google-genai, python-dotenv, numpy, Pillow (pydantic comes
   with mcp). Optional extras: `voice` (edge-tts), `asr` (faster-whisper),
   `pretty` (rich), `dev` (pytest). Ask before adding others.

@@ -567,7 +567,7 @@ def export_package(
     payload, errors = prepare_export(root, videos, texts, cover_times, name, save_to_library)
     if payload is None:
         return {
-            "engine": f"ARGUS {__version__}",
+            "engine": f"OmniFrame {__version__}",
             "valid": False,
             "errors": errors,
             "note": "nothing was exported; fix the listed problems and call again",

@@ -1,8 +1,8 @@
-"""argus-install: add the ARGUS MCP server to the config file of each installed AI IDE.
+"""omniframe-install: add the OmniFrame MCP server to the config file of each installed AI IDE.
 
 It asks nothing. It finds the clients that are installed and adds or updates only the
-`argus` entry in each one's MCP config. Every other server and field stays as it is.
-A backup `<file>.argus-backup` is written before the first change to an existing file.
+`omniframe` entry in each one's MCP config. Every other server and field stays as it is.
+A backup `<file>.omniframe-backup` is written before the first change to an existing file.
 """
 
 from __future__ import annotations
@@ -16,24 +16,24 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
-SERVER_NAME = "argus"
-# Fallback when argus-install does not run from an install that has the argus-studio script
-# (for example a bare `python -m argus.install`): start ARGUS from GitHub with uvx.
+SERVER_NAME = "omniframe"
+# Fallback when omniframe-install does not run from an install that has the omniframe script
+# (for example a bare `python -m omniframe.install`): start OmniFrame from GitHub with uvx.
 SERVER_COMMAND = "uvx"
-SERVER_ARGS = ["--from", "git+https://github.com/vertovhq/argus", "argus-studio"]
+SERVER_ARGS = ["--from", "git+https://github.com/vertovhq/omniframe", "omniframe"]
 
 
 def local_server(scripts_dir: Path | None = None) -> tuple[str, list[str]] | None:
-    """The argus-studio script next to this Python (the venv install.ps1 / install.sh made), if any.
+    """The omniframe script next to this Python (the venv install.ps1 / install.sh made), if any.
 
     It works offline and from a private clone, so it wins over the uvx fallback.
     """
     folder = Path(sys.executable).parent if scripts_dir is None else scripts_dir
-    name = "argus-studio.exe" if sys.platform == "win32" else "argus-studio"
+    name = "omniframe.exe" if sys.platform == "win32" else "omniframe"
     script = folder / name
     return (str(script.resolve()), []) if script.is_file() else None
 ROOT_KEY = "mcpServers"
-BACKUP_SUFFIX = ".argus-backup"
+BACKUP_SUFFIX = ".omniframe-backup"
 # A stdio entry cannot carry these, so an old remote entry loses them on update.
 REMOTE_ONLY_KEYS = ("url", "serverUrl")
 
@@ -112,7 +112,7 @@ def _write(path: Path, data: dict, existed: bool) -> None:
     backup = path.with_name(path.name + BACKUP_SUFFIX)
     if existed and not backup.exists():
         shutil.copy2(path, backup)
-    tmp = path.with_name(path.name + ".argus-tmp")
+    tmp = path.with_name(path.name + ".omniframe-tmp")
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     os.replace(tmp, path)
 
@@ -173,19 +173,19 @@ def _run_one(spec: ClientSpec, *, remove: bool, trust: bool, dry_run: bool,
 def main(argv: list[str] | None = None, *, home: Path | None = None,
          env: Mapping[str, str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="argus-install",
-        description="Add the ARGUS MCP server to each installed AI IDE. Asks nothing.",
+        prog="omniframe-install",
+        description="Add the OmniFrame MCP server to each installed AI IDE. Asks nothing.",
     )
     parser.add_argument("--client", action="append", choices=CLIENT_KEYS, metavar="NAME",
                         help="only this client (repeatable): " + ", ".join(CLIENT_KEYS))
     parser.add_argument("--dry-run", action="store_true",
                         help="print the change and write nothing")
     parser.add_argument("--remove", action="store_true",
-                        help="remove the argus entry instead of adding it")
+                        help="remove the omniframe entry instead of adding it")
     parser.add_argument("--update", action="store_true",
-                        help="replace an existing argus entry (without it an existing entry is kept)")
+                        help="replace an existing omniframe entry (without it an existing entry is kept)")
     parser.add_argument("--trust", action="store_true",
-                        help='Kiro only: add "autoApprove": ["*"] to the argus entry')
+                        help='Kiro only: add "autoApprove": ["*"] to the omniframe entry')
     args = parser.parse_args(argv)
 
     home = Path.home() if home is None else Path(home)

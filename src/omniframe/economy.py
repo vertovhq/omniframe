@@ -2,7 +2,7 @@
 
 Every MCP tool reply that names a project appends one JSON line to
 `<project>/.work/economy.jsonl`: the tool, the characters of text, the pictures with their
-pixel sizes, and the seconds ARGUS spent. ARGUS writes the log and the model never reads it,
+pixel sizes, and the seconds OmniFrame spent. OmniFrame writes the log and the model never reads it,
 so the log costs no tokens. `totals` sums it for `export_package`.
 """
 

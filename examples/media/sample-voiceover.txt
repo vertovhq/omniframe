@@ -1,1 +1,1 @@
-This is a sample voiceover made with ARGUS. Each word gets a start and an end time, so captions can follow the speech.
+This is a sample voiceover made with OmniFrame. Each word gets a start and an end time, so captions can follow the speech.

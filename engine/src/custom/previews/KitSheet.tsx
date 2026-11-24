@@ -3,7 +3,7 @@ import {AbsoluteFill} from 'remotion';
 import {useLayout} from '../style';
 import {Gradient, SceneTrack, Stage, Text} from '../kit';
 
-// Shared by the kit previews (`<group>.tsx` next to this file). ARGUS renders one still per block
+// Shared by the kit previews (`<group>.tsx` next to this file). OmniFrame renders one still per block
 // to build a group's contact strip (`studio_guide(kit_group=...)`); it copies this file and the
 // group's file into a throw-away project as components and plays them as one `custom` scene.
 // A group file lists `{name: 'Block', at: seconds, node: () => ...}` entries: one slot of `SLOT`
@@ -38,7 +38,7 @@ export const Pad = ({children, align = 'flex-start'}: {children?: ReactNode; ali
 };
 
 /** A stand-in picture to put the effects on: a tinted panel with a word and a few shapes, detailed enough to show blur, zoom and shake. */
-export const Sample = ({label = 'ARGUS', hue = '#2F6BFF'}: {label?: string; hue?: string}) => {
+export const Sample = ({label = 'OmniFrame', hue = '#2F6BFF'}: {label?: string; hue?: string}) => {
   const {u} = useLayout();
   return (
     <Stage bg={`linear-gradient(135deg, ${hue}, #0C1226)`}>

@@ -1,4 +1,4 @@
-"""ARGUS MCP server.
+"""OmniFrame MCP server.
 
 Exposes the video production pipeline as MCP tools: watching footage, voiceover,
 rendering, QA, export and the user's own scripts.
@@ -28,11 +28,11 @@ from .media_out import Image
 from .tools import beats, export, memory, qa, render, scripts_runner, sfx, studio, watch
 
 mcp = MCPServer(
-    "Argus",
+    "omniframe",
     instructions=(
-        "ARGUS turns you into a video editor and producer for TikTok, Shorts and YouTube. "
+        "OmniFrame turns you into a video editor and producer for TikTok, Shorts and YouTube. "
         "Call `studio_guide` at the start of every session: it holds the working method and "
-        "the user's saved preferences. You make every creative decision. ARGUS tools watch "
+        "the user's saved preferences. You make every creative decision. OmniFrame tools watch "
         "(`watch_video`, `get_frames`), speak (`synthesize_voiceover`), render (`render_video`), "
         "check (`qa_verify_video`) and package "
         "(`export_package`). Operations that take long return a `job_id`; poll `job_status`."
@@ -297,7 +297,7 @@ def run_script(
 
 @_tool
 def doctor() -> dict:
-    """Check the environment: the same report as the argus-doctor command.
+    """Check the environment: the same report as the omniframe-doctor command.
 
     Returns `checks`, `critical_failures` and `ok`. Optional checks only warn.
     """
@@ -309,7 +309,7 @@ def doctor() -> dict:
 def startup_banner() -> str:
     """One status line for stderr; the tool count is read from the registered tools."""
     banner = (
-        f"[ARGUS] Studio v{__version__} ACTIVE | {len(_registered_tool_names())} tools | "
+        f"[OmniFrame] Studio v{__version__} ACTIVE | {len(_registered_tool_names())} tools | "
         f"{CONFIG.fps:.0f} fps | output: {Path(CONFIG.output_dir)}"
     )
     if not CONFIG.gemini_api_key and not CONFIG.elevenlabs_api_key:
@@ -323,11 +323,11 @@ def main() -> None:
     try:
         jobs.cleanup_old_jobs()
     except Exception as exc:  # housekeeping must never stop the server
-        print(f"[ARGUS] job cleanup skipped: {exc}", file=sys.stderr)
+        print(f"[OmniFrame] job cleanup skipped: {exc}", file=sys.stderr)
     try:
         engine_setup.ensure_started()  # no-op for a repository checkout; never waits
     except Exception as exc:
-        print(f"[ARGUS] engine setup not started: {exc}", file=sys.stderr)
+        print(f"[OmniFrame] engine setup not started: {exc}", file=sys.stderr)
     mcp.run()
 
 

@@ -1,10 +1,10 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
-    "argus": {
+    "omniframe": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/vertovhq/argus", "argus-studio"]
+      "args": ["--from", "git+https://github.com/vertovhq/omniframe", "omniframe"]
     }
   }
 }

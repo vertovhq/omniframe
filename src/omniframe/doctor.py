@@ -1,4 +1,4 @@
-"""argus doctor — one-command environment self-check.
+"""omniframe doctor — one-command environment self-check.
 
 Verifies everything the pipeline needs before a new user hits "nothing works".
 Critical: python, ffmpeg, ffprobe, Node.js + npx, the engine (node_modules with remotion
@@ -7,7 +7,7 @@ warning, never an error): faster-whisper, edge-tts (installed + service alive),
 a Chrome or Edge for the renderer (otherwise Remotion downloads its own browser), the Gemini key
 and the ElevenLabs key.
 
-Console:  argus-doctor [--json] [--no-live]
+Console:  omniframe-doctor [--json] [--no-live]
 MCP:      doctor() -> the same report as JSON.
 Exit code 0 when every critical check passed (warnings are fine).
 """
@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 
 from . import __version__
-from .config import ArgusConfig, load_config
+from .config import OmniFrameConfig, load_config
 from .ffmpeg import NO_WINDOW
 
 # ids whose failure flips the exit code / report["ok"]; warnings never do
@@ -92,12 +92,12 @@ def _exe_status(cid: str, label: str, exe: str, env_var: str) -> dict:
     return _check(cid, label, "ok", f"{version} — {resolved}")
 
 
-def check_ffmpeg(cfg: ArgusConfig) -> dict:
-    return _exe_status("ffmpeg", "ffmpeg", cfg.ffmpeg, "ARGUS_FFMPEG")
+def check_ffmpeg(cfg: OmniFrameConfig) -> dict:
+    return _exe_status("ffmpeg", "ffmpeg", cfg.ffmpeg, "OMNIFRAME_FFMPEG")
 
 
-def check_ffprobe(cfg: ArgusConfig) -> dict:
-    return _exe_status("ffprobe", "ffprobe", cfg.ffprobe, "ARGUS_FFPROBE")
+def check_ffprobe(cfg: OmniFrameConfig) -> dict:
+    return _exe_status("ffprobe", "ffprobe", cfg.ffprobe, "OMNIFRAME_FFPROBE")
 
 
 def _check_module(cid: str, label: str, module: str, missing_status: str, hint: str, note: str = "") -> dict:
@@ -171,7 +171,7 @@ def check_engine() -> dict:
     if not (eng / "package.json").exists():
         return _check(
             "engine", "engine/ (Remotion)", "fail", f"engine not found: {eng}",
-            "clone the argus-studio repo, or set ARGUS_ENGINE_DIR to the engine/ folder",
+            "clone the omniframe repo, or set OMNIFRAME_ENGINE_DIR to the engine/ folder",
         )
     install = f"cd {eng} && npm install --no-audit --no-fund"
     modules = eng / "node_modules"
@@ -190,24 +190,24 @@ def _check_packaged_engine(engine_setup) -> dict:
     label = "engine/ (Remotion)"
     eng = engine_setup.resolve_engine_dir()
     if engine_setup.engine_ready():
-        return _check("engine", label, "ok", f"{eng} (installed by ARGUS {__version__})")
+        return _check("engine", label, "ok", f"{eng} (installed by OmniFrame {__version__})")
     status = engine_setup.read_status()
     state = status.get("state")
     if state == "installing" and engine_setup._pid_alive(int(status.get("pid") or 0)):
         return _check(
             "engine", label, "warn",
             f"installing in the background, step: {status.get('step') or 'starting'}; log: {engine_setup.log_path()}",
-            "wait and run argus-doctor again",
+            "wait and run omniframe-doctor again",
         )
     if state == "error":
         return _check(
             "engine", label, "fail", str(status.get("error") or "install failed"),
-            f"fix the problem, restart the argus-studio MCP server to retry; log: {engine_setup.log_path()}",
+            f"fix the problem, restart the omniframe MCP server to retry; log: {engine_setup.log_path()}",
         )
     return _check(
         "engine", label, "fail", "not installed yet",
-        "restart the argus-studio MCP server (it installs the engine in the background), "
-        "or run: python -m argus.engine_setup",
+        "restart the omniframe MCP server (it installs the engine in the background), "
+        "or run: python -m omniframe.engine_setup",
     )
 
 
@@ -270,16 +270,16 @@ def check_edge_tts(live: bool) -> dict:
     )
 
 
-def check_gemini_key(cfg: ArgusConfig) -> dict:
+def check_gemini_key(cfg: OmniFrameConfig) -> dict:
     if cfg.gemini_api_key:
         return _check("gemini_key", "Gemini key", "ok", "set (Gemini TTS available)")
     return _check(
         "gemini_key", "Gemini key", "warn", "not set; offline tools work, Gemini TTS does not",
-        "copy .env.example to .env and set ARGUS_GEMINI_API_KEY (or export the variable)",
+        "copy .env.example to .env and set OMNIFRAME_GEMINI_API_KEY (or export the variable)",
     )
 
 
-def check_elevenlabs_key(cfg: ArgusConfig) -> dict:
+def check_elevenlabs_key(cfg: OmniFrameConfig) -> dict:
     # optional: needed only for the ElevenLabs voice
     if cfg.elevenlabs_api_key:
         return _check("elevenlabs_key", "ElevenLabs key", "ok", "set (voice clones available)")
@@ -289,7 +289,7 @@ def check_elevenlabs_key(cfg: ArgusConfig) -> dict:
     )
 
 
-def check_output_dir(cfg: ArgusConfig) -> dict:
+def check_output_dir(cfg: OmniFrameConfig) -> dict:
     try:
         if cfg.output_dir.exists():
             return _check("output_dir", "output folder", "ok", str(cfg.output_dir))
@@ -304,7 +304,7 @@ def check_output_dir(cfg: ArgusConfig) -> dict:
 
 # ------------------------------------------------------------------- report
 
-def run_checks(live: bool = True, config: ArgusConfig | None = None) -> dict:
+def run_checks(live: bool = True, config: OmniFrameConfig | None = None) -> dict:
     """Run every check and return the report dict (same shape for CLI and MCP)."""
     cfg = config if config is not None else load_config()
 
@@ -326,7 +326,7 @@ def run_checks(live: bool = True, config: ArgusConfig | None = None) -> dict:
     ]
     critical_failures = [c["id"] for c in checks if c["status"] == "fail" and c["id"] in CRITICAL_IDS]
     return {
-        "argus": __version__,
+        "omniframe": __version__,
         "platform": sys.platform,
         "live": live,
         "checks": checks,
@@ -338,7 +338,7 @@ def run_checks(live: bool = True, config: ArgusConfig | None = None) -> dict:
 def render_text(report: dict) -> str:
     marks = {"ok": "✓", "fail": "✗", "warn": "⚠"}
     lines = [
-        f"ARGUS doctor v{report['argus']} — {report['platform']}, "
+        f"OmniFrame doctor v{report['omniframe']} — {report['platform']}, "
         f"python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
         + (" | no live probes" if not report["live"] else ""),
         "",
@@ -358,7 +358,7 @@ def render_text(report: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="argus-doctor", description="ARGUS environment self-check")
+    ap = argparse.ArgumentParser(prog="omniframe-doctor", description="OmniFrame environment self-check")
     ap.add_argument("--json", action="store_true", help="print the report as JSON")
     ap.add_argument("--no-live", action="store_true", help="skip network probes (edge-tts service)")
     args = ap.parse_args(argv)

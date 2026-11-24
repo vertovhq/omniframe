@@ -209,7 +209,7 @@ def build_index(library_root: Path) -> str:
     """The text of `index.md`: a short header, then one line per entry."""
     cards = read_cards(library_root)
     lines = [
-        "# ARGUS style library",
+        "# OmniFrame style library",
         "",
         f"One line per entry; `<entry>/{CARD}` has the details and `<entry>/{POSTER}` is a frame of its video. "
         f"Import a file in a project component as `import X from './{LIBRARY_DIR}/<entry>/<File>'`.",

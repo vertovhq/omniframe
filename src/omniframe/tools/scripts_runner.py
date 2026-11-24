@@ -1,6 +1,6 @@
 """User scripts: Python files the model can run through `run_script` (design §13, requirement 14).
 
-A script is a `.py` file in `<repo>/scripts/` or in `ARGUS_SCRIPTS_DIR`. Its module docstring
+A script is a `.py` file in `<repo>/scripts/` or in `OMNIFRAME_SCRIPTS_DIR`. Its module docstring
 starts with a one-line summary and has a line `Args: {...}` with an example argument. Listing
 reads that docstring with `ast`, so listing never runs a script.
 
@@ -36,7 +36,7 @@ TAIL_CHARS = 1500
 
 
 def script_folders() -> list[Path]:
-    """Where scripts are looked up, in order: `<repo>/scripts/`, then `ARGUS_SCRIPTS_DIR`."""
+    """Where scripts are looked up, in order: `<repo>/scripts/`, then `OMNIFRAME_SCRIPTS_DIR`."""
     folders: list[Path] = []
     for folder in (REPO_ROOT / "scripts", Path(CONFIG.scripts_dir)):
         resolved = folder.resolve()
@@ -80,14 +80,14 @@ def list_scripts() -> dict:
             if SCRIPT_NAME.fullmatch(path.stem) and path.stem not in scripts:
                 scripts[path.stem] = _describe(path)
     return {
-        "engine": f"ARGUS {__version__}",
+        "engine": f"OmniFrame {__version__}",
         "scripts": [scripts[name] for name in sorted(scripts)],
         "folders": [str(folder) for folder in script_folders()],
     }
 
 
 def _error(message: str, **extra: object) -> dict:
-    return {"engine": f"ARGUS {__version__}", "ok": False, "error": message, **extra}
+    return {"engine": f"OmniFrame {__version__}", "ok": False, "error": message, **extra}
 
 
 def _checked_timeout(value: object) -> float | None:

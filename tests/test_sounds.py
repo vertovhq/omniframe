@@ -17,10 +17,10 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import project  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.plan import validate_plan  # noqa: E402
-from argus.tools import render, sounds, studio, synth  # noqa: E402
+from omniframe import project  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.plan import validate_plan  # noqa: E402
+from omniframe.tools import render, sounds, studio, synth  # noqa: E402
 
 TOLERANCE_S = 1.0 / 30.0
 

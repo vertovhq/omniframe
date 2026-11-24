@@ -483,7 +483,7 @@ def _transcript_head(segments: list[dict]) -> str:
 
 
 def run_job(payload: dict, report: Callable[..., None]) -> dict:
-    """Worker side of `watch_video` (called by `argus.jobs` for kind `watch`)."""
+    """Worker side of `watch_video` (called by `omniframe.jobs` for kind `watch`)."""
     src = Path(payload["path"]).resolve()
     project = str(payload["project"])
     max_frames = int(payload.get("max_frames", DEFAULT_MAX_FRAMES))

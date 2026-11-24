@@ -2,11 +2,11 @@
   "_how_to_use": "Copy the object under 'windows' or 'macos_linux' into the workspace file .kiro/settings/mcp.json. The relative venv path resolves from the workspace root. For ~/.kiro/settings/mcp.json (all workspaces), replace the command with the absolute path to your venv python. Keep API keys in .env, not in this file. Kiro reloads the file when you save it.",
   "windows": {
     "mcpServers": {
-      "argus": {
+      "omniframe": {
         "command": ".venv/Scripts/python.exe",
-        "args": ["-m", "argus"],
+        "args": ["-m", "omniframe"],
         "env": {
-          "OMNIFRAME_OUTPUT_DIR": "D:/argus/output"
+          "OMNIFRAME_OUTPUT_DIR": "D:/omniframe/output"
         },
         "disabled": false
       }
@@ -14,11 +14,11 @@
   },
   "macos_linux": {
     "mcpServers": {
-      "argus": {
+      "omniframe": {
         "command": ".venv/bin/python",
-        "args": ["-m", "argus"],
+        "args": ["-m", "omniframe"],
         "env": {
-          "OMNIFRAME_OUTPUT_DIR": "/Users/you/argus/output"
+          "OMNIFRAME_OUTPUT_DIR": "/Users/you/omniframe/output"
         },
         "disabled": false
       }

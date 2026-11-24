@@ -12,7 +12,7 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus.media_out import Image, prepare_image, tool_result  # noqa: E402
+from omniframe.media_out import Image, prepare_image, tool_result  # noqa: E402
 
 
 def _png(path: Path, size: tuple[int, int], mode: str = "RGB") -> Path:
@@ -85,7 +85,7 @@ def test_tool_result_list_shape(tmp_path: Path) -> None:
 
     summary = json.loads(out[0])
     assert summary["video"] == "v.mp4"
-    assert summary["engine"].startswith("ARGUS ")
+    assert summary["engine"].startswith("OmniFrame ")
     assert [e["t"] for e in summary["images"]] == [1.5, 7.0]
     # same order as the Image items, and the paths are the files that were sent
     assert [e["path"] for e in summary["images"]] == [str(img.path) for img in out[1:]]

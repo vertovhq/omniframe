@@ -16,9 +16,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs, project  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.tools import voiceover  # noqa: E402
+from omniframe import jobs, project  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.tools import voiceover  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -26,7 +26,7 @@ def voice_project_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = dataclasses.replace(CONFIG, output_dir=tmp_path / "out", elevenlabs_api_key="", gemini_api_key="")
     for module in (jobs, project, voiceover):
         monkeypatch.setattr(module, "CONFIG", cfg)
-    monkeypatch.delenv("ARGUS_TTS_PROVIDER", raising=False)
+    monkeypatch.delenv("OMNIFRAME_TTS_PROVIDER", raising=False)
 
 
 # ------------------------------------------------------------------ item 10: the project a voice writes into
@@ -48,7 +48,7 @@ def test_holdings_check_creates_no_folder() -> None:
 
 def test_voice_call_hands_the_holdings_to_the_job(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(voiceover, "resolve_provider", lambda name: None)  # provider choice is not under test here
-    root = project.project_dir("argus-demo")
+    root = project.project_dir("omniframe-demo")
     (root / "plan.json").write_text("{}", encoding="utf-8")
     seen: dict = {}
 
@@ -57,9 +57,9 @@ def test_voice_call_hands_the_holdings_to_the_job(monkeypatch: pytest.MonkeyPatc
         return {"job_id": "voiceover-test"}
 
     monkeypatch.setattr(jobs, "run_or_detach", fake_job)
-    voiceover.synthesize_voiceover("Hello there.", "argus-demo")
+    voiceover.synthesize_voiceover("Hello there.", "omniframe-demo")
     assert seen["kind"] == "voiceover"
-    assert seen["payload"]["project"] == "argus-demo"
+    assert seen["payload"]["project"] == "omniframe-demo"
     assert seen["payload"]["project_holds"] == ["plan.json"]
 
 

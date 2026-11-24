@@ -2,11 +2,11 @@
 
 from pathlib import Path
 
-from argus import engine_setup
+from omniframe import engine_setup
 
 
 def test_override_wins_and_is_not_a_package_install(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("ARGUS_ENGINE_DIR", str(tmp_path))
+    monkeypatch.setenv("OMNIFRAME_ENGINE_DIR", str(tmp_path))
     assert engine_setup.resolve_engine_dir() == tmp_path.resolve()
     assert engine_setup.is_packaged() is False
 
@@ -24,7 +24,7 @@ def _fake_package(root: Path) -> Path:
 def test_sync_copies_the_packaged_engine_and_keeps_an_existing_copy(monkeypatch, tmp_path) -> None:
     src = _fake_package(tmp_path / "pkg")
     dst = tmp_path / "home" / "engine"
-    monkeypatch.delenv("ARGUS_ENGINE_DIR", raising=False)
+    monkeypatch.delenv("OMNIFRAME_ENGINE_DIR", raising=False)
     monkeypatch.setattr(engine_setup, "packaged_engine", lambda: src)
     monkeypatch.setattr(engine_setup, "user_engine", lambda: dst)
     monkeypatch.setattr(engine_setup, "repo_engine", lambda: tmp_path / "no-repo" / "engine")
@@ -42,8 +42,8 @@ def test_sync_copies_the_packaged_engine_and_keeps_an_existing_copy(monkeypatch,
 
 
 def test_a_running_installer_is_not_started_twice(monkeypatch, tmp_path) -> None:
-    monkeypatch.delenv("ARGUS_ENGINE_DIR", raising=False)
-    monkeypatch.setattr(engine_setup, "argus_home", lambda: tmp_path)
+    monkeypatch.delenv("OMNIFRAME_ENGINE_DIR", raising=False)
+    monkeypatch.setattr(engine_setup, "omniframe_home", lambda: tmp_path)
     monkeypatch.setattr(engine_setup, "repo_engine", lambda: tmp_path / "no-repo" / "engine")
     monkeypatch.setattr(engine_setup, "user_engine", lambda: tmp_path / "engine")
     monkeypatch.setattr(engine_setup, "_pid_alive", lambda pid: True)
@@ -59,8 +59,8 @@ def test_a_running_installer_is_not_started_twice(monkeypatch, tmp_path) -> None
 
 
 def test_error_state_reaches_the_render_message(monkeypatch, tmp_path) -> None:
-    monkeypatch.delenv("ARGUS_ENGINE_DIR", raising=False)
-    monkeypatch.setattr(engine_setup, "argus_home", lambda: tmp_path)
+    monkeypatch.delenv("OMNIFRAME_ENGINE_DIR", raising=False)
+    monkeypatch.setattr(engine_setup, "omniframe_home", lambda: tmp_path)
     monkeypatch.setattr(engine_setup, "repo_engine", lambda: tmp_path / "no-repo" / "engine")
     monkeypatch.setattr(engine_setup, "user_engine", lambda: tmp_path / "engine")
     (tmp_path / "engine-setup.json").write_text(
@@ -68,4 +68,4 @@ def test_error_state_reaches_the_render_message(monkeypatch, tmp_path) -> None:
     )
     message = engine_setup.not_ready_message()
     assert "npm install failed with exit code 1" in message
-    assert "restart the argus-studio MCP server" in message
+    assert "restart the omniframe MCP server" in message

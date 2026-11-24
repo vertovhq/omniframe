@@ -13,9 +13,9 @@ the job finishes in time; otherwise it returns a `job_id` to poll with `job_stat
 The same kind + key never runs twice at once. A worker that died without a result is
 reported as `error`, never as `running` forever.
 
-The worker entry is `python -I -m argus.jobs <job_dir>`. A job function is
+The worker entry is `python -I -m omniframe.jobs <job_dir>`. A job function is
 `fn(payload: dict, report) -> dict` where `report(progress, note)` updates the status.
-Functions are found by `register(kind)`, or else as `run_job` in `argus.tools.<kind>`.
+Functions are found by `register(kind)`, or else as `run_job` in `omniframe.tools.<kind>`.
 """
 
 from __future__ import annotations
@@ -187,16 +187,16 @@ def _resolve(kind: str) -> JobFn:
     if not _KIND_RE.fullmatch(kind):
         raise ValueError(f"invalid job kind {kind!r}")
     try:
-        module = importlib.import_module(f"argus.tools.{kind}")
+        module = importlib.import_module(f"omniframe.tools.{kind}")
     except ModuleNotFoundError as exc:
-        if exc.name != f"argus.tools.{kind}":
+        if exc.name != f"omniframe.tools.{kind}":
             raise
         raise ValueError(f"unknown job kind {kind!r}") from exc
     if kind in _REGISTRY:  # the module registered itself on import
         return _REGISTRY[kind]
     fn = getattr(module, "run_job", None)
     if fn is None:
-        raise ValueError(f"argus.tools.{kind} has no run_job(payload, report) for job kind {kind!r}")
+        raise ValueError(f"omniframe.tools.{kind} has no run_job(payload, report) for job kind {kind!r}")
     return fn
 
 
@@ -287,7 +287,7 @@ def _start(kind: str, payload: dict, key: str | None) -> tuple[str, bool]:
         env = {**os.environ, "OMNIFRAME_OUTPUT_DIR": str(Path(CONFIG.output_dir))}
         with open(job_dir / "log.txt", "wb") as log:
             _PROCS[job_id] = subprocess.Popen(
-                [sys.executable, "-I", "-m", "argus.jobs", str(job_dir)],
+                [sys.executable, "-I", "-m", "omniframe.jobs", str(job_dir)],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log,
                 creationflags=(NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == "nt" else 0,
                 env=env, **extra,
@@ -312,7 +312,7 @@ def _snapshot(job_id: str) -> dict:
     now = time.time()
     began = status.get("started") or job.get("created") or now
     out: dict = {
-        "engine": f"ARGUS {__version__}",
+        "engine": f"OmniFrame {__version__}",
         "job_id": job_id,
         "kind": job.get("kind"),
         "state": status.get("state"),
@@ -437,7 +437,7 @@ def run_or_detach(
     while True:
         snap = _snapshot(job_id)
         if snap["state"] == "done":
-            body = {"engine": f"ARGUS {__version__}", **snap["result"]}
+            body = {"engine": f"OmniFrame {__version__}", **snap["result"]}
             return result_for_model({"summary": body.get("summary") or summarize(snap), **body})
         if snap["state"] == "error":
             return {k: snap[k] for k in ("summary", "engine", "job_id", "kind", "state", "error")}
@@ -546,6 +546,6 @@ def _worker_main(job_dir: Path) -> int:
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("usage: python -m argus.jobs <job_dir>", file=sys.stderr)
+        print("usage: python -m omniframe.jobs <job_dir>", file=sys.stderr)
         raise SystemExit(2)
     raise SystemExit(_worker_main(Path(sys.argv[1])))

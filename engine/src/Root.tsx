@@ -16,7 +16,7 @@ const defaultProps: EngineProps = {
   scenes: [
     {at: 0, kind: 'words', text: 'это движок кинетического видео'},
     {at: 2.4, kind: 'title', kicker: 'глава 01', text: 'собери ролик из json'},
-    {at: 4.2, kind: 'big', text: 'ARGUS'},
+    {at: 4.2, kind: 'big', text: 'OmniFrame'},
   ],
 };
 

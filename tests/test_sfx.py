@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus.tools import sfx  # noqa: E402
+from omniframe.tools import sfx  # noqa: E402
 
 # Minimal synthetic Freesound search-result block (same shape the parser reads).
 HTML_ROW = """

@@ -10,8 +10,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus.config import CONFIG  # noqa: E402
-from argus.tools import model_catalog  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.tools import model_catalog  # noqa: E402
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ def test_a_pinned_tts_model_is_used_without_listing(monkeypatch, cfg) -> None:
 
 def test_no_tts_model_in_the_list_names_the_variable(monkeypatch, cfg) -> None:
     _listing(monkeypatch, [{"id": "gemini-3.8-flash", "name": "chat"}])
-    with pytest.raises(RuntimeError, match="ARGUS_TTS_MODEL"):
+    with pytest.raises(RuntimeError, match="OMNIFRAME_TTS_MODEL"):
         model_catalog.tts_model_id()
 
 
@@ -75,7 +75,7 @@ def test_a_failed_list_names_the_variable_and_adds_no_id(monkeypatch, cfg) -> No
     with pytest.raises(RuntimeError) as raised:
         model_catalog.tts_model_id()
     message = str(raised.value)
-    assert "401" in message and "ARGUS_TTS_MODEL" in message and "gemini-" not in message
+    assert "401" in message and "OMNIFRAME_TTS_MODEL" in message and "gemini-" not in message
 
 
 def test_options_mark_the_default_only_once(monkeypatch, cfg) -> None:
@@ -97,5 +97,5 @@ def test_a_pinned_id_is_the_default_even_when_the_list_has_a_newer_one(monkeypat
 
 def test_a_missing_key_is_reported_before_any_call(monkeypatch) -> None:
     monkeypatch.setattr(model_catalog, "CONFIG", dataclasses.replace(CONFIG, gemini_api_key=""))
-    with pytest.raises(RuntimeError, match="ARGUS_GEMINI_API_KEY"):
+    with pytest.raises(RuntimeError, match="OMNIFRAME_GEMINI_API_KEY"):
         model_catalog.gemini_model_list()

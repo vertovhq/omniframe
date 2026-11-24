@@ -1,19 +1,19 @@
-# ARGUS — product steering
+# OmniFrame — product steering
 
-ARGUS is an MCP server that turns the AI model inside Kiro (or any MCP client)
-into a video editor and producer. The model is the director. ARGUS tools are its
+OmniFrame is an MCP server that turns the AI model inside Kiro (or any MCP client)
+into a video editor and producer. The model is the director. OmniFrame tools are its
 eyes, ears and hands: they watch, listen, render, check and package. They never
 make creative decisions.
 
 ## Who uses it
 
 - Solo creators making TikTok / YouTube Shorts / YouTube videos. The author runs
-  his own TikTok channel with ARGUS: "here is a reference, make a continuation /
+  his own TikTok channel with OmniFrame: "here is a reference, make a continuation /
   an analog / my idea in this style".
 - Experts with no editing skills, e.g. a doctor with a talking-head recording:
   "here is my video, edit it with effects".
 
-## Scenarios ARGUS must handle
+## Scenarios OmniFrame must handle
 
 1. **Reference → new video**: analog, continuation, or the user's own idea in the
    reference's style.

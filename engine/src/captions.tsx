@@ -7,7 +7,7 @@ import {readableOn} from './kit/text';
 import {DESIGN_SHORT_SIDE, fontFor, useLayout, useStyle} from './style';
 import {fitLines, fitSizeToHeight, measureTextWidth, normalizeToken, useFontsReady} from './text';
 
-// Same limits as `group_phrases` in src/argus/captions.py: change both together.
+// Same limits as `group_phrases` in src/omniframe/captions.py: change both together.
 export const PHRASE_MAX_WORDS = 4;
 export const PHRASE_MAX_CHARS = 26;
 export const PHRASE_GAP_S = 0.45;

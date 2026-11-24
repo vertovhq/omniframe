@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import server  # noqa: E402
+from omniframe import server  # noqa: E402
 
 SURFACE_LIMIT = 9200  # descriptions + input schemas of all tools, characters (20.10 item 20; 9000 before the voice overwrite flag)
 

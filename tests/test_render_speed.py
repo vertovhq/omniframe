@@ -15,10 +15,10 @@ from pathlib import Path
 import pytest
 from PIL import Image as PILImage
 
-from argus import jobs, project
-from argus.config import CONFIG
-from argus.plan import validate_plan
-from argus.tools import render
+from omniframe import jobs, project
+from omniframe.config import CONFIG
+from omniframe.plan import validate_plan
+from omniframe.tools import render
 
 
 @pytest.fixture(autouse=True)
@@ -42,7 +42,7 @@ def _gradient(path: Path, size: tuple[int, int] = (90, 160)) -> Path:
 
 def _plan_dict(**extra) -> dict:
     return {"version": 2, "format": "9:16", "duration": 3, "style": "dark",
-            "scenes": [{"kind": "big", "at": 0, "text": "ARGUS"}], **extra}
+            "scenes": [{"kind": "big", "at": 0, "text": "OmniFrame"}], **extra}
 
 
 # ------------------------------------------------------------------ contact sheet

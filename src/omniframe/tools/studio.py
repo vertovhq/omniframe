@@ -1,6 +1,6 @@
 """`studio_guide`: the working method, what is available now, the user's preferences.
 
-The guide text ships with the package (`argus/STUDIO_GUIDE.md`). Capabilities are
+The guide text ships with the package (`omniframe/STUDIO_GUIDE.md`). Capabilities are
 computed per call from the registered tools, the config and import checks, so the
 model never plans around a provider that is not there. Preferences are the tail of
 the knowledge base file that `learn_and_record_memory` appends to.
@@ -17,7 +17,7 @@ from importlib import resources
 from pathlib import Path
 
 from .. import __version__, state
-from ..config import CONFIG, ArgusConfig
+from ..config import CONFIG, OmniFrameConfig
 from ..media_out import Image
 from . import kit_preview, library, sounds
 
@@ -41,7 +41,7 @@ def once(key: str, result: dict, full: bool = False) -> dict:
     ).hexdigest()[:12]
     if not full and _SENT.get(key) == digest:
         return {
-            "engine": f"ARGUS {__version__}",
+            "engine": f"OmniFrame {__version__}",
             "unchanged": True,
             "hash": digest,
             "note": f"unchanged since your last read, hash {digest}; pass full=true to get it again",
@@ -52,7 +52,7 @@ def once(key: str, result: dict, full: bool = False) -> dict:
 
 def read_guide() -> str:
     """The packaged guide text."""
-    return resources.files("argus").joinpath("STUDIO_GUIDE.md").read_text(encoding="utf-8")
+    return resources.files("omniframe").joinpath("STUDIO_GUIDE.md").read_text(encoding="utf-8")
 
 
 def read_preferences(path: Path, limit: int = PREFERENCES_LIMIT) -> tuple[str, bool]:
@@ -93,7 +93,7 @@ def _provider(available: bool, note: str) -> dict:
     return {"available": available, "note": note}
 
 
-def providers(cfg: ArgusConfig) -> dict:
+def providers(cfg: OmniFrameConfig) -> dict:
     """Which voice, transcript and video providers work right now."""
     eleven = bool(cfg.elevenlabs_api_key)
     gemini = bool(cfg.gemini_api_key)
@@ -107,7 +107,7 @@ def providers(cfg: ArgusConfig) -> dict:
         ),
         "gemini": _provider(
             gemini,
-            "voice (Gemini TTS)" if gemini else "no key: set ARGUS_GEMINI_API_KEY in .env",
+            "voice (Gemini TTS)" if gemini else "no key: set OMNIFRAME_GEMINI_API_KEY in .env",
         ),
         "edge": _provider(
             edge,
@@ -116,7 +116,7 @@ def providers(cfg: ArgusConfig) -> dict:
         "faster_whisper": _provider(
             whisper,
             f"transcripts and word timings, model {cfg.whisper_model}" if whisper
-            else "not installed: pip install 'argus-studio[asr]'; no transcripts until then",
+            else "not installed: pip install 'omniframe[asr]'; no transcripts until then",
         ),
     }
 
@@ -175,7 +175,7 @@ def find_section(sections: dict[str, tuple[str, str]], key: str) -> str | None:
 def section_for_model(section: str, full: bool = False) -> dict:
     """`studio_guide(section=...)`: one section of the guide. An unknown name lists the valid ones."""
     sections = guide_sections(read_guide())
-    head = {"engine": f"ARGUS {__version__}"}
+    head = {"engine": f"OmniFrame {__version__}"}
     num = find_section(sections, section)
     if num is None:
         names = [f"{n} {title}" for n, (title, _) in sections.items()]
@@ -186,7 +186,7 @@ def section_for_model(section: str, full: bool = False) -> dict:
 
 def studio_guide(
     tool_names: Iterable[str],
-    config: ArgusConfig | None = None,
+    config: OmniFrameConfig | None = None,
     *,
     custom_scenes: bool = False,
     project: str | None = None,
@@ -228,7 +228,7 @@ def kit_group_result(group: str) -> dict:
     while a background job renders it (see `kit_preview.strip_for_guide`). An unknown group gets the list of groups.
     """
     names = kit_preview.group_names()
-    head = {"engine": f"ARGUS {__version__}"}
+    head = {"engine": f"OmniFrame {__version__}"}
     if group == "sfx":
         return {**head, **sfx_group(), "groups": [*names, "sfx"]}
     if group not in names:

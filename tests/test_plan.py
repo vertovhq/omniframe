@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from argus.plan import (
+from omniframe.plan import (
     FORMAT_SIZES,
     SAFE_AREA_DEFAULTS,
     STYLE_PRESETS,

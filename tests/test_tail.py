@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus.plan import TAIL_S, derive_duration, validate_plan  # noqa: E402
+from omniframe.plan import TAIL_S, derive_duration, validate_plan  # noqa: E402
 
 
 def _plan(**extra) -> object:

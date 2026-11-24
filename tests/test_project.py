@@ -3,9 +3,9 @@ from dataclasses import replace
 
 import pytest
 
-from argus import project
-from argus.config import CONFIG
-from argus.project import PROJECT_FOLDERS, project_dir, slugify
+from omniframe import project
+from omniframe.config import CONFIG
+from omniframe.project import PROJECT_FOLDERS, project_dir, slugify
 
 SLUG_PATTERN = re.compile(r"[a-z0-9-]{1,48}")
 

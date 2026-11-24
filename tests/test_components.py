@@ -19,10 +19,10 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs, project  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.plan import validate_plan  # noqa: E402
-from argus.tools import components, render  # noqa: E402
+from omniframe import jobs, project  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.plan import validate_plan  # noqa: E402
+from omniframe.tools import components, render  # noqa: E402
 
 ENGINE = Path(__file__).resolve().parents[1] / "engine"
 REGISTRY = ENGINE / "src" / "custom" / "registry.ts"
@@ -285,7 +285,7 @@ def _kit_exports() -> set[str]:
 def test_kit_index_is_short_and_every_export_is_in_a_group_file() -> None:
     import re
 
-    from argus.tools import kit_preview
+    from omniframe.tools import kit_preview
 
     index = (KIT / "KIT.md").read_text(encoding="utf-8")
     assert len(index) < 5000
@@ -303,7 +303,7 @@ def test_kit_index_is_short_and_every_export_is_in_a_group_file() -> None:
 
 
 def test_every_group_has_a_preview_of_known_blocks() -> None:
-    from argus.tools import kit_preview
+    from omniframe.tools import kit_preview
 
     exported = _kit_exports()
     sheet = kit_preview.previews_dir() / "KitSheet.tsx"
@@ -572,7 +572,7 @@ def test_rich_motion_sample_scene_takes_two_unlike_looks(root: Path, fmt: str, s
 
 @needs_engine
 def test_contact_strip_of_a_group_is_rendered_once_and_cached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from argus.tools import kit_preview
+    from omniframe.tools import kit_preview
 
     monkeypatch.setattr(kit_preview, "CONFIG", dataclasses.replace(CONFIG, output_dir=tmp_path / "out"))
     blocks = kit_preview.preview_blocks("bursts")
@@ -591,7 +591,7 @@ def test_contact_strip_of_a_group_is_rendered_once_and_cached(tmp_path: Path, mo
 
 
 def test_compose_strip_lays_frames_out_in_a_grid(tmp_path: Path) -> None:
-    from argus.tools import kit_preview
+    from omniframe.tools import kit_preview
 
     frames = []
     for i in range(4):
@@ -606,7 +606,7 @@ def test_compose_strip_lays_frames_out_in_a_grid(tmp_path: Path) -> None:
 
 
 def test_strip_is_rebuilt_when_the_kit_changes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from argus.tools import kit_preview
+    from omniframe.tools import kit_preview
 
     first = kit_preview.signature("hud")
     assert first == kit_preview.signature("hud") and first != kit_preview.signature("depth")

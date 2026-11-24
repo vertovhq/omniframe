@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus.tools import render  # noqa: E402
+from omniframe.tools import render  # noqa: E402
 
 
 def test_stills_collect_every_missing_file(tmp_path: Path) -> None:

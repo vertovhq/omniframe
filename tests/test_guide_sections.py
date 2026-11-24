@@ -15,9 +15,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import state  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.tools import studio  # noqa: E402
+from omniframe import state  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.tools import studio  # noqa: E402
 
 CORE_LIMIT = 4000  # characters of the guide core returned by studio_guide()
 

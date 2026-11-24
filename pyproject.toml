@@ -3,10 +3,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "argus-studio"
-# single source of truth: src/argus/__init__.py -> __version__
+name = "omniframe"
+# single source of truth: src/omniframe/__init__.py -> __version__
 dynamic = ["version"]
-description = "ARGUS — MCP server for producing viral vertical videos: voiceover with word timings, a Remotion render engine, QA and export."
+description = "OmniFrame — MCP server for producing viral vertical videos: voiceover with word timings, a Remotion render engine, QA and export."
 readme = "README.md"
 # SPDX expression per PEP 639: https://peps.python.org/pep-0639/ (no License :: classifier with it)
 license = "AGPL-3.0-or-later"
@@ -39,28 +39,28 @@ asr = ["faster-whisper>=1.0"]
 dev = ["pytest>=8.0.0"]
 
 [project.scripts]
-argus-studio = "argus.server:main"
-argus-doctor = "argus.doctor:main"
-argus-install = "argus.install:main"
+omniframe = "omniframe.server:main"
+omniframe-doctor = "omniframe.doctor:main"
+omniframe-install = "omniframe.install:main"
 
 [tool.hatch.version]
-path = "src/argus/__init__.py"
+path = "src/omniframe/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/argus"]
+packages = ["src/omniframe"]
 
-# The render engine travels inside the wheel as argus/_engine; see src/argus/engine_setup.py.
+# The render engine travels inside the wheel as omniframe/_engine; see src/omniframe/engine_setup.py.
 # force-include copies a directory recursively and ignores .gitignore
 # (https://hatch.pypa.io/latest/config/build/#forced-inclusion), so only the parts the engine
 # needs are listed: "engine" as a whole pulled in node_modules (15k files) and test-baseline
 # (156 MB) and made `pip install -e .` hang.
 [tool.hatch.build.targets.wheel.force-include]
-"engine/src" = "argus/_engine/src"
-"engine/scripts" = "argus/_engine/scripts"
-"engine/public/fonts" = "argus/_engine/public/fonts"
-"engine/package.json" = "argus/_engine/package.json"
-"engine/package-lock.json" = "argus/_engine/package-lock.json"
-"engine/tsconfig.json" = "argus/_engine/tsconfig.json"
+"engine/src" = "omniframe/_engine/src"
+"engine/scripts" = "omniframe/_engine/scripts"
+"engine/public/fonts" = "omniframe/_engine/public/fonts"
+"engine/package.json" = "omniframe/_engine/package.json"
+"engine/package-lock.json" = "omniframe/_engine/package-lock.json"
+"engine/tsconfig.json" = "omniframe/_engine/tsconfig.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

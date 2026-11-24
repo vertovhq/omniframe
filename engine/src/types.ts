@@ -189,7 +189,7 @@ export type KineticProps = {
 };
 
 // ---------------------------------------------------------------------------
-// Plan v2. Mirrors `src/argus/plan.py` (the source of truth): change both together.
+// Plan v2. Mirrors `src/omniframe/plan.py` (the source of truth): change both together.
 // The Python side validates the plan and fills defaults (`Plan.resolved()`) before it
 // reaches the engine, but every field with a default is optional here.
 // ---------------------------------------------------------------------------

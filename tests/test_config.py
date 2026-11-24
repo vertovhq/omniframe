@@ -3,27 +3,28 @@ from pathlib import Path
 
 import pytest
 
-from argus import config
-from argus.config import find_env_file, load_config
+from omniframe import config
+from omniframe._compat import omniframe_home
+from omniframe.config import find_env_file, load_config
 
 NEW_VARS = (
-    "ARGUS_WHISPER_MODEL",
-    "ARGUS_ELEVEN_MODEL",
-    "ARGUS_RENDER_CONCURRENCY",
-    "ARGUS_SCRIPTS_DIR",
+    "OMNIFRAME_WHISPER_MODEL",
+    "OMNIFRAME_ELEVEN_MODEL",
+    "OMNIFRAME_RENDER_CONCURRENCY",
+    "OMNIFRAME_SCRIPTS_DIR",
 )
 
 
 @pytest.fixture
 def isolated(tmp_path, monkeypatch):
-    """Empty cwd and repo root, no ARGUS_ variables from the developer's machine."""
+    """Empty cwd and repo root, no OMNIFRAME_ variables from the developer's machine."""
     cwd = tmp_path / "cwd"
     repo = tmp_path / "repo"
     cwd.mkdir()
     repo.mkdir()
     monkeypatch.chdir(cwd)
     monkeypatch.setattr(config, "REPO_ROOT", repo)
-    monkeypatch.delenv("ARGUS_ENV_FILE", raising=False)
+    monkeypatch.delenv("OMNIFRAME_ENV_FILE", raising=False)
     for name in NEW_VARS:
         monkeypatch.delenv(name, raising=False)
     return cwd, repo
@@ -35,7 +36,7 @@ def test_env_lookup_prefers_explicit_file(isolated, monkeypatch, tmp_path):
     explicit.write_text("X=1\n", encoding="utf-8")
     (cwd / ".env").write_text("X=2\n", encoding="utf-8")
     (repo / ".env").write_text("X=3\n", encoding="utf-8")
-    monkeypatch.setenv("ARGUS_ENV_FILE", str(explicit))
+    monkeypatch.setenv("OMNIFRAME_ENV_FILE", str(explicit))
 
     assert find_env_file() == explicit.resolve()
 
@@ -43,7 +44,7 @@ def test_env_lookup_prefers_explicit_file(isolated, monkeypatch, tmp_path):
 def test_missing_explicit_file_falls_through_to_cwd(isolated, monkeypatch, tmp_path):
     cwd, repo = isolated
     (cwd / ".env").write_text("X=2\n", encoding="utf-8")
-    monkeypatch.setenv("ARGUS_ENV_FILE", str(tmp_path / "missing.env"))
+    monkeypatch.setenv("OMNIFRAME_ENV_FILE", str(tmp_path / "missing.env"))
 
     assert find_env_file() == (cwd / ".env").resolve()
 
@@ -69,7 +70,7 @@ def test_no_env_file_returns_none(isolated):
 
 def test_dotenv_values_do_not_override_real_environment(isolated, monkeypatch):
     cwd, _ = isolated
-    key = "ARGUS_TEST_PRECEDENCE_KEY"
+    key = "OMNIFRAME_TEST_PRECEDENCE_KEY"
     monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv(key, "from-process")
     (cwd / ".env").write_text(f"{key}=from-file\n", encoding="utf-8")
@@ -81,7 +82,7 @@ def test_dotenv_values_do_not_override_real_environment(isolated, monkeypatch):
 
 def test_dotenv_values_load_from_repo_root(isolated, monkeypatch):
     _, repo = isolated
-    key = "ARGUS_TEST_REPO_FALLBACK_KEY"
+    key = "OMNIFRAME_TEST_REPO_FALLBACK_KEY"
     monkeypatch.delenv(key, raising=False)
     (repo / ".env").write_text(f"{key}=from-repo\n", encoding="utf-8")
 
@@ -91,7 +92,7 @@ def test_dotenv_values_load_from_repo_root(isolated, monkeypatch):
 
 
 def test_new_fields_have_documented_defaults(isolated, monkeypatch):
-    for name in ("ARGUS_ELEVEN_MODEL", "ARGUS_TTS_MODEL"):
+    for name in ("OMNIFRAME_ELEVEN_MODEL", "OMNIFRAME_TTS_MODEL"):
         monkeypatch.delenv(name, raising=False)  # a pinned id in the user's .env is loaded into os.environ
     cfg = load_config()
 
@@ -99,14 +100,14 @@ def test_new_fields_have_documented_defaults(isolated, monkeypatch):
     assert cfg.eleven_model == ""  # empty: the newest model the key lists is used
     assert cfg.tts_model == ""
     assert cfg.render_concurrency == 0
-    assert cfg.scripts_dir == Path.home() / ".argus" / "scripts"
+    assert cfg.scripts_dir == omniframe_home() / "scripts"
 
 
 def test_new_fields_read_from_environment(isolated, monkeypatch, tmp_path):
-    monkeypatch.setenv("ARGUS_WHISPER_MODEL", "medium")
-    monkeypatch.setenv("ARGUS_ELEVEN_MODEL", "eleven_multilingual_v2")
-    monkeypatch.setenv("ARGUS_RENDER_CONCURRENCY", "4")
-    monkeypatch.setenv("ARGUS_SCRIPTS_DIR", str(tmp_path / "scripts"))
+    monkeypatch.setenv("OMNIFRAME_WHISPER_MODEL", "medium")
+    monkeypatch.setenv("OMNIFRAME_ELEVEN_MODEL", "eleven_multilingual_v2")
+    monkeypatch.setenv("OMNIFRAME_RENDER_CONCURRENCY", "4")
+    monkeypatch.setenv("OMNIFRAME_SCRIPTS_DIR", str(tmp_path / "scripts"))
 
     cfg = load_config()
 
@@ -117,8 +118,8 @@ def test_new_fields_read_from_environment(isolated, monkeypatch, tmp_path):
 
 
 def test_negative_render_concurrency_is_rejected(isolated, monkeypatch):
-    monkeypatch.setenv("ARGUS_RENDER_CONCURRENCY", "-1")
+    monkeypatch.setenv("OMNIFRAME_RENDER_CONCURRENCY", "-1")
 
-    with pytest.raises(ValueError, match="ARGUS_RENDER_CONCURRENCY"):
+    with pytest.raises(ValueError, match="OMNIFRAME_RENDER_CONCURRENCY"):
         load_config()
 

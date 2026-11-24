@@ -577,7 +577,7 @@ def starting_sheet(out: Path) -> Path:
     width = SHEET_CELL_W * 2 + SHEET_GAP
     sheet = PILImage.new("RGB", (width, rows * (SHEET_CELL_H + SHEET_GAP) + 50), (18, 18, 22))
     draw = ImageDraw.Draw(sheet)
-    draw.text((12, 14), f"Starting sound recipes (ARGUS {synth.RECIPE_VERSION}): {', '.join(names)}", fill=(230, 230, 236), font=_font(18))
+    draw.text((12, 14), f"Starting sound recipes (OmniFrame {synth.RECIPE_VERSION}): {', '.join(names)}", fill=(230, 230, 236), font=_font(18))
     for i, name in enumerate(names):
         samples = synth.render_recipe(synth.resolve_recipe({"from": name}))
         mono = samples.mean(axis=1)

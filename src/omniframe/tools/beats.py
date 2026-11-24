@@ -155,7 +155,7 @@ def calculate_beat_grid(
     target = beats_file(src, project)
     target.write_text(json.dumps(full, ensure_ascii=False), encoding="utf-8")
     result = {
-        "engine": f"ARGUS {__version__}",
+        "engine": f"OmniFrame {__version__}",
         "audio": str(src),
         "bpm": round(bpm, 2),
         "beat_interval_s": round(period, 3),

@@ -17,11 +17,11 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs, project  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.ffmpeg import probe, stream_info  # noqa: E402
-from argus.media_out import Image  # noqa: E402
-from argus.tools import media_prep, render  # noqa: E402
+from omniframe import jobs, project  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.ffmpeg import probe, stream_info  # noqa: E402
+from omniframe.media_out import Image  # noqa: E402
+from omniframe.tools import media_prep, render  # noqa: E402
 
 ENGINE = Path(__file__).resolve().parents[1] / "engine"
 needs_engine = pytest.mark.skipif(

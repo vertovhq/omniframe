@@ -1,4 +1,4 @@
-# Install ARGUS: from zero to the first video
+# Install OmniFrame: from zero to the first video
 
 About 30 minutes, most of it downloads. If a step fails, copy the exact error text. Do not use
 `--force` or delete folders to fix it.
@@ -12,22 +12,22 @@ Install `uv` (https://docs.astral.sh/uv/), ffmpeg and Node.js 18 or newer. Then 
 MCP server command in your client:
 
 ```bash
-uvx --from git+https://github.com/vertovhq/argus argus-studio
+uvx --from git+https://github.com/vertovhq/omniframe omniframe
 ```
 
 For Kiro, the folder [`kiro-power/`](kiro-power/README.md) is a power that installs the same server with
 its guide. Import it from a clone with Add Custom Power.
 
-The first start copies the graphics engine into `~/.argus/engine` and installs its packages in the
+The first start copies the graphics engine into `~/.omniframe/engine` and installs its packages in the
 background. Check it with the `doctor` tool, or run
-`uvx --from git+https://github.com/vertovhq/argus argus-doctor`. Keys go in `~/.argus/.env`. The steps
+`uvx --from git+https://github.com/vertovhq/omniframe omniframe-doctor`. Keys go in `~/.omniframe/.env`. The steps
 below (sections 2 to 4) apply only to Option A, the clone.
 
 ## 1. Requirements
 
 | Tool | Why | Check |
 |---|---|---|
-| Python 3.11 or newer | ARGUS server | `python --version` |
+| Python 3.11 or newer | OmniFrame server | `python --version` |
 | ffmpeg on PATH | probing, cutting, loudness, frames | `ffmpeg -version` |
 | Node.js 18 or newer | Remotion render engine (kinetic graphics) | `node --version` |
 | Internet | voices (edge-tts), Freesound | — |
@@ -39,8 +39,8 @@ PATH applies.
 ## 2. Get the code
 
 ```powershell
-git clone https://github.com/vertovhq/argus.git
-cd argus
+git clone https://github.com/vertovhq/omniframe.git
+cd omniframe
 ```
 
 ## 3. Install
@@ -54,11 +54,11 @@ powershell -ExecutionPolicy Bypass -File install.ps1     # macOS/Linux: bash ins
 The script does five things:
 
 0. Creates the virtual environment `.venv` if there is none.
-1. `pip install -e ".[dev,pretty,voice]"`: the ARGUS package, tests, `rich` output and the free
+1. `pip install -e ".[dev,pretty,voice]"`: the OmniFrame package, tests, `rich` output and the free
    edge-tts voice.
 2. `npm install` in `engine/`: the Remotion engine.
 3. Copies `.env.example` to `.env` if there is no `.env` yet.
-4. Runs `argus-install`: adds ARGUS to each AI IDE it finds (Kiro, Cursor, Claude Code,
+4. Runs `omniframe-install`: adds OmniFrame to each AI IDE it finds (Kiro, Cursor, Claude Code,
    VS Code with Copilot, Antigravity). See step 5.
 
 If you prefer manual steps, create and activate the venv (`python -m venv .venv`, then
@@ -80,7 +80,7 @@ Edit `.env` in the repository folder. Never paste keys into a chat.
 
 | Variable | Get it at | Used for |
 |---|---|---|
-| `ARGUS_GEMINI_API_KEY` | https://aistudio.google.com/apikey | Gemini voices, the model list |
+| `OMNIFRAME_GEMINI_API_KEY` | https://aistudio.google.com/apikey | Gemini voices, the model list |
 | `ELEVENLABS_API_KEY` | https://elevenlabs.io (API Keys) | ElevenLabs voices |
 
 ElevenLabs keys start with `sk_`. The key is shown once, when you create it. A long hex string
@@ -90,18 +90,18 @@ Other settings are documented in `.env.example`. `OMNIFRAME_OUTPUT_DIR` sets whe
 
 ## 5. Connect your MCP client
 
-`install.ps1` / `install.sh` already ran `argus-install`. Run it again any time:
+`install.ps1` / `install.sh` already ran `omniframe-install`. Run it again any time:
 
 ```powershell
-.venv\Scripts\argus-install --dry-run          # what it would change, writes nothing
-.venv\Scripts\argus-install --client cursor    # one IDE only (kiro, cursor, claude, vscode, antigravity)
-.venv\Scripts\argus-install --update           # replace an existing argus entry
-.venv\Scripts\argus-install --remove           # take ARGUS out again
+.venv\Scripts\omniframe-install --dry-run          # what it would change, writes nothing
+.venv\Scripts\omniframe-install --client cursor    # one IDE only (kiro, cursor, claude, vscode, antigravity)
+.venv\Scripts\omniframe-install --update           # replace an existing omniframe entry
+.venv\Scripts\omniframe-install --remove           # take OmniFrame out again
 ```
 
-It finds the installed IDEs and writes only the `argus` entry, pointing at `.venv`'s `argus-studio`.
-Other servers and fields stay as they are. An existing `argus` entry is kept unless you pass
-`--update`. Before the first change it saves `<file>.argus-backup`. Config files it writes:
+It finds the installed IDEs and writes only the `omniframe` entry, pointing at `.venv`'s `omniframe`.
+Other servers and fields stay as they are. An existing `omniframe` entry is kept unless you pass
+`--update`. Before the first change it saves `<file>.omniframe-backup`. Config files it writes:
 
 | IDE | File |
 |---|---|
@@ -111,7 +111,7 @@ Other servers and fields stay as they are. An existing `argus` entry is kept unl
 | VS Code (Copilot) | `~/.copilot/mcp-config.json` (or `$COPILOT_HOME`) |
 | Antigravity | `~/.gemini/config/mcp_config.json` |
 
-For Kiro, `--trust` also adds `"autoApprove": ["*"]`. Restart the IDE (in Kiro: reload `argus` in
+For Kiro, `--trust` also adds `"autoApprove": ["*"]`. Restart the IDE (in Kiro: reload `omniframe` in
 the MCP Server view) after a change.
 
 Manual setup, for any other MCP client or a workspace-level file. Kiro: create or edit `.kiro/settings/mcp.json` in the workspace (or `~/.kiro/settings/mcp.json` for
@@ -120,9 +120,9 @@ every workspace):
 ```json
 {
   "mcpServers": {
-    "argus": {
+    "omniframe": {
       "command": ".venv/Scripts/python.exe",
-      "args": ["-m", "argus"],
+      "args": ["-m", "omniframe"],
       "env": { "OMNIFRAME_OUTPUT_DIR": "./output" }
     }
   }
@@ -132,11 +132,11 @@ every workspace):
 macOS and Linux: change the command to `.venv/bin/python`. In the user-level file, use the absolute
 path to the venv's Python. The relative path resolves from the workspace root.
 
-Save the file, then open the MCP Server view in Kiro and reload `argus`. Without a reload, the new
+Save the file, then open the MCP Server view in Kiro and reload `omniframe`. Without a reload, the new
 tools do not appear.
 
-Other MCP clients: point the command at the venv Python with arguments `-m argus`, or at the
-`argus-studio` command when the venv is on PATH.
+Other MCP clients: point the command at the venv Python with arguments `-m omniframe`, or at the
+`omniframe` command when the venv is on PATH.
 
 More examples: [`examples/mcp-config.example.json`](examples/mcp-config.example.json).
 
@@ -145,7 +145,7 @@ More examples: [`examples/mcp-config.example.json`](examples/mcp-config.example.
 In a terminal, with the venv activated:
 
 ```powershell
-argus-doctor
+omniframe-doctor
 ```
 
 It prints a table. ✓ means the item works, ✗ means it is missing (the line says what to install), and
@@ -165,7 +165,7 @@ In the Kiro chat:
 5. When the stills look right: `Render a preview, then the final of the same plan.`
 6. `Run qa_verify_video on the final file.` Then `export_package` for the upload folder.
 
-For production-quality voice, add your ElevenLabs API key to .env (ELEVENLABS_API_KEY). Without a key ARGUS falls back to a free voice so the example still runs.
+For production-quality voice, add your ElevenLabs API key to .env (ELEVENLABS_API_KEY). Without a key OmniFrame falls back to a free voice so the example still runs.
 
 Files go to `<OMNIFRAME_OUTPUT_DIR>/projects/demo/`. Long jobs return a `job_id`; ask for `job_status` to check them.
 
@@ -174,8 +174,8 @@ Files go to `<OMNIFRAME_OUTPUT_DIR>/projects/demo/`. Long jobs return a `job_id`
 | Symptom | Cause and fix |
 |---|---|
 | `api_key_id_used_as_api_key` | You pasted a key ID. The ElevenLabs key starts with `sk_`. |
-| `argus-doctor` reports ffmpeg or Node missing | PATH did not update. Open a new terminal. |
+| `omniframe-doctor` reports ffmpeg or Node missing | PATH did not update. Open a new terminal. |
 | New tools are not in the chat | The MCP server was not reloaded after the config change. |
-| Render says the engine is installing or not installed (uvx or Kiro Power) | The background install is still running or failed. The `doctor` tool shows the step, and `~/.argus/engine-setup.log` has the output. |
+| Render says the engine is installing or not installed (uvx or Kiro Power) | The background install is still running or failed. The `doctor` tool shows the step, and `~/.omniframe/engine-setup.log` has the output. |
 | Tool call timed out | Not an error in most cases. Long work runs in the background; check `job_status`. |
 | Render does not match what you wanted | Check the stills first and say what is wrong before the final render. |

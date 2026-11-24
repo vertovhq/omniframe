@@ -15,10 +15,10 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs, project, server  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.media_out import Image  # noqa: E402
-from argus.tools import watch  # noqa: E402
+from omniframe import jobs, project, server  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.media_out import Image  # noqa: E402
+from omniframe.tools import watch  # noqa: E402
 
 FPS = 30
 SEG_S = 1.2
@@ -209,7 +209,7 @@ def test_cache_hit_on_second_call_through_the_job(five_segments: Path) -> None:
     one, two = _text(first), _text(second)
     assert one["cache_hit"] is False and two["cache_hit"] is True
     assert one["shots"] == two["shots"] and one["sound_events"] == two["sound_events"]
-    assert one["engine"].startswith("ARGUS ")
+    assert one["engine"].startswith("OmniFrame ")
 
     # the job result carries the contact sheet as image content, at the sheet's own size
     assert len(first) == 2 and isinstance(first[1], Image)

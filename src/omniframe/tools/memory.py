@@ -12,7 +12,7 @@ from pathlib import Path
 from ..config import CONFIG
 from .. import __version__
 
-HEADER = "# ARGUS — user preferences\n"
+HEADER = "# OmniFrame — user preferences\n"
 
 
 def learn_and_record_memory(
@@ -23,7 +23,7 @@ def learn_and_record_memory(
 ) -> dict:
     """Append one lasting user preference or correction to the knowledge base file.
 
-    A new file starts with the header `# ARGUS — user preferences`.
+    A new file starts with the header `# OmniFrame — user preferences`.
     """
     path = Path(knowledge_base_path) if knowledge_base_path else CONFIG.knowledge_base
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -40,4 +40,4 @@ def learn_and_record_memory(
             fh.write(HEADER)
         fh.write(entry)
 
-    return {"engine": f"ARGUS {__version__}", "recorded": str(path), "lesson": lesson_title.strip()}
+    return {"engine": f"OmniFrame {__version__}", "recorded": str(path), "lesson": lesson_title.strip()}

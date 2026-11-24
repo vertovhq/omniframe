@@ -20,10 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_export import _master  # noqa: E402  (synthetic final that passes QA)
 
-from argus import jobs, project, server  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.media_out import Image  # noqa: E402
-from argus.tools import components, export, library, memory, qa, studio  # noqa: E402
+from omniframe import jobs, project, server  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.media_out import Image  # noqa: E402
+from omniframe.tools import components, export, library, memory, qa, studio  # noqa: E402
 
 TEXTS = {"tiktok": {"caption": "Yacht day", "hashtags": ["yacht"]}}
 ART = "import {useStyle} from '../style';\nimport Dot from './Dot';\nexport default function Art() { useStyle(); return <Dot />; }\n"
@@ -403,7 +403,7 @@ def test_studio_guide_lists_entries_and_returns_their_posters_as_images(out_dir:
     assert [p["entry"] for p in posters] == ["plain-card", "yacht-scenes"]  # newest first, entries without a poster skipped
     images = result[1:]
     assert len(images) == 2 and all(isinstance(item, Image) for item in images)
-    assert data["guide"].startswith("# ARGUS Studio Guide") and "preferences" in data
+    assert data["guide"].startswith("# OmniFrame Studio Guide") and "preferences" in data
     assert not list(lib.glob("*/*.view.jpg"))
     with PILImage.open(posters[0]["path"]) as picture:
         assert max(picture.size) <= library.POSTER_SIDE
@@ -427,7 +427,7 @@ def test_studio_guide_returns_at_most_eight_posters(out_dir: Path) -> None:
 def _scan(root: Path, library_root: Path, name: str = "Uses") -> list[str]:
     plan = {"version": 2, "format": "9:16", "duration": 3, "style": "dark",
             "scenes": [{"kind": "custom", "at": 0, "until": 3, "component": name}]}
-    from argus.plan import validate_plan
+    from omniframe.plan import validate_plan
 
     parsed, errors = validate_plan(plan)
     assert parsed is not None, errors

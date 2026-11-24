@@ -1,6 +1,6 @@
 """`render_video`: stills, previews and final renders of a plan v2 (design §9).
 
-The model writes a plan (`argus.plan`), looks at stills, then at a half-size preview, then
+The model writes a plan (`omniframe.plan`), looks at stills, then at a half-size preview, then
 renders the final file. The engine is the Remotion project in `engine/`; the node side is
 `engine/scripts/render.mjs` (bundle, or reuse the bundle of the same engine state from
 `<project>/cache/bundle/`, then stills or one video file). Each result has `timing` in seconds.
@@ -128,7 +128,7 @@ COMPARE_LABEL_H = 44
 COMPARE_GAP = 8
 
 CLIP_END_SLACK_S = 0.1         # container durations are rounded; `out` may exceed the file by this much
-PROTOCOL = "@@ARGUS "          # prefix of the stdout lines of engine/scripts/render.mjs
+PROTOCOL = "@@OMNIFRAME "          # prefix of the stdout lines of engine/scripts/render.mjs
 DEFAULT_SFX = ("whoosh.mp3", "pop.mp3", "hit.wav")
 MEDIA_DIR = "m"                # inside the public dir; plan files are linked here
 PUBLIC_INDEX = "public-index.json"  # <project>/cache/: public name under m/ -> source file (see _PublicDir)
@@ -140,9 +140,9 @@ _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 def _ensure_default_sfx() -> Path:
     """Synthesize the default whoosh/pop/hit set once into engine/public/sfx.
 
-    Users can drop premium sounds with the same names into ARGUS_SFX_DIR.
+    Users can drop premium sounds with the same names into OMNIFRAME_SFX_DIR.
     """
-    user_dir = os.environ.get("ARGUS_SFX_DIR", "").strip()
+    user_dir = os.environ.get("OMNIFRAME_SFX_DIR", "").strip()
     if user_dir:
         user = Path(user_dir).expanduser()
         if all((user / n).exists() for n in DEFAULT_SFX):
@@ -183,7 +183,7 @@ def _ensure_default_sfx() -> Path:
 
 
 def engine_dir() -> Path:
-    """The Remotion engine folder: `ARGUS_ENGINE_DIR`, the repository `engine/`, or `~/.argus/engine`."""
+    """The Remotion engine folder: `OMNIFRAME_ENGINE_DIR`, the repository `engine/`, or `~/.omniframe/engine`."""
     return resolve_engine_dir()
 
 
@@ -834,7 +834,7 @@ def _engine_props(
 def _concurrency() -> int:
     # Default: half the CPU threads. Measured on the 4-thread author PC (10 s slice, frames + encode):
     # 2 workers 41 s and 51 s, 3 workers 48 s and 55 s, 4 workers 50 s. No gain above 2, so the
-    # default stays; ARGUS_RENDER_CONCURRENCY still overrides it.
+    # default stays; OMNIFRAME_RENDER_CONCURRENCY still overrides it.
     return CONFIG.render_concurrency or max(1, (os.cpu_count() or 2) // 2)
 
 
@@ -925,7 +925,7 @@ def bundle_key(public_root: Path) -> str:
     Props are not part of the bundle, so a new plan with the same engine state reuses it.
     """
     engine = engine_dir()
-    digest = hashlib.sha256(f"argus {__version__}\n".encode("utf-8"))
+    digest = hashlib.sha256(f"omniframe {__version__}\n".encode("utf-8"))
     for path in sorted((engine / "src").rglob("*")):
         if path.is_file():
             digest.update(path.relative_to(engine).as_posix().encode("utf-8") + b"\0" + path.read_bytes() + b"\0")
@@ -1134,14 +1134,14 @@ def _loudnorm_pass1(path: Path, target: float) -> dict | None:
 
 
 def finalize_video(raw: Path, out: Path) -> dict:
-    """Loudness-normalise the audio (two-pass `loudnorm`), add faststart and the ARGUS tag.
+    """Loudness-normalise the audio (two-pass `loudnorm`), add faststart and the OmniFrame tag.
 
     The video stream is copied. A file without audio, or with silent audio, is only tagged.
     Returns `{"loudness_target", "loudness_before", "loudness_after", "note"?}`.
     """
     target = CONFIG.loudness_target
     info = stream_info(raw)
-    tag = ["-metadata", f"comment=Made with ARGUS Studio v{__version__}", "-movflags", "+faststart"]
+    tag = ["-metadata", f"comment=Made with OmniFrame Studio v{__version__}", "-movflags", "+faststart"]
     measured = _loudnorm_pass1(raw, target) if info.has_audio else None
     staged = temp_sibling(out, ".final.mp4")
     result: dict[str, Any] = {"loudness_target": target}
@@ -1265,7 +1265,7 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     if public.missing:  # stills only (task 20.10 item 5c): every missing file at once, nothing is drawn
         shutil.rmtree(work, ignore_errors=True)
         return {
-            "engine": f"ARGUS {__version__}",
+            "engine": f"OmniFrame {__version__}",
             "valid": False,
             "mode": mode,
             "missing_media": public.missing,
@@ -1451,8 +1451,8 @@ def run_job(payload: dict, report: Callable[..., None]) -> dict:
     result["elapsed_s"] = round(time.monotonic() - started, 1)
     timing["total_s"] = round(time.monotonic() - started, 3)
     result["timing"] = timing
-    # ARGUS time per stage only (model time is outside ARGUS); the worker sends stderr to the job's log.txt.
-    print("ARGUS stage times: " + ", ".join(f"{k} {v}" for k, v in timing.items()), file=sys.stderr, flush=True)
+    # OmniFrame time per stage only (model time is outside OmniFrame); the worker sends stderr to the job's log.txt.
+    print("OmniFrame stage times: " + ", ".join(f"{k} {v}" for k, v in timing.items()), file=sys.stderr, flush=True)
     return result
 
 
@@ -1504,14 +1504,14 @@ def render_video(
     if chained and mode != "final":
         bad_steps.append("then: applies to mode \"final\" only")
     if bad_steps:
-        return {"engine": f"ARGUS {__version__}", "valid": False, "errors": bad_steps,
+        return {"engine": f"OmniFrame {__version__}", "valid": False, "errors": bad_steps,
                 "note": "nothing was rendered; fix the listed problems and call again"}
     payload, errors = prepare_render(
         plan, root, mode=mode, times=times, compare=compare, format=format, name=name, save_sounds=save_sounds,
     )
     if payload is None:
         return {
-            "engine": f"ARGUS {__version__}",
+            "engine": f"OmniFrame {__version__}",
             "valid": False,
             "errors": errors,
             "note": "nothing was rendered; fix the listed problems and call again",

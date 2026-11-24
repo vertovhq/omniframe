@@ -4,8 +4,8 @@
 //   node engine/scripts/render.mjs <spec.json>
 //
 // Bundles the engine once, then renders either stills (one file per time) or one video file.
-// The Python side (src/argus/tools/render.py) writes the spec and reads our stdout:
-// every protocol line starts with "@@ARGUS " followed by a JSON object, anything else is
+// The Python side (src/omniframe/tools/render.py) writes the spec and reads our stdout:
+// every protocol line starts with "@@OMNIFRAME " followed by a JSON object, anything else is
 // log noise from webpack/Chromium that Python keeps only for error messages.
 //
 //   {"event": "progress", "value": 0..1, "note": "..."}   progress of the whole script
@@ -38,7 +38,7 @@ const FRAME_TIMEOUT_MS = 120_000;
 // Share of the whole progress bar per stage.
 const BUNDLE_SHARE = 0.25;
 
-const emit = (obj) => process.stdout.write(`@@ARGUS ${JSON.stringify(obj)}\n`);
+const emit = (obj) => process.stdout.write(`@@OMNIFRAME ${JSON.stringify(obj)}\n`);
 const progress = (value, note) => emit({event: 'progress', value: Math.max(0, Math.min(1, value)), note});
 // Seconds with milliseconds, from a monotonic clock.
 const now = () => performance.now() / 1000;

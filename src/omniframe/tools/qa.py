@@ -417,7 +417,7 @@ def _result(
     hard = [f.entry() for f in checks.findings if f.severity == "hard"]
     warnings = [f.entry() for f in checks.findings if f.severity == "warning"]
     out = {
-        "engine": f"ARGUS {__version__}",
+        "engine": f"OmniFrame {__version__}",
         "source": str(src),
         "format": fmt,
         "passed": not hard,
@@ -491,7 +491,7 @@ def verify_video(
 
 
 def run_job(payload: dict, report: Callable[..., None]) -> dict:
-    """Worker side of `qa_verify_video` (called by `argus.jobs` for kind `qa`)."""
+    """Worker side of `qa_verify_video` (called by `omniframe.jobs` for kind `qa`)."""
     return verify_video(
         payload["path"],
         format=payload.get("format"),

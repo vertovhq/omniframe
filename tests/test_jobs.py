@@ -15,8 +15,8 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs  # noqa: E402
-from argus.media_out import Image  # noqa: E402
+from omniframe import jobs  # noqa: E402
+from omniframe.media_out import Image  # noqa: E402
 
 WAIT = 60  # generous: a worker is a fresh Python process
 
@@ -68,7 +68,7 @@ def _plant_job(kind: str, state: str, pid: int | None, *, created: float | None 
 def test_inline_result_when_job_finishes_in_time() -> None:
     out = jobs.run_or_detach("selftest", {"result": {"answer": 42}}, key="inline", wait_s=WAIT)
     assert out["answer"] == 42
-    assert out["engine"].startswith("ARGUS ")
+    assert out["engine"].startswith("OmniFrame ")
     assert "job_id" not in out
 
 

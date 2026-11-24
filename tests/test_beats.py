@@ -12,8 +12,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus.config import CONFIG  # noqa: E402
-from argus.tools import beats  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.tools import beats  # noqa: E402
 
 
 def _click_track(path: Path, bpm: float, seconds: float = 8.0) -> None:

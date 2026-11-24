@@ -13,7 +13,7 @@ can be added with `register_provider` without changing a tool signature:
 Pipeline: split long text on paragraph boundaries -> one provider call per chunk ->
 decode every chunk to 48 kHz wav -> concatenate -> offset word timings by the exact chunk
 durations -> master (60 Hz highpass, 110 Hz body EQ, 3.2 kHz presence EQ, compressor,
-loudnorm) -> mp3. Anything that can take longer than ~20 s runs through `argus.jobs`.
+loudnorm) -> mp3. Anything that can take longer than ~20 s runs through `omniframe.jobs`.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ from . import model_catalog, watch
 #                                 GET /v1/shared-voices
 #   Library voices need no "add" step: "You can use voices from the Voice Library directly without
 #   saving them to My Voices" (https://elevenlabs.io/docs/product/guides/voices); the same page warns
-#   that Voice Library voices are not available via the API to free tier users. So ARGUS never adds
+#   that Voice Library voices are not available via the API to free tier users. So OmniFrame never adds
 #   voices to the account; it reports a plain-language error instead.
 ELEVEN_HOST = "https://api.elevenlabs.io"
 ELEVEN_OUTPUT_FORMAT = "mp3_44100_128"  # allowed on every plan; 192 kbps needs Creator+ (same page as above)
@@ -159,7 +159,7 @@ _noop: Callable[..., None] = lambda *args, **kwargs: None  # noqa: E731
 
 
 def mastering_chain(loudness_target: float) -> str:
-    """The fixed ARGUS radio-master ffmpeg filter chain."""
+    """The fixed OmniFrame radio-master ffmpeg filter chain."""
     return ",".join([
         "highpass=f=60",
         "equalizer=f=110:t=q:w=1:g=2",
@@ -446,14 +446,14 @@ def _eleven_tts_models(errors: dict[str, str]) -> list[dict]:
 
 
 def eleven_model_id() -> str:
-    """The ElevenLabs model for synthesis: ARGUS_ELEVEN_MODEL when set, else the newest text-to-speech model listed."""
+    """The ElevenLabs model for synthesis: OMNIFRAME_ELEVEN_MODEL when set, else the newest text-to-speech model listed."""
     if CONFIG.eleven_model:
         return CONFIG.eleven_model
     errors: dict[str, str] = {}
     found = _eleven_tts_models(errors)
     if not found:
         reason = errors.get("models", "the key lists no text-to-speech model")
-        raise RuntimeError(f"could not pick an ElevenLabs model ({reason}); set ARGUS_ELEVEN_MODEL in .env to a model id")
+        raise RuntimeError(f"could not pick an ElevenLabs model ({reason}); set OMNIFRAME_ELEVEN_MODEL in .env to a model id")
     return found[0]["id"]
 
 
@@ -478,7 +478,7 @@ def _eleven_all_voices() -> list[dict]:
 
 # Delivery vocabulary for Eleven v3/v4, from "Prompting Eleven v4" ("Audio tags", "Punctuation", "Pace") in
 # https://elevenlabs.io/docs/overview/capabilities/text-to-speech/best-practices
-# This is material for the model; ARGUS never picks or scores emotions itself.
+# This is material for the model; OmniFrame never picks or scores emotions itself.
 ELEVEN_VOICE_TAGS = (
     "[whispers]", "[sighs]", "[exhales]", "[laughs]", "[laughs harder]", "[starts laughing]", "[wheezing]",
     "[sarcastic]", "[curious]", "[excited]", "[crying]", "[snorts]", "[mischievously]",
@@ -658,7 +658,7 @@ class EdgeProvider:
         return _importable("edge_tts")
 
     def unavailable_hint(self) -> str:
-        return "edge-tts is not installed: pip install edge-tts (or pip install 'argus-studio[voice]')"
+        return "edge-tts is not installed: pip install edge-tts (or pip install 'omniframe[voice]')"
 
     def max_chars(self, model: str | None) -> int:
         return EDGE_CHAR_LIMIT
@@ -710,7 +710,7 @@ class GeminiProvider:
         return bool(CONFIG.gemini_api_key)
 
     def unavailable_hint(self) -> str:
-        return "no Gemini key: set ARGUS_GEMINI_API_KEY in .env (free key: https://aistudio.google.com/apikey)"
+        return "no Gemini key: set OMNIFRAME_GEMINI_API_KEY in .env (free key: https://aistudio.google.com/apikey)"
 
     def max_chars(self, model: str | None) -> int:
         return GEMINI_CHAR_LIMIT
@@ -774,8 +774,8 @@ for _provider in (ElevenLabsProvider(), GeminiProvider(), EdgeProvider()):
 
 
 def default_provider() -> str:
-    """`ARGUS_TTS_PROVIDER` if set; else ElevenLabs when its key is configured; else edge."""
-    chosen = os.environ.get("ARGUS_TTS_PROVIDER", "").strip().lower()
+    """`OMNIFRAME_TTS_PROVIDER` if set; else ElevenLabs when its key is configured; else edge."""
+    chosen = os.environ.get("OMNIFRAME_TTS_PROVIDER", "").strip().lower()
     if chosen:
         return chosen
     return "elevenlabs" if PROVIDERS["elevenlabs"].available() else "edge"
@@ -982,7 +982,7 @@ def synthesize_voiceover(
     resolve_provider(provider)  # fail early on an unknown or unavailable provider
     clash = None if overwrite else _voice_clash(project, slugify(name), text)
     if clash:
-        return {"engine": f"ARGUS {__version__}", "summary": clash, "error": clash}
+        return {"engine": f"OmniFrame {__version__}", "summary": clash, "error": clash}
     payload = {
         "text": text,
         "project": project,
@@ -1201,7 +1201,7 @@ def _eleven_tier(errors: dict[str, str]) -> str | None:
 
 
 def _model_options(errors: dict[str, str]) -> dict[str, list[dict]]:
-    """Models per provider the keys can use, newest first; `default` marks the id ARGUS uses without a choice."""
+    """Models per provider the keys can use, newest first; `default` marks the id OmniFrame uses without a choice."""
     options: dict[str, list[dict]] = {}
     if PROVIDERS["elevenlabs"].available():
         options["elevenlabs"] = _eleven_tts_models(errors)
@@ -1231,7 +1231,7 @@ def voice_options(
     `edge_voices`, `gemini_voices`: free defaults and Gemini names. Every list is capped at `limit`,
     and the whole answer at VOICE_RESPONSE_MAX_CHARS (the longest lists lose voices first).
     `models`: per provider, the text-to-speech models the keys can use,
-    newest first, with `id`, `name`, `use`, `default`. `default: true` is the model ARGUS uses when none is
+    newest first, with `id`, `name`, `use`, `default`. `default: true` is the model OmniFrame uses when none is
     given. A failed list is in `errors`. `details=True` adds `delivery` (audio tags and pacing rules), which
     leaves room for fewer voices.
     """
@@ -1292,7 +1292,7 @@ def voice_options(
         )
     models = _model_options(errors)
     result: dict = {
-        "engine": f"ARGUS {__version__}",
+        "engine": f"OmniFrame {__version__}",
         "default_provider": default_provider(),
         "provider_choice": provider_choice(),
         "providers": _provider_status(),

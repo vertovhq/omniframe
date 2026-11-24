@@ -1,7 +1,7 @@
 """Which Gemini models the key can use: Gemini text-to-speech (task 20.8).
 
-ARGUS does not type model ids into code. An id comes from the provider's own list, unless the
-user set one in `.env` (ARGUS_TTS_MODEL). ElevenLabs models are listed in
+OmniFrame does not type model ids into code. An id comes from the provider's own list, unless the
+user set one in `.env` (OMNIFRAME_TTS_MODEL). ElevenLabs models are listed in
 `voiceover.py`, next to the ElevenLabs HTTP helper. "Newest" means the highest version numbers in the id
 (gemini-3.8 > gemini-3.1 > gemini-2.5), because neither API returns a release date.
 """
@@ -38,7 +38,7 @@ def is_tts(model: dict) -> bool:
 def gemini_model_list() -> list[dict]:
     """Every model the Gemini key lists, as `[{id, name}]`. Raises RuntimeError with the reason."""
     if not CONFIG.gemini_api_key:
-        raise RuntimeError("no Gemini key: set ARGUS_GEMINI_API_KEY in .env (free key: https://aistudio.google.com/apikey)")
+        raise RuntimeError("no Gemini key: set OMNIFRAME_GEMINI_API_KEY in .env (free key: https://aistudio.google.com/apikey)")
     try:
         from google import genai
 
@@ -67,14 +67,14 @@ def _pick(configured: str, keep: Callable[[dict], bool], env_name: str, what: st
 
 
 def tts_model_id() -> str:
-    """The Gemini text-to-speech model: ARGUS_TTS_MODEL when set, else the newest TTS model listed."""
-    return _pick(CONFIG.tts_model, is_tts, "ARGUS_TTS_MODEL", "text-to-speech")
+    """The Gemini text-to-speech model: OMNIFRAME_TTS_MODEL when set, else the newest TTS model listed."""
+    return _pick(CONFIG.tts_model, is_tts, "OMNIFRAME_TTS_MODEL", "text-to-speech")
 
 
 def options(errors: dict[str, str]) -> list[dict]:
     """Gemini TTS models the key lists, newest first.
 
-    Each row is `{id, name, use, default}`; `default` marks the id ARGUS uses when the user picks none.
+    Each row is `{id, name, use, default}`; `default` marks the id OmniFrame uses when the user picks none.
     A failed list goes into `errors["gemini_models"]` and returns no rows.
     """
     try:

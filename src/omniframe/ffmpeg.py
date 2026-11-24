@@ -27,7 +27,7 @@ _CREATE_NO_WINDOW = 0x08000000  # documented Win32 value; subprocess exposes it 
 def no_window_flag(os_name: str = os.name) -> int:
     """`creationflags` for a child process: on Windows, no console window opens for it.
 
-    Every `subprocess.run` / `Popen` in ARGUS passes `NO_WINDOW`, so a render or a
+    Every `subprocess.run` / `Popen` in OmniFrame passes `NO_WINDOW`, so a render or a
     detached job does not flash console windows. Returns 0 on other systems, where
     Popen rejects a non-zero creationflags value.
     """
@@ -45,7 +45,7 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess[bytes]:
     except FileNotFoundError as exc:
         raise FFmpegError(
             f"'{cmd[0]}' not found. Install ffmpeg (https://ffmpeg.org) "
-            "or set ARGUS_FFMPEG/ARGUS_FFPROBE in .env."
+            "or set OMNIFRAME_FFMPEG/OMNIFRAME_FFPROBE in .env."
         ) from exc
     if proc.returncode != 0:
         tail = proc.stderr.decode("utf-8", "replace").strip().splitlines()[-6:]

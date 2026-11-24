@@ -44,7 +44,7 @@ const isDarkColor = (hex: string): boolean => {
 };
 
 // ---------------------------------------------------------------------------
-// Presets (mirror STYLE_PRESETS in src/argus/plan.py; the Python side expands
+// Presets (mirror STYLE_PRESETS in src/omniframe/plan.py; the Python side expands
 // presets before rendering, the engine needs them for v1 props and the Studio)
 // ---------------------------------------------------------------------------
 

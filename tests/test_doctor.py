@@ -17,8 +17,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import doctor  # noqa: E402
-from argus.config import ArgusConfig  # noqa: E402
+from omniframe import doctor  # noqa: E402
+from omniframe.config import OmniFrameConfig  # noqa: E402
 
 
 def _fake_exe(tmp_path: Path, name: str) -> str:
@@ -45,8 +45,8 @@ def _pin_which(monkeypatch, tmp_path: Path, missing: tuple[str, ...] = ()) -> No
     monkeypatch.setattr(doctor, "_which", fake_which)
 
 
-def _make_cfg(tmp_path: Path, *, key: str = "test-key", eleven: str = "el-key") -> ArgusConfig:
-    return ArgusConfig(
+def _make_cfg(tmp_path: Path, *, key: str = "test-key", eleven: str = "el-key") -> OmniFrameConfig:
+    return OmniFrameConfig(
         gemini_api_key=key,
         elevenlabs_api_key=eleven,
         output_dir=tmp_path / "out",
@@ -83,7 +83,7 @@ def _fake_engine(tmp_path: Path, monkeypatch, *, with_modules: bool = True, skip
         for name in doctor.ENGINE_PACKAGES:
             if name not in skip:
                 (eng / "node_modules" / name).mkdir(parents=True)
-    monkeypatch.setenv("ARGUS_ENGINE_DIR", str(eng))
+    monkeypatch.setenv("OMNIFRAME_ENGINE_DIR", str(eng))
     return eng
 
 
@@ -134,7 +134,7 @@ def test_output_dir_created_deep(tmp_path, monkeypatch):
     _mock_run_ok(monkeypatch)
     _pin_which(monkeypatch, tmp_path)
     _fake_engine(tmp_path, monkeypatch)
-    cfg = ArgusConfig(
+    cfg = OmniFrameConfig(
         gemini_api_key="k",
         output_dir=tmp_path / "a" / "b" / "out",
         ffmpeg=_fake_exe(tmp_path, "ffmpeg.exe"),
@@ -153,7 +153,7 @@ def test_ffmpeg_missing_fails_with_hint(tmp_path, monkeypatch):
     _mock_run_ok(monkeypatch)
     _pin_which(monkeypatch, tmp_path)
     _fake_engine(tmp_path, monkeypatch)
-    cfg = ArgusConfig(
+    cfg = OmniFrameConfig(
         gemini_api_key="k",
         output_dir=tmp_path / "out",
         ffmpeg="no-such-ffmpeg-anywhere",
@@ -255,7 +255,7 @@ def test_elevenlabs_key_optional(tmp_path, monkeypatch):
     key = next(c for c in with_key["checks"] if c["id"] == "elevenlabs_key")
     assert key["status"] == "ok"
 
-    cfg = ArgusConfig(
+    cfg = OmniFrameConfig(
         gemini_api_key="k",
         elevenlabs_api_key="",
         output_dir=tmp_path / "out",
@@ -312,14 +312,14 @@ def test_edge_probe_reports_last_error(tmp_path, monkeypatch):
 
 def test_main_json_exit_codes(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(doctor, "run_checks", lambda **kw: {
-        "argus": "test", "platform": "test", "live": False,
+        "omniframe": "test", "platform": "test", "live": False,
         "checks": [], "critical_failures": [], "ok": True,
     })
     assert doctor.main(["--json"]) == 0
     assert json.loads(capsys.readouterr().out)["ok"] is True
 
     monkeypatch.setattr(doctor, "run_checks", lambda **kw: {
-        "argus": "test", "platform": "test", "live": False,
+        "omniframe": "test", "platform": "test", "live": False,
         "checks": [{"id": "node", "label": "node", "status": "fail", "detail": "x", "hint": "y"}],
         "critical_failures": ["node"], "ok": False,
     })
@@ -329,7 +329,7 @@ def test_main_json_exit_codes(tmp_path, monkeypatch, capsys):
 # ------------------------------------------------------------- render browser
 
 def test_render_browser_found_is_ok(tmp_path, monkeypatch):
-    from argus.tools import render
+    from omniframe.tools import render
 
     browser = _fake_exe(tmp_path, "chrome.exe")
     monkeypatch.setattr(render, "_find_browser", lambda: browser)
@@ -338,7 +338,7 @@ def test_render_browser_found_is_ok(tmp_path, monkeypatch):
 
 
 def test_render_browser_missing_says_remotion_downloads(tmp_path, monkeypatch):
-    from argus.tools import render
+    from omniframe.tools import render
 
     monkeypatch.setattr(render, "_find_browser", lambda: None)
     check = doctor.check_render_browser()

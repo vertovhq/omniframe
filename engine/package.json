@@ -1,8 +1,8 @@
 {
-  "name": "argus-kinetic-engine",
+  "name": "omniframe-kinetic-engine",
   "version": "0.1.0",
   "private": true,
-  "description": "ARGUS vertical kinetic-video engine (Remotion, JSON-driven, 1080x1920@30)",
+  "description": "OmniFrame vertical kinetic-video engine (Remotion, JSON-driven, 1080x1920@30)",
   "scripts": {
     "studio": "remotion studio src/index.ts"
   },

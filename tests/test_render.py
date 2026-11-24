@@ -19,11 +19,11 @@ from PIL import Image as PILImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus import jobs, project  # noqa: E402
-from argus.config import CONFIG  # noqa: E402
-from argus.ffmpeg import probe, stream_info  # noqa: E402
-from argus.media_out import Image  # noqa: E402
-from argus.tools import qa, render  # noqa: E402
+from omniframe import jobs, project  # noqa: E402
+from omniframe.config import CONFIG  # noqa: E402
+from omniframe.ffmpeg import probe, stream_info  # noqa: E402
+from omniframe.media_out import Image  # noqa: E402
+from omniframe.tools import qa, render  # noqa: E402
 
 ENGINE = Path(__file__).resolve().parents[1] / "engine"
 needs_engine = pytest.mark.skipif(
@@ -72,7 +72,7 @@ def _reference_video(path: Path, seconds: float = 4.0) -> Path:
 def _plan(**extra) -> dict:
     return {
         "version": 2, "format": "9:16", "duration": 3, "style": "dark",
-        "scenes": [{"kind": "big", "at": 0, "text": "ARGUS"}], **extra,
+        "scenes": [{"kind": "big", "at": 0, "text": "OmniFrame"}], **extra,
     }
 
 
@@ -310,7 +310,7 @@ def test_finalize_normalises_loudness_tags_and_keeps_the_video(tmp_path: Path) -
     assert info["loudness_before"] < -25
     assert abs(info["loudness_after"] - CONFIG.loudness_target) <= 1.0, info
     meta = probe(out)
-    assert meta["format"]["tags"]["comment"].startswith("Made with ARGUS Studio v")
+    assert meta["format"]["tags"]["comment"].startswith("Made with OmniFrame Studio v")
     vids = [s for s in meta["streams"] if s["codec_type"] == "video"]
     assert vids[0]["codec_name"] == "h264" and (vids[0]["width"], vids[0]["height"]) == (180, 320)
     # faststart: the moov box comes before the media data
@@ -341,7 +341,7 @@ def test_finalize_without_audio_only_tags(tmp_path: Path) -> None:
 # ------------------------------------------------------------------ server wiring
 
 def test_server_registers_render_video() -> None:
-    from argus import server
+    from omniframe import server
 
     assert "render_video" in server._registered_tool_names()
 
@@ -356,13 +356,13 @@ REGISTERED_TOOLS = {
 
 def test_server_registers_exactly_the_v2_tools() -> None:
     """A tool that is added or removed shows up here; the v1 tools are gone."""
-    from argus import server
+    from omniframe import server
 
     assert set(server._registered_tool_names()) == REGISTERED_TOOLS
 
 
 def test_startup_banner_counts_the_registered_tools() -> None:
-    from argus import server
+    from omniframe import server
 
     count = len(server._registered_tool_names())
     assert f"| {count} tools |" in server.startup_banner()
@@ -378,7 +378,7 @@ def _images(out) -> tuple[dict, list]:
 @needs_engine
 @pytest.mark.parametrize("fmt, size", [("9:16", (1080, 1920)), ("16:9", (1920, 1080))])
 def test_stills_in_both_formats_return_images(fmt: str, size: tuple[int, int]) -> None:
-    plan = _plan(format=fmt, captions={"words": [{"w": "ARGUS", "s": 0.2, "e": 0.9}], "mode": "word"})
+    plan = _plan(format=fmt, captions={"words": [{"w": "OmniFrame", "s": 0.2, "e": 0.9}], "mode": "word"})
     out = render.render_video(plan, "t", mode="stills", times=[0.4, 1.5], wait_s=WAIT)
     summary, images = _images(out)
     assert len(images) == 1, summary  # one contact sheet for the whole call
@@ -436,7 +436,7 @@ def test_final_render_of_three_seconds_passes_qa() -> None:
     assert (project.project_dir("t") / "plan.json").is_file()
     report = qa.verify_video(video)
     assert report["passed"], (report["hard_failures"], report["checks"])
-    assert probe(video)["format"]["tags"]["comment"].startswith("Made with ARGUS Studio")
+    assert probe(video)["format"]["tags"]["comment"].startswith("Made with OmniFrame Studio")
 
 
 @needs_engine

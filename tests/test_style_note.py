@@ -10,8 +10,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from argus.plan import builtin_preset, preset_tokens, validate_plan  # noqa: E402
-from argus.tools import render, studio  # noqa: E402
+from omniframe.plan import builtin_preset, preset_tokens, validate_plan  # noqa: E402
+from omniframe.tools import render, studio  # noqa: E402
 
 DARK_LINE = "style: engine defaults (dark, #7C5CFA, Inter)"
 LIGHT_LINE = "style: built-in preset light (#7C5CFA accent, Inter)"

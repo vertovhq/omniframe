@@ -466,7 +466,7 @@ class EngineHold:
         for i, n in enumerate(self.names):
             lines.append(f"import C{i} from './job/{Path(by_name[n].rel).stem}';")
             self._line_names[len(lines)] = n
-        lines += ["", "// Generated for one render by argus.tools.components; the committed file is an empty map."]
+        lines += ["", "// Generated for one render by omniframe.tools.components; the committed file is an empty map."]
         lines += ["// eslint-disable-next-line @typescript-eslint/no-explicit-any"]
         lines += ["export const registry: Record<string, ComponentType<any>> = {"]
         for i, n in enumerate(self.names):
