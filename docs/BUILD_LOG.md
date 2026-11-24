@@ -371,3 +371,10 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Kiro: steering rule for detached runs (output to files, read back) let the cancelled run be read afterwards.
 - Verified: `git grep -i "veo|flow_login|playwright" -- src tests kiro-power` empty; full pytest 531 passed in 866 s, exit 0.
 - Credits: <author fills>
+
+## Task 20.12 — argus-install: one command for Kiro, Cursor, Claude Code, VS Code, Antigravity (2026-11-24, Haiku 5.5 high; finished by Opus)
+- Built: `argus-install` (`src/argus/install.py`) writes only the `argus` entry into each installed IDE's MCP file, keeps an existing entry unless `--update`, backs up once, `--dry-run`, `--client`, `--remove`, `--trust` (Kiro autoApprove). The entry points at the venv's `argus-studio`. `install.ps1` / `install.sh` create `.venv` and call it last.
+- Bugs & fixes: `pip install -e .` hung for minutes → `force-include "engine"` copies a folder recursively and ignores .gitignore, so it pulled `engine/node_modules` (15,181 files) and `test-baseline` (156 MB) → only `src`, `scripts`, `public/fonts` and the package/tsconfig files are listed; install 13 s, wheel 1.5 MB with 71 engine files. The first entry used `uvx --from git+https://github.com/vertovhq/argus`, which cannot start while the repo is not public → local script first.
+- Kiro: none.
+- Verified: `test_install.py` + `test_tool_surface.py` 27 passed; `--dry-run` on this machine; real `--client antigravity` run kept the file unchanged; wheel contents listed. Full pytest not run.
+- Credits: <author fills>

@@ -66,13 +66,15 @@ N credits и занимает M min. Цифры появятся после де
 ```bash
 git clone https://github.com/vertovhq/argus.git
 cd argus
-python -m venv .venv
-# Windows (PowerShell): .venv\Scripts\Activate.ps1      macOS/Linux: source .venv/bin/activate
 bash install.sh     # Windows: powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-Скрипт установки ставит Python-пакет, голос edge-tts, Node-пакеты движка и создаёт `.env` из
-`.env.example`. Запускай его в активированном venv. Пошагово: [INSTALL.md](INSTALL.md).
+Скрипт установки создаёт `.venv`, ставит Python-пакет, голос edge-tts, Node-пакеты движка и создаёт
+`.env` из `.env.example`. В конце он запускает `argus-install`: тот добавляет ARGUS во все найденные
+AI IDE (Kiro, Cursor, Claude Code, VS Code с Copilot, Antigravity), JSON руками не нужен. Меняется
+только запись `argus`; уже существующая остаётся (`--update` заменяет её), перед первой правкой
+пишется `<файл>.argus-backup`. Посмотреть без изменений: `argus-install --dry-run`. Только одна IDE:
+`argus-install --client cursor`. Пошагово и другие MCP-клиенты: [INSTALL.md](INSTALL.md).
 
 ### Без клонирования: uvx или Kiro Power
 

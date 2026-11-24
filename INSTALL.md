@@ -36,31 +36,33 @@ ffmpeg on Windows: download a build from https://www.gyan.dev/ffmpeg/builds/ (th
 zip), unpack it to `C:\ffmpeg`, and add `C:\ffmpeg\bin` to PATH. Open a new terminal afterwards so
 PATH applies.
 
-## 2. Get the code and create a virtual environment
+## 2. Get the code
 
 ```powershell
 git clone https://github.com/vertovhq/argus.git
 cd argus
-python -m venv .venv
-.venv\Scripts\Activate.ps1          # macOS/Linux: source .venv/bin/activate
 ```
 
 ## 3. Install
 
-With the venv activated, from the repository folder:
+From the repository folder:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1     # macOS/Linux: bash install.sh
 ```
 
-The script does three things:
+The script does five things:
 
+0. Creates the virtual environment `.venv` if there is none.
 1. `pip install -e ".[dev,pretty,voice]"`: the ARGUS package, tests, `rich` output and the free
    edge-tts voice.
 2. `npm install` in `engine/`: the Remotion engine.
 3. Copies `.env.example` to `.env` if there is no `.env` yet.
+4. Runs `argus-install`: adds ARGUS to each AI IDE it finds (Kiro, Cursor, Claude Code,
+   VS Code with Copilot, Antigravity). See step 5.
 
-If you prefer manual steps, run the same commands yourself:
+If you prefer manual steps, create and activate the venv (`python -m venv .venv`, then
+`.venv\Scripts\Activate.ps1` or `source .venv/bin/activate`) and run the same commands yourself:
 
 ```powershell
 pip install -e ".[dev,pretty,voice]"
@@ -88,7 +90,31 @@ Other settings are documented in `.env.example`. `OMNIFRAME_OUTPUT_DIR` sets whe
 
 ## 5. Connect your MCP client
 
-Kiro: create or edit `.kiro/settings/mcp.json` in the workspace (or `~/.kiro/settings/mcp.json` for
+`install.ps1` / `install.sh` already ran `argus-install`. Run it again any time:
+
+```powershell
+.venv\Scripts\argus-install --dry-run          # what it would change, writes nothing
+.venv\Scripts\argus-install --client cursor    # one IDE only (kiro, cursor, claude, vscode, antigravity)
+.venv\Scripts\argus-install --update           # replace an existing argus entry
+.venv\Scripts\argus-install --remove           # take ARGUS out again
+```
+
+It finds the installed IDEs and writes only the `argus` entry, pointing at `.venv`'s `argus-studio`.
+Other servers and fields stay as they are. An existing `argus` entry is kept unless you pass
+`--update`. Before the first change it saves `<file>.argus-backup`. Config files it writes:
+
+| IDE | File |
+|---|---|
+| Kiro | `~/.kiro/settings/mcp.json` |
+| Cursor | `~/.cursor/mcp.json` |
+| Claude Code | `~/.claude.json` |
+| VS Code (Copilot) | `~/.copilot/mcp-config.json` (or `$COPILOT_HOME`) |
+| Antigravity | `~/.gemini/config/mcp_config.json` |
+
+For Kiro, `--trust` also adds `"autoApprove": ["*"]`. Restart the IDE (in Kiro: reload `argus` in
+the MCP Server view) after a change.
+
+Manual setup, for any other MCP client or a workspace-level file. Kiro: create or edit `.kiro/settings/mcp.json` in the workspace (or `~/.kiro/settings/mcp.json` for
 every workspace):
 
 ```json

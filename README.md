@@ -67,13 +67,15 @@ and Linux.
 ```bash
 git clone https://github.com/vertovhq/argus.git
 cd argus
-python -m venv .venv
-# Windows (PowerShell): .venv\Scripts\Activate.ps1      macOS/Linux: source .venv/bin/activate
 bash install.sh     # Windows: powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-The install script installs the Python package, the edge-tts voice, the Node packages of the engine
-and a `.env` copy of `.env.example`. Run it inside the activated venv. Step by step: [INSTALL.md](INSTALL.md).
+The install script creates `.venv`, installs the Python package, the edge-tts voice, the Node packages
+of the engine and a `.env` copy of `.env.example`. At the end it runs `argus-install`, which adds ARGUS
+to every AI IDE it finds: Kiro, Cursor, Claude Code, VS Code (Copilot) and Antigravity. No JSON by hand.
+It changes only the `argus` entry, keeps an existing one (`--update` replaces it) and writes
+`<file>.argus-backup` before the first change. See first: `argus-install --dry-run`. One IDE only:
+`argus-install --client cursor`. Step by step and other MCP clients: [INSTALL.md](INSTALL.md).
 
 ### Without cloning: uvx or Kiro Power
 
