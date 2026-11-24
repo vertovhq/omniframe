@@ -36,8 +36,10 @@ a film is a folder of HTML pages, and it has its own desktop editor. OmniFrame i
 MCP client can drive it, Kiro included. It starts from a reference video and makes a continuation
 of it. It also edits your own recording, then checks the result (frame size, loudness, true peak,
 black gaps, audio length) and exports the upload package. Its sound effects are synthesized in code
-(whoosh, pop, hit) and can be mixed with CC0 sounds from Freesound. One finished 9:16 video costs
-N credits and takes M min. These numbers will be filled in after the demo.
+(whoosh, pop, hit) and can be mixed with CC0 sounds from Freesound. Measured in Kiro
+(the chat footer "Est. Credits Used / Elapsed time"): the first 15-second 9:16 video of a series took
+17 credits and 13 min on Sonnet; the next one in the series reused its own elements from the style
+library and took 2.03 credits and 12 min on Haiku.
 
 ## Quickstart without keys
 
@@ -174,7 +176,7 @@ The working order for every plan: `synthesize_voiceover` when the video has a vo
 
 ## Coming soon
 
-AI video clips through Google Flow (Veo) are coming in the next update. The current code is on branch `veo-wip`.
+AI video clips through Google Flow (Veo) are coming in the next update.
 
 ## Honest notes
 
@@ -231,4 +233,4 @@ Remotion (its own license).
 Copyright (C) 2026 vertovhq
 
 OmniFrame is free and open source under the [AGPL-3.0-or-later](LICENSE). Made by VertovHQ.
-Commercial licensing: contact VertovHQ.
+Commercial licensing: vertovhq@gmail.com.

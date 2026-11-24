@@ -1,11 +1,8 @@
 {
   "mcpServers": {
-    "argus": {
+    "omniframe": {
       "command": ".venv/Scripts/python.exe",
-      "args": [
-        "-m",
-        "argus"
-      ],
+      "args": ["-m", "omniframe"],
       "disabled": false
     }
   }
