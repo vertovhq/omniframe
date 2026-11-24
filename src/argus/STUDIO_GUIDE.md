@@ -13,6 +13,8 @@ gave no reference, propose 2 or 3 looks in one message, recommend one, and ask t
 Order: plan, then stills sheet, then fixes, then preview, then final once.
 Show the subject. A video about a thing shows that thing on screen in most scenes: the user's footage, a clip, or a figure you draw in plain React/SVG in the chosen look. Text-only scenes are for the hook and the captions, not the whole video.
 
+If every scene only places library entries with new text, props and timing and you wrote no new drawing code, skip the stills round and render the preview.
+
 Reuse first. The `library` block of studio_guide lists the style library before you write code: one line per entry (name, what, fits when, versions, times used). If the library has an element that fits, import it and change only props, text and timing. Write a new one only when the user asks for something different, the reference shows a different look, or no entry fits. An entry is the user's own past work, never a built-in look.
 
 Transitions, bursts, shake, flashes and HUD: set them by kit name in the plan instead of writing your own code.

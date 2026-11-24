@@ -378,3 +378,10 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Kiro: none.
 - Verified: `test_install.py` + `test_tool_surface.py` 27 passed; `--dry-run` on this machine; real `--client antigravity` run kept the file unchanged; wheel contents listed. Full pytest not run.
 - Credits: <author fills>
+
+## Task 20.13 — skip the stills round when nothing new is drawn (2026-11-24, Haiku 5.5 high; commit by Opus)
+- Built: one guide core line: if every scene only places library entries with new text, props and timing and no new drawing code was written, skip the stills round and render the preview. No code decides it.
+- Bugs & fixes: the Haiku chat was cancelled after the green run → Opus read the result and committed.
+- Kiro: none.
+- Verified: full pytest 554 passed in 638 s, exit 0, including the guide core length test (after 20.12, so it covers the installer too). The author's series video on Haiku is not run yet.
+- Credits: <author fills>
