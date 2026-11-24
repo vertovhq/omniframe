@@ -46,8 +46,11 @@ import YachtBoat from './library/yacht-scenes/Boat';
 
 The entry's files keep their own imports (`../style`, `../kit`, `./Sibling`), so they work as saved.
 Only the files that are imported (and what they import) are copied into the render, under
-`custom/job/library/<entry>/`. Entry files follow the same contract as project components; they may
-not import other library entries. An entry name is lowercase letters, digits and `-`; `style` and
+`custom/job/library/<entry>/`. Entry files follow the same contract as project components. An entry
+that was saved from a component importing other entries lists them under `Uses` in its `card.md`
+(with the version each had); its files import them as `../<entry>/<File>`, and a render copies
+those files at the pinned version. One level only: such an entry cannot be used by another
+composed entry. An entry name is lowercase letters, digits and `-`; `style` and
 `kit` are reserved. The registry names only project components: a plan scene still points at a file in
 `<project>/components/`, which may be a thin wrapper around a library component.
 

@@ -22,6 +22,13 @@ imports the entry.
 Using an entry: a project component imports one of its files as
 `import Boat from './library/<entry>/<File>'` (`tools/components.py` copies the files a render
 needs). Whether an entry fits a new reference is the model's call; nothing here scores it.
+
+Composed entries: a component that imports other entries can be saved too. Its card lists them
+under `Uses` with the version each one had at save time (`**Uses:** neon-octopus v1, neon-bg v1`), and
+the saved file imports them as `../<entry>/<File>`. Only the saved component's own files are kept
+in the entry. Importing a composed entry copies the used files at the pinned versions, so an
+older version stays usable after a newer one is saved. One level only: an entry that uses other
+entries cannot be used by another entry or by a saved component.
 """
 
 from __future__ import annotations
@@ -40,7 +47,7 @@ from PIL import Image as PILImage
 
 from ..ffmpeg import run_ffmpeg, temp_sibling
 from ..project import slugify
-from .components import COMPONENTS_DIR, LIBRARY_DIR, NAME_RE, collect_files
+from .components import COMPONENTS_DIR, LIBRARY_DIR, NAME_RE, SourceFile, collect_files, scan_source
 
 CARD = "card.md"
 POSTER = "poster.jpg"
@@ -67,12 +74,18 @@ _CARD_FIELDS = {
     "Props": "props",
     "Source project": "source",
     "Files": "files",
+    "Uses": "uses",
     "Saved": "saved",
     "Version": "version",
     "Times used": "times_used",
 }
 _CARD_LINE = re.compile(r"^\*\*(?P<label>[^*:]+):\*\*[ \t]*(?P<value>.*)$", re.M)
 _HISTORY_LINE = re.compile(r"^- v(?P<version>\d+) \((?P<when>[^,]*), from (?P<source>[^)]*)\): (?P<what>.*)$", re.M)
+_USE_ITEM = re.compile(r"(?P<entry>[a-z0-9][a-z0-9-]*) v(?P<version>\d+)")
+# `from './library/<entry>/<File>'` in a project component, and the same import as a saved entry keeps it.
+_LIBRARY_IMPORT_TEXT = re.compile(
+    r"""(?P<q>['"])\./library/(?P<entry>[a-z0-9][a-z0-9-]*)/(?P<file>[A-Za-z][A-Za-z0-9_]*)(?P=q)"""
+)
 
 
 # ------------------------------------------------------------------ paths
@@ -93,9 +106,17 @@ def _one_line(text: str) -> str:
     return " ".join(str(text).split())
 
 
+def _uses_text(uses: list[dict[str, Any]]) -> str:
+    return ", ".join(f"{use['entry']} v{use['version']}" for use in uses)
+
+
 def card_text(entry: str, fields: dict[str, Any]) -> str:
-    """The text of `card.md` for an entry. `history` lists the versions; the newest is the current files."""
+    """The text of `card.md` for an entry. `history` lists the versions; the newest is the current files.
+
+    `uses` lists the other entries whose files the entry imports, each at the version it pins.
+    """
     files: list[str] = fields.get("files") or []
+    uses: list[dict[str, Any]] = fields.get("uses") or []
     first = Path(files[0]).stem if files else entry
     history = fields.get("history") or [
         {"version": 1, "when": fields.get("saved", ""), "source": fields.get("source", ""), "what": FIRST_SAVE}
@@ -108,6 +129,7 @@ def card_text(entry: str, fields: dict[str, Any]) -> str:
         f"**Props:** {_one_line(fields.get('props') or '(none given)')}",
         f"**Source project:** {fields.get('source', '')}",
         f"**Files:** {', '.join(files)}",
+        *([f"**Uses:** {_uses_text(uses)}"] if uses else []),
         f"**Version:** {fields.get('version', 1)}",
         f"**Times used:** {fields.get('times_used', 0)}",
         f"**Saved:** {fields.get('saved', '')}",
@@ -141,6 +163,11 @@ def read_card(folder: Path) -> dict[str, Any] | None:
         if key:
             fields[key] = match["value"].strip()
     fields["files"] = [f.strip() for f in str(fields.get("files", "")).split(",") if f.strip()]
+    fields["uses"] = [
+        {"entry": m["entry"], "version": int(m["version"])}
+        for m in (_USE_ITEM.fullmatch(part.strip()) for part in str(fields.get("uses", "")).split(","))
+        if m is not None
+    ]
     fields["version"] = _number(fields.get("version"), 1)
     fields["times_used"] = _number(fields.get("times_used"), 0)
     fields["history"] = [
@@ -230,9 +257,11 @@ def validate_save(
     """Check a `save_to_library` request: one item, or a list of items (at most `MAX_SAVES`).
 
     Returns `(clean items, [])` or `(None, errors)`. Writes nothing. Each clean item has `entry`,
-    `components` (the names asked for), `files` (those plus every file they import, as file names in
-    `<project>/components/`), `what`, `fits_when`, `props`, `changed`, `poster_time`, `exists` (the
-    entry is already in the library, so this save makes a new version) and `source` (the project name).
+    `components` (the names asked for), `files` (the project files they need, the components and the
+    project files they import, as file names in
+    `<project>/components/`), `uses` (the entries the components import, at their current versions),
+    `what`, `fits_when`, `props`, `changed`, `poster_time`, `exists` (the entry is already in the
+    library, so this save makes a new version) and `source` (the project name).
     """
     if isinstance(spec, list):
         if not spec or len(spec) > MAX_SAVES:
@@ -320,6 +349,7 @@ def _validate_one(
 
     names = spec.get("components")
     files: list[str] = []
+    uses: list[dict[str, Any]] = []
     if not isinstance(names, list) or not names or not all(isinstance(n, str) for n in names):
         errors.append(f"{where}.components: give the component names of <project>/components, e.g. [\"Art\", \"Scenes\"]")
     else:
@@ -332,13 +362,10 @@ def _validate_one(
             found, scan_errors, _ = collect_files(project_root, names, library_root)
             errors += [f"{where}: {e}" for e in scan_errors]
             for item in found:
-                if item.rel.startswith(f"{LIBRARY_DIR}/"):
-                    errors.append(
-                        f"{where}.components: {item.path.parent.name}/{item.path.name} comes from the library, not from "
-                        f"this project. Save components that do not import library files"
-                    )
-                else:
+                if not item.rel.startswith(f"{LIBRARY_DIR}/"):
                     files.append(item.rel)
+            uses, use_errors = _direct_uses(found, project_root, library_root, where)
+            errors += use_errors
 
     if errors:
         return None, errors
@@ -346,11 +373,43 @@ def _validate_one(
         "entry": entry,
         "components": list(names),
         "files": files,
+        "uses": uses,
         "exists": exists,
         "poster_time": at,
         "source": project_root.name,
         **texts,
     }, []
+
+
+def _direct_uses(
+    found: list[SourceFile], project_root: Path, library_root: Path, where: str
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """The entries the saved components import themselves, each at its current version (the Uses line).
+
+    Entries that those entries import are not listed: they come with the entry they belong to.
+    An entry that uses other entries cannot be imported by a saved component (one level only).
+    """
+    uses: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for item in found:
+        if item.rel.startswith(f"{LIBRARY_DIR}/"):
+            continue
+        _, _, local = scan_source(item.path, project_root, library_root)
+        for dep in local:
+            if not dep.rel.startswith(f"{LIBRARY_DIR}/"):
+                continue
+            name = dep.rel.split("/")[1]
+            card = read_card(library_root / name)
+            if card is None:
+                errors.append(f"{where}.components: {name} is not an entry of the library")
+            elif card["uses"]:
+                errors.append(
+                    f"{where}.components: {name} uses other entries itself; chains are one level deep, "
+                    "so a saved component cannot import it"
+                )
+            elif all(use["entry"] != name for use in uses):
+                uses.append({"entry": name, "version": card["version"]})
+    return uses, errors
 
 
 def write_poster(video: Path, at: float, out: Path, scratch: Path) -> None:
@@ -384,6 +443,15 @@ def _keep_previous_version(dest: Path, previous: dict, staging: Path) -> None:
             shutil.copy2(dest / name, archive / name)
 
 
+def _saved_source(text: str) -> str:
+    """A project component as the entry keeps it: `./library/<entry>/<File>` becomes `../<entry>/<File>`.
+
+    Inside the library every entry is a sibling folder, so a used entry is reached that way in a render.
+    Other text is kept as it is.
+    """
+    return _LIBRARY_IMPORT_TEXT.sub(lambda m: f"{m['q']}../{m['entry']}/{m['file']}{m['q']}", text)
+
+
 def save_entry(request: dict, project_root: Path, library_root: Path, video: Path, at: float) -> dict:
     """Write one entry (the files, `card.md`, `poster.jpg` from `video` at `at` s) and rebuild `index.md`.
 
@@ -403,7 +471,8 @@ def save_entry(request: dict, project_root: Path, library_root: Path, video: Pat
         if previous:
             _keep_previous_version(dest, previous, staging)
         for name in request["files"]:
-            shutil.copy2(project_root / COMPONENTS_DIR / name, staging / name)
+            source = (project_root / COMPONENTS_DIR / name).read_text(encoding="utf-8")
+            (staging / name).write_text(_saved_source(source), encoding="utf-8", newline="\n")
         write_poster(video, at, staging / POSTER, staging)
         saved = datetime.date.today().isoformat()
         history.append({

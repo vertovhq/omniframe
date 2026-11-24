@@ -38,7 +38,7 @@ SAFE_AREA_DEFAULTS: dict[str, dict[str, float]] = {
     "16:9": {"top": 0.06, "bottom": 0.08, "left": 0.05, "right": 0.05},
 }
 
-TAIL_S = 0.6          # silence/hold after the last thing in the plan
+TAIL_S = 0.3          # silence/hold after the last thing in the plan (at most 0.3 s when the length is derived)
 SCENE_MIN_S = 2.0     # assumed length of a scene without `until` when deriving the duration
 DEFAULT_GRAIN = 0.05  # grain for custom tokens that do not set one (the `dark` value)
 
@@ -712,7 +712,7 @@ def derive_duration(
     """Length of the video when the plan has no `duration` (design §8).
 
     The largest of: last clip end, last scene end (`until`, else `at` + 2 s), HUD `until`,
-    the voice length, the last word end; plus a 0.6 s tail. A clip without `out` counts only
+    the voice length, the last word end; plus a 0.3 s tail. A clip without `out` counts only
     when its probed length is in `clip_lengths` (clip index -> seconds). `words_end` is the
     end of words loaded from a file; inline caption words are read from the plan.
     """

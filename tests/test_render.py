@@ -188,7 +188,7 @@ def test_caption_words_from_file_inline_and_remap(root: Path) -> None:
     payload, errors = _prepare(plan, root)
     assert errors == [], errors
     assert [(w["w"], w["s"]) for w in payload["caption_words"]] == [("world", 0.1)]
-    assert payload["plan"]["duration"] == pytest.approx(2.6)  # the scene (at 0 + 2 s) is the last thing, plus the tail
+    assert payload["plan"]["duration"] == pytest.approx(2.3)  # the scene (at 0 + 2 s) is the last thing, plus TAIL_S 0.3
     assert not any("clips" in w for w in payload["warnings"])  # the engine draws clips since task 14
 
     plan["clips"][0].update({"in": 1.0, "out": 3.0})  # no word in that range

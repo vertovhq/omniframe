@@ -23,6 +23,9 @@ Style library (task 20.3): a component may also import a saved library entry,
 (`tools/library.py`). Only the files that are imported, and what they import in turn, are copied
 into `custom/job/library/<entry>/`; two small re-export files there make the entry's own
 `../style` and `../kit` imports resolve, so an entry saved from a project works unchanged.
+An entry that was saved from a component which imported other entries lists them under Uses
+(name and version). Importing it also copies those files, at the pinned version, into
+`custom/job/library/<other>/`; the entry imports them as `../<other>/<File>`. One level only.
 """
 
 from __future__ import annotations
@@ -33,7 +36,7 @@ import re
 import shutil
 import subprocess
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
@@ -49,6 +52,8 @@ EXTENSIONS = (".tsx", ".ts")
 LIBRARY_DIR = "library"          # folder name under OMNIFRAME_OUTPUT_DIR and, in a render, under custom/job/
 # `./library/<entry>/<File>`: a library entry file, imported by a project component.
 LIBRARY_IMPORT_RE = re.compile(r"^\./library/(?P<entry>[a-z0-9][a-z0-9-]*)/(?P<file>[A-Za-z][A-Za-z0-9_]*)$")
+# `../<entry>/<File>`: inside a library entry that lists `<entry>` under Uses in its card.md.
+USES_IMPORT_RE = re.compile(r"^\.\./(?P<entry>[a-z0-9][a-z0-9-]*)/(?P<file>[A-Za-z][A-Za-z0-9_]*)$")
 # Inside job/library/ the entry's own `../style` and `../kit` point here; these files re-export the engine's.
 LIBRARY_SHIMS = {
     "style.ts": "export * from '../../style';\n",
@@ -145,16 +150,48 @@ def _line_of(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
 
+def _used_file(
+    library_root: Path | None, entry: str, file: str, uses: Mapping[str, int], owner: str
+) -> tuple[Path | None, str]:
+    """The file of another entry that a composed entry imports (`../<entry>/<File>`), at the version it pins.
+
+    Returns `(path, "")` or `(None, reason)`. An entry that uses other entries itself is refused:
+    chains are one level deep.
+    """
+    if entry not in uses:
+        listed = ", ".join(uses) or "nothing"
+        return None, (f"import '../{entry}/{file}' needs {entry!r} under Uses in card.md "
+                      f"(this entry lists {listed})")
+    if library_root is None:
+        return None, f"import '../{entry}/{file}': there is no style library"
+    from . import library  # local import: library.py imports this module
+
+    folder = library_root / entry
+    card = library.read_card(folder)
+    if card is None:
+        return None, f"import '../{entry}/{file}': there is no entry {entry!r}"
+    if card["uses"]:
+        return None, f"{entry!r} uses other entries itself; chains are one level deep, so {owner} cannot use it"
+    version = uses[entry]
+    base = folder if version == card["version"] else folder / library.VERSIONS / f"v{version}"
+    target = _find_in(base, file)
+    if target is None:
+        return None, f"{entry} v{version} has no file {file}; {owner} pins that version"
+    return target, ""
+
+
 def scan_source(
     path: Path,
     project_root: Path,
     library_root: Path | None = None,
     entry: str | None = None,
+    uses: Mapping[str, int] | None = None,
 ) -> tuple[list[str], list[str], list[SourceFile]]:
     """Check one component file against the contract.
 
     A project component is `<project>/components/<File>`; with `entry` set the file is
-    `<library_root>/<entry>/<File>` and `./Name` means a file of the same entry.
+    `<library_root>/<entry>/<File>` and `./Name` means a file of the same entry. `uses` maps the
+    entries that such a file may import as `../<entry>/<File>` to the version each one pins.
     Returns `(errors, warnings, the files it imports)`. Messages read
     `components/<File>:<line>: ...` (`library/<entry>/<File>:<line>: ...` for an entry).
     """
@@ -200,6 +237,14 @@ def scan_source(
             elif all(item.path != target for item in local):
                 local.append(SourceFile(target, f"{LIBRARY_DIR}/{lib['entry']}/{target.name}"))
             continue
+        used = USES_IMPORT_RE.fullmatch(spec) if entry is not None else None
+        if used is not None:
+            target, reason = _used_file(library_root, used["entry"], used["file"], uses or {}, f"{entry!r}")
+            if target is None:
+                errors.append(f"{where}: {reason}")
+            elif all(item.path != target for item in local):
+                local.append(SourceFile(target, f"{LIBRARY_DIR}/{used['entry']}/{target.name}"))
+            continue
         if entry is None:
             errors.append(
                 f"{where}: import '{spec}' is not allowed; a component may import only react, remotion, "
@@ -209,7 +254,8 @@ def scan_source(
         else:
             errors.append(
                 f"{where}: import '{spec}' is not allowed in a library entry; it may import only react, "
-                f"remotion, '{STYLE_IMPORT}', '{KIT_IMPORT}' and other files of the same entry as './Name'"
+                f"remotion, '{STYLE_IMPORT}', '{KIT_IMPORT}', other files of the same entry as './Name', "
+                f"and entries listed under Uses in card.md as '../<entry>/<File>'"
             )
     for pattern, what in (
         (_IMPORT_DYNAMIC, "dynamic import() is not allowed"),
@@ -253,11 +299,29 @@ def collect_files(
         seen.add(item.path)
         files.append(item)
         entry = item.rel.split("/")[1] if item.rel.startswith(f"{LIBRARY_DIR}/") else None
-        e, w, local = scan_source(item.path, project_root, library_root, entry)
+        uses = _entry_uses(library_root, entry) if entry is not None else None
+        e, w, local = scan_source(item.path, project_root, library_root, entry, uses)
         errors += e
         warnings += w
         queue += local
+    first: dict[str, Path] = {}
+    for item in files:  # one render gets one version of each entry file
+        if first.setdefault(item.rel, item.path) != item.path:
+            errors.append(
+                f"{item.rel}: needed in two versions in one render (a component imports the newest, "
+                "a composed entry pins an older one); use one version"
+            )
     return files, errors, warnings
+
+
+def _entry_uses(library_root: Path | None, entry: str) -> dict[str, int]:
+    """`{entry: pinned version}` from the Uses line of an entry's card (empty when it uses nothing)."""
+    if library_root is None:
+        return {}
+    from . import library  # local import: library.py imports this module
+
+    card = library.read_card(library_root / entry)
+    return {} if card is None else {use["entry"]: use["version"] for use in card["uses"]}
 
 
 def check_components(

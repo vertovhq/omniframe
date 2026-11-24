@@ -200,8 +200,8 @@ video to the end on your own.
   does not land mid-gesture or mid-blink.
 - Write the plan: one entry in `clips` per kept range, all with the same `src`, laid back
   to back (`at` of a clip = `at` + `out` - `in` of the one before). Set the plan's
-  `duration` to the kept ranges added together: without it ARGUS adds a 0.6 s hold
-  after the last clip. `zoom` keys are in seconds from the start of
+  `duration` to the kept ranges added together: without it ARGUS adds a 0.3 s hold
+  after the last clip. When the user asks for a length, set `duration` to that length, so the final is never longer. `zoom` keys are in seconds from the start of
   that clip on the timeline; put a punch-in on a key phrase. `clean_audio: true`
   filters a noisy room (high-pass and noise reduction).
 - Captions: `captions.words = {"source": <words_path>, "remap": "clips"}`. ARGUS keeps

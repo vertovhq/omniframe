@@ -207,7 +207,7 @@ def test_duration_follows_a_clip_without_out_and_nothing_says_clips_are_not_draw
     src = _cfr_source(root / "refs" / "talk.mp4", 4.0)
     payload, errors = _prepare(_plan(clips=[{"src": str(src), "at": 1.0, "in": 1.5}]), root)
     assert errors == [], errors
-    assert payload["plan"]["duration"] == pytest.approx(1.0 + 2.5 + 0.6, abs=0.15)
+    assert payload["plan"]["duration"] == pytest.approx(1.0 + 2.5 + 0.3, abs=0.15)
     assert not any("clips" in w for w in payload["warnings"])
 
 
@@ -272,7 +272,7 @@ def test_clip_with_in_and_out_renders_the_right_part_and_duration(root: Path) ->
 
     out = render.render_video(plan, "t", mode="final", name="cut", wait_s=WAIT)
     assert isinstance(out, dict) and "output" in out, out
-    assert out["duration"] == pytest.approx(1.5 + 0.6, abs=0.05)  # clip end (1.5 s) plus the tail
+    assert out["duration"] == pytest.approx(1.5 + 0.3, abs=0.05)  # clip end (1.5 s) plus the tail
     assert out["output_duration"] == pytest.approx(out["duration"], abs=0.25)
     assert out["has_audio"]  # the clip's own sound plays
 
@@ -293,7 +293,7 @@ def test_clip_without_out_plays_to_the_end_of_the_file(root: Path) -> None:
     plan = _plan(clips=[{"src": str(src), "at": 0, "in": 3.0}])  # the last 2 s: 1 s green, 1 s blue
     out = render.render_video(plan, "t", mode="stills", times=[0.5, 1.5, 2.3], wait_s=WAIT)
     summary, _ = _images(out)
-    assert summary["duration"] == pytest.approx(2.6, abs=0.1)
+    assert summary["duration"] == pytest.approx(2.3, abs=0.1)  # the 2.0 s clip plus TAIL_S 0.3
     a, b, c = (_still(e) for e in summary["stills"])
     cy, cx = a.shape[0] // 2, a.shape[1] // 2
     assert a[cy, cx][1] > 200 and b[cy, cx][2] > 200

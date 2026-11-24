@@ -221,19 +221,163 @@ def test_bad_save_requests_are_listed_and_nothing_starts(
     assert message in errors_text
 
 
-def test_saving_refuses_components_that_break_the_contract_or_use_the_library(out_dir: Path, root: Path) -> None:
+def test_saving_refuses_components_that_break_the_contract(out_dir: Path, root: Path) -> None:
     (root / "components" / "Net.tsx").write_text("import x from 'left-pad';\nexport default () => null;\n", encoding="utf-8")
     lib = out_dir / "library"
-    _entry(lib, "old-entry", "Old.")
-    (root / "components" / "Wrap.tsx").write_text(
-        "import Scene from './library/old-entry/Scene';\nexport default () => <Scene />;\n", encoding="utf-8")
-
     _, errors = library.validate_save({**SPEC, "components": ["Net"]}, root, lib)
     assert any("left-pad" in e for e in errors)
-    clean, errors = library.validate_save({**SPEC, "components": ["Wrap"]}, root, lib)
-    assert clean is None and any("comes from the library" in e for e in errors)
     clean, errors = library.validate_save(SPEC, root, lib)
     assert errors == [] and clean[0]["files"] == ["Art.tsx", "Dot.tsx"] and clean[0]["source"] == "project-1"
+    assert clean[0]["uses"] == []
+
+
+# ------------------------------------------------------------------ composed entries (Uses)
+
+BG_V1 = "export default function Bg() { return <i />; }\n"
+BG_V2 = "export default function Bg() { return <b />; }\n"
+WRAP = "import Bg from './library/neon-bg/Bg';\nexport default function Wrap() { return <Bg />; }\n"
+
+
+def _save(project_root: Path, lib: Path, master: Path, spec: dict) -> dict:
+    """Save through the same two steps the export job uses: validate, then write the entry."""
+    clean, errors = library.validate_save(spec, project_root, lib, 4.0)
+    assert errors == [] and clean, errors
+    return library.save_entry(clean[0], project_root, lib, master, 1.0)
+
+
+@pytest.fixture
+def bg_source(out_dir: Path) -> Path:
+    base = project.project_dir("Neon Source")
+    (base / "components" / "Bg.tsx").write_text(BG_V1, encoding="utf-8")
+    return base
+
+
+def test_a_component_that_imports_entries_is_saved_with_uses_and_no_copies(
+    out_dir: Path, root: Path, bg_source: Path, master: Path
+) -> None:
+    lib = out_dir / "library"
+    _save(bg_source, lib, master, {"name": "neon-bg", "components": ["Bg"], "what": "BG.", "fits_when": "Dark."})
+    (root / "components" / "Wrap.tsx").write_text(WRAP, encoding="utf-8")
+
+    clean, errors = library.validate_save({"name": "wrapper", "components": ["Wrap"], "what": "W.", "fits_when": "W."},
+                                          root, lib)
+    assert errors == [] and clean[0]["files"] == ["Wrap.tsx"]
+    assert clean[0]["uses"] == [{"entry": "neon-bg", "version": 1}]
+
+    library.save_entry(clean[0], root, lib, master, 1.0)
+    entry = lib / "wrapper"
+    assert sorted(p.name for p in entry.iterdir()) == ["Wrap.tsx", "card.md", "poster.jpg"]  # Bg stays in neon-bg
+    assert "import Bg from '../neon-bg/Bg';" in (entry / "Wrap.tsx").read_text(encoding="utf-8")
+    card = (entry / "card.md").read_text(encoding="utf-8")
+    assert "**Uses:** neon-bg v1" in card and "import Wrap from './library/wrapper/Wrap';" in card
+
+
+def test_importing_a_composed_entry_copies_its_dependencies_at_the_pinned_version(
+    out_dir: Path, root: Path, bg_source: Path, master: Path
+) -> None:
+    lib = out_dir / "library"
+    _save(bg_source, lib, master, {"name": "neon-bg", "components": ["Bg"], "what": "BG.", "fits_when": "Dark."})
+    (root / "components" / "Wrap.tsx").write_text(WRAP, encoding="utf-8")
+    _save(root, lib, master, {"name": "wrapper", "components": ["Wrap"], "what": "W.", "fits_when": "W."})
+
+    # a newer neon-bg is saved afterwards; the wrapper still pins v1
+    (bg_source / "components" / "Bg.tsx").write_text(BG_V2, encoding="utf-8")
+    second = _save(bg_source, lib, master, {"name": "neon-bg", "components": ["Bg"], "what": "BG.",
+                                            "fits_when": "Dark.", "changed": "Bigger HUD."})
+    assert second["version"] == 2
+    assert (lib / "neon-bg" / "versions" / "v1" / "Bg.tsx").read_text(encoding="utf-8") == BG_V1
+
+    (root / "components" / "Uses.tsx").write_text(
+        "import W from './library/wrapper/Wrap';\nexport default W;\n", encoding="utf-8")
+    files, errors, _ = components.collect_files(root, ["Uses"], lib)
+    assert errors == []
+    by_rel = {f.rel: f.path for f in files}
+    assert sorted(by_rel) == ["Uses.tsx", "library/neon-bg/Bg.tsx", "library/wrapper/Wrap.tsx"]
+    assert by_rel["library/neon-bg/Bg.tsx"].read_text(encoding="utf-8") == BG_V1  # the pinned v1, not the newest
+    assert by_rel["library/neon-bg/Bg.tsx"].parent == lib / "neon-bg" / "versions" / "v1"
+
+
+def test_a_render_that_needs_two_versions_of_one_entry_is_refused(
+    out_dir: Path, root: Path, bg_source: Path, master: Path
+) -> None:
+    lib = out_dir / "library"
+    _save(bg_source, lib, master, {"name": "neon-bg", "components": ["Bg"], "what": "BG.", "fits_when": "Dark."})
+    (root / "components" / "Wrap.tsx").write_text(WRAP, encoding="utf-8")
+    _save(root, lib, master, {"name": "wrapper", "components": ["Wrap"], "what": "W.", "fits_when": "W."})
+    (bg_source / "components" / "Bg.tsx").write_text(BG_V2, encoding="utf-8")
+    _save(bg_source, lib, master, {"name": "neon-bg", "components": ["Bg"], "what": "BG.",
+                                   "fits_when": "Dark.", "changed": "Bigger HUD."})
+
+    (root / "components" / "Both.tsx").write_text(
+        "import W from './library/wrapper/Wrap';\nimport B from './library/neon-bg/Bg';\nexport default W;\n",
+        encoding="utf-8")
+    _, errors, _ = components.collect_files(root, ["Both"], lib)
+    assert any("needed in two versions" in e and "library/neon-bg/Bg.tsx" in e for e in errors)
+
+
+def test_chains_are_one_level_deep(out_dir: Path, root: Path, bg_source: Path, master: Path) -> None:
+    lib = out_dir / "library"
+    _save(bg_source, lib, master, {"name": "neon-bg", "components": ["Bg"], "what": "BG.", "fits_when": "Dark."})
+    (root / "components" / "Wrap.tsx").write_text(WRAP, encoding="utf-8")
+    _save(root, lib, master, {"name": "wrapper", "components": ["Wrap"], "what": "W.", "fits_when": "W."})
+
+    # an entry that uses `wrapper`, which already uses `neon-bg`: two levels
+    outer = lib / "outer"
+    outer.mkdir(parents=True)
+    (outer / "Outer.tsx").write_text("import W from '../wrapper/Wrap';\nexport default W;\n", encoding="utf-8")
+    (outer / library.CARD).write_text(library.card_text("outer", {
+        "what": "O.", "fits_when": "O.", "source": "p", "files": ["Outer.tsx"], "saved": "2026-11-23",
+        "uses": [{"entry": "wrapper", "version": 1}],
+    }), encoding="utf-8")
+    (root / "components" / "Deep.tsx").write_text(
+        "import O from './library/outer/Outer';\nexport default O;\n", encoding="utf-8")
+    _, errors, _ = components.collect_files(root, ["Deep"], lib)
+    assert any("uses other entries itself" in e for e in errors)
+
+    # and a saved component cannot import `wrapper`, which uses an entry itself
+    (root / "components" / "Deep2.tsx").write_text(
+        "import W from './library/wrapper/Wrap';\nexport default W;\n", encoding="utf-8")
+    clean, errors = library.validate_save({"name": "deeper", "components": ["Deep2"], "what": "D.", "fits_when": "D."},
+                                          root, lib)
+    assert clean is None and any("chains are one level deep" in e for e in errors)
+
+
+def test_an_entry_import_must_be_listed_under_uses(out_dir: Path, root: Path, bg_source: Path, master: Path) -> None:
+    lib = out_dir / "library"
+    _save(bg_source, lib, master, {"name": "neon-bg", "components": ["Bg"], "what": "BG.", "fits_when": "Dark."})
+    _entry(lib, "plain", "Plain.")
+    (lib / "plain" / "Scene.tsx").write_text("import B from '../neon-bg/Bg';\nexport default B;\n", encoding="utf-8")
+    (root / "components" / "Uses.tsx").write_text(
+        "import S from './library/plain/Scene';\nexport default S;\n", encoding="utf-8")
+    _, errors, _ = components.collect_files(root, ["Uses"], lib)
+    assert any("needs 'neon-bg' under Uses in card.md" in e for e in errors)
+
+
+def test_a_pinned_version_that_is_not_kept_is_reported(out_dir: Path, root: Path, bg_source: Path, master: Path) -> None:
+    lib = out_dir / "library"
+    _save(bg_source, lib, master, {"name": "neon-bg", "components": ["Bg"], "what": "BG.", "fits_when": "Dark."})
+    outer = lib / "gone"
+    outer.mkdir(parents=True)
+    (outer / "Gone.tsx").write_text("import B from '../neon-bg/Bg';\nexport default B;\n", encoding="utf-8")
+    (outer / library.CARD).write_text(library.card_text("gone", {
+        "what": "G.", "fits_when": "G.", "source": "p", "files": ["Gone.tsx"], "saved": "2026-11-23",
+        "uses": [{"entry": "neon-bg", "version": 7}],
+    }), encoding="utf-8")
+    (root / "components" / "Uses.tsx").write_text(
+        "import G from './library/gone/Gone';\nexport default G;\n", encoding="utf-8")
+    _, errors, _ = components.collect_files(root, ["Uses"], lib)
+    assert any("neon-bg v7 has no file Bg" in e for e in errors)
+
+
+def test_uses_survive_a_render_that_counts_the_use(out_dir: Path, root: Path, bg_source: Path, master: Path) -> None:
+    lib = out_dir / "library"
+    _save(bg_source, lib, master, {"name": "neon-bg", "components": ["Bg"], "what": "BG.", "fits_when": "Dark."})
+    (root / "components" / "Wrap.tsx").write_text(WRAP, encoding="utf-8")
+    _save(root, lib, master, {"name": "wrapper", "components": ["Wrap"], "what": "W.", "fits_when": "W."})
+    library.count_use(lib, ["wrapper"])
+    card = library.read_card(lib / "wrapper")
+    assert card["uses"] == [{"entry": "neon-bg", "version": 1}] and card["times_used"] == 1
+    assert "**Uses:** neon-bg v1" in (lib / "wrapper" / "card.md").read_text(encoding="utf-8")
 
 
 # ------------------------------------------------------------------ reading

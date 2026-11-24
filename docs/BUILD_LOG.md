@@ -357,3 +357,10 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Kiro: none beyond the steering rule for detached runs (output to files, read back).
 - Verified: `test_library.py` 31 passed; `test_library`, `test_guide_sections`, `test_tool_surface`, `test_export`, `test_components`, `test_studio_guide` 104 passed, exit 0 (217 s). Seeded `OMNIFRAME_OUTPUT/library` with `neon-octopus` (Octopus.tsx) and `neon-bg` (Bg.tsx) from octopus-neon, posters from the final at 1.9 s. The author's Verify is not run; the task stays `[ ]`.
 - Credits: <author fills>
+
+## Task 20.11 follow-ups — library entries that use other entries, shorter tail, neon-bg v2 (2026-11-24, Haiku 5.5 high; commit by Opus)
+- Built: a component that imports library entries can be saved; its card lists `Uses:` with pinned versions, and the dependency files are copied with it (one level deep only). `TAIL_S` 0.6 → 0.3 s for a computed duration; an explicit `duration` is kept as asked. `neon-bg` v2 in the user library takes a `clock` prop for a whole-video HUD timer (v1 kept).
+- Bugs & fixes: two tests still expected the old 0.6 s tail (`test_clips.py`, `test_render.py` line 191) → updated to 2.3 s; a `git commit -F -` without input hung the shell → committed with `-m`.
+- Kiro: none.
+- Verified: `test_library.py` + `test_tail.py` 40 passed; `test_clips.py` + `test_render.py` 42 passed, exit 0 (128 s); engine `tsc --noEmit` exit 0. Full pytest not run. `octopus-color` not re-rendered with `clock`.
+- Credits: <author fills>
