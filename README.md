@@ -27,16 +27,12 @@ Every scenario ends with the same output: a 9:16 and/or 16:9 file ready to uploa
 and a `post.md` with title, description and hashtags. Publishing stays manual. OmniFrame calls no
 platform APIs.
 
-## How OmniFrame differs from video-shotcraft and OpenFilm
+## What sets it apart
 
-[video-shotcraft](https://github.com/Vincentwei1021/video-shotcraft) (Apache 2.0) is an agent skill
-for Claude Code and Codex. It turns a product's screenshots and copy into a promo, drawn with
-Remotion. [OpenFilm](https://github.com/openfilm/openfilm) turns a coding agent into a film maker:
-a film is a folder of HTML pages, and it has its own desktop editor. OmniFrame is an MCP server, so any
-MCP client can drive it, Kiro included. It starts from a reference video and makes a continuation
-of it. It also edits your own recording, then checks the result (frame size, loudness, true peak,
-black gaps, audio length) and exports the upload package. Its sound effects are synthesized in code
-(whoosh, pop, hit) and can be mixed with CC0 sounds from Freesound. Measured in Kiro
+OmniFrame is an MCP server, so any MCP client can drive it, Kiro included. It starts from a reference
+video and makes a continuation of it. It also edits your own recording, then checks the result (frame
+size, loudness, true peak, black gaps, audio length) and exports the upload package. Its sound effects
+are synthesized in code (whoosh, pop, hit) and can be mixed with CC0 sounds from Freesound. Measured in Kiro
 (the chat footer "Est. Credits Used / Elapsed time"): the first 15-second 9:16 video of a series took
 17 credits and 13 min on Sonnet; the next one in the series reused its own elements from the style
 library and took 2.03 credits and 12 min on Haiku.
@@ -51,7 +47,6 @@ QA and export.
 3. Connect your MCP client (see [Connect your client](#connect-your-client)) and reload its MCP servers.
 4. Ask in the chat, in this order (files are in [`examples/media/`](examples/media/README.md)):
    - `Call studio_guide and follow its working order.`
-   - `Watch examples/media/moving-shapes-8s.mp4 with watch_video, then get_frames at 2 and 6 seconds. Describe what you see.`
    - `Read examples/media/sample-voiceover.txt and voice it with synthesize_voiceover, project demo.`
    - `Render stills of examples/plans/graphics_9x16.json in project demo at 1, 4 and 8 seconds. Show me the frames.`
 
@@ -176,6 +171,8 @@ The working order for every plan: `synthesize_voiceover` when the video has a vo
 
 ## Coming soon
 
+Coming: cloud mode.
+
 AI video clips through Google Flow (Veo) are coming in the next update.
 
 ## Honest notes
@@ -224,9 +221,8 @@ sees the video through contact sheets and stills.
 
 ## Third-party code and assets
 
-Code, fonts and media from other projects, with their licenses, are listed in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The main ones are video-shotcraft (Apache 2.0) and
-Remotion (its own license).
+Code, fonts and media that OmniFrame uses or adapts, with their licenses, are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## License
 

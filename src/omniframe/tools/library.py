@@ -19,6 +19,12 @@ files; older files move to `<entry>/versions/v<n>/`, and `card.md` lists every v
 line on what changed. `card.md` also counts `times used`: `count_use` adds one each time a render
 imports the entry.
 
+Starter styles: `src/omniframe/starter_library/` ships a few styles in the wheel. The first time a
+library folder is reached (`library_dir`), the starter styles it lacks are copied in, and the
+folder gets the marker file `.starter_copied`. With the marker present nothing is copied again,
+so a starter style the user deleted stays deleted. Deleting the marker brings them back on the
+next access. Nothing already in the folder is overwritten.
+
 Using an entry: a project component imports one of its files as
 `import Boat from './library/<entry>/<File>'` (`tools/components.py` copies the files a render
 needs). Whether an entry fits a new reference is the model's call; nothing here scores it.
@@ -90,9 +96,57 @@ _LIBRARY_IMPORT_TEXT = re.compile(
 
 # ------------------------------------------------------------------ paths
 
+PACKAGED_STARTERS = Path(__file__).resolve().parents[1] / "starter_library"  # shipped in the wheel
+STARTER_MARK = ".starter_copied"  # written into the library folder once the starter styles were copied
+
+
+def starter_dir() -> Path:
+    """The folder of starter styles. `OMNIFRAME_STARTER_DIR` replaces it.
+
+    The variable is read from the environment, not patched in code, because `export_package` runs
+    in a worker process that a monkeypatch in the test process cannot reach.
+    """
+    override = os.environ.get("OMNIFRAME_STARTER_DIR", "").strip()
+    return Path(override) if override else PACKAGED_STARTERS
+
+
 def library_dir(output_dir: Path) -> Path:
-    """`<OMNIFRAME_OUTPUT_DIR>/library`."""
-    return Path(output_dir) / LIBRARY_DIR
+    """`<OMNIFRAME_OUTPUT_DIR>/library`. The first access copies in the starter styles, once (see `seed_starter_styles`)."""
+    path = Path(output_dir) / LIBRARY_DIR
+    try:
+        seed_starter_styles(path)
+    except OSError:
+        pass  # a read-only library still works, just without the starter styles
+    return path
+
+
+def seed_starter_styles(library_root: Path) -> list[str]:
+    """Copy the starter styles that `library_root` lacks, then write the marker `STARTER_MARK`.
+
+    With the marker present this does nothing, so a starter style the user deleted stays deleted.
+    An existing folder is never touched. A copy is made under a hidden name and renamed into place,
+    so an interrupted copy leaves no half entry, and no marker: the next access finishes the job.
+    Returns the names copied.
+    """
+    source_root = starter_dir()
+    mark = library_root / STARTER_MARK
+    if mark.exists() or not source_root.is_dir():
+        return []
+    library_root.mkdir(parents=True, exist_ok=True)
+    copied: list[str] = []
+    for source in sorted(source_root.iterdir()):
+        target = library_root / source.name
+        if not source.is_dir() or target.exists():
+            continue
+        staging = library_root / f".{source.name}.partial"
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(source, staging)
+        staging.rename(target)
+        copied.append(source.name)
+    mark.write_text("Starter styles were copied here once. Delete this file to copy them again.\n", encoding="utf-8")
+    if copied:
+        write_index(library_root)
+    return copied
 
 
 def project_library_dir(project_root: Path) -> Path:

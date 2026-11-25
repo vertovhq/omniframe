@@ -20,9 +20,11 @@ from pydantic import (
     ConfigDict,
     Discriminator,
     Field,
+    SerializerFunctionWrapHandler,
     Tag,
     ValidationError,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
@@ -520,6 +522,15 @@ class SfxEvent(_Model):
         if self.trim is not None and not 0 <= self.trim[0] < self.trim[1]:
             raise ValueError(f"trim must be [in, out] with 0 <= in < out, got {self.trim}")
         return self
+
+    @model_serializer(mode="wrap")
+    def _dump(self, handler: SerializerFunctionWrapHandler) -> Any:
+        data = handler(self)
+        # `volume` has a default, so a dump would write it back. Reloading the saved plan then sees
+        # both `gain_db` and `volume` and refuses it. Leave `volume` out unless the user gave it.
+        if isinstance(data, dict) and self.gain_db is not None and "volume" not in self.model_fields_set:
+            data.pop("volume", None)
+        return data
 
     @property
     def transforms(self) -> bool:

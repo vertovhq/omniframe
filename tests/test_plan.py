@@ -217,3 +217,28 @@ def test_to_dict_is_json_with_aliases():
     assert out["clips"][0]["in"] == 1 and "in_" not in out["clips"][0]
     assert "hud" not in out
     json.dumps(out)
+
+
+def _gain_plan(**sfx_fields):
+    event = {"at": 0.5, "sound": "pop", **sfx_fields}
+    return _base(
+        scenes=[{"kind": "big", "at": 0, "text": "x"}],
+        audio={"sfx": [event]},
+    )
+
+
+def test_a_saved_plan_with_only_gain_db_loads_again():
+    """`volume` has a default; a saved plan must not write it back next to `gain_db`."""
+    plan, errors = validate_plan(_gain_plan(gain_db=-6))
+    assert errors == []
+    saved = plan.to_dict()
+    assert saved["audio"]["sfx"][0]["gain_db"] == -6.0
+    assert "volume" not in saved["audio"]["sfx"][0]
+    again, errors = validate_plan(saved)
+    assert errors == []
+    assert again.audio.sfx[0].gain_db == -6.0
+
+
+def test_gain_db_and_volume_given_together_are_refused():
+    _, errors = validate_plan(_gain_plan(gain_db=-6, volume=0.5))
+    assert any("not both" in e for e in errors)

@@ -31,8 +31,6 @@ applies to each. The OmniFrame license itself is in [LICENSE](LICENSE).
 
 ## Sample media in `examples/media/`
 
-- `moving-shapes-8s.mp4`: an 8 second clip generated for this repository with ffmpeg's lavfi sources
-  (a gradient and moving boxes). It contains no third-party material and has no sound track.
 - The sample voiceover is not stored in the repository. Running the example makes it with OmniFrame
   (`synthesize_voiceover`). Without an ElevenLabs key, that uses Microsoft's Edge read-aloud voices,
   which remain subject to Microsoft's terms for that service.

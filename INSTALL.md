@@ -159,11 +159,10 @@ In the Kiro chat, ask for `doctor`. It returns the same report as JSON.
 In the Kiro chat:
 
 1. `Call studio_guide and follow its working order.`
-2. `Watch examples/media/moving-shapes-8s.mp4 with watch_video, then get_frames at 2 and 6 seconds. Describe what you see.`
-3. `Read examples/media/sample-voiceover.txt and voice it with synthesize_voiceover, project demo.`
-4. `Render stills of examples/plans/graphics_9x16.json in project demo at 1, 4 and 8 seconds. Show me the frames.`
-5. When the stills look right: `Render a preview, then the final of the same plan.`
-6. `Run qa_verify_video on the final file.` Then `export_package` for the upload folder.
+2. `Read examples/media/sample-voiceover.txt and voice it with synthesize_voiceover, project demo.`
+3. `Render stills of examples/plans/graphics_9x16.json in project demo at 1, 4 and 8 seconds. Show me the frames.`
+4. When the stills look right: `Render a preview, then the final of the same plan.`
+5. `Run qa_verify_video on the final file.` Then `export_package` for the upload folder.
 
 For production-quality voice, add your ElevenLabs API key to .env (ELEVENLABS_API_KEY). Without a key OmniFrame falls back to a free voice so the example still runs.
 

@@ -48,6 +48,9 @@ path = "src/omniframe/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/omniframe"]
+# Starter style library: copied into a user's library on first access (tools/library.py). Listed
+# explicitly so the three styles ship even if a later ignore rule would drop their files.
+artifacts = ["src/omniframe/starter_library"]
 
 # The render engine travels inside the wheel as omniframe/_engine; see src/omniframe/engine_setup.py.
 # force-include copies a directory recursively and ignores .gitignore

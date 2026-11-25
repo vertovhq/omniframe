@@ -407,3 +407,10 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Kiro: none.
 - Verified: `test_guide_sections`, `test_library`, `test_studio_guide`, `test_tool_surface`, `test_recipes`: 148 passed, exit 0 (no full suite; the author was rendering). Guide core 2767 characters, limit 4000.
 - Credits: <author fills>
+
+## Task 20.18 — release prep: starter styles, gain_db fix, README audit, sample video removed (Haiku 5.5 high)
+- Built: three starter styles in `src/omniframe/starter_library/`, copied into a library on first access; the library folder then gets `.starter_copied`, so a deleted style stays deleted. `SfxEvent` leaves an unset `volume` out of dumps (a saved plan with `gain_db` failed to reload). Sample video `moving-shapes-8s.mp4` and its links removed. README audit. New `tests/conftest.py`, `tests/test_starter_library.py`.
+- Bugs & fixes: 2 `test_library.py` failures, each with 3 extra starter entries in the index. Cause: `export_package` runs in a worker process that the test's monkeypatch does not reach, so the worker copied the real starter folder. Fix: `OMNIFRAME_STARTER_DIR` env var, set in conftest and read by the worker.
+- Kiro: none.
+- Verified: `test_library.py` and `test_starter_library.py` 42 passed, exit 0. Wheel `omniframe-3.0.0.dev0` holds the three `omniframe/starter_library/` folders (9 files). Full pytest before the fix: 263 passed, 2 failed. Not rerun after the marker change: test_plan, test_sounds, test_guide_sections, test_studio_guide, test_recipes, test_tool_surface, test_export.
+- Credits: <author fills>
