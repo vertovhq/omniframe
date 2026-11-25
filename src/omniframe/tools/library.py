@@ -1,4 +1,4 @@
-"""The style library: scenes, characters, plates and caption styles that worked, kept for the next video.
+"""The style library: looks (background, palette, fonts, caption and plate look, transitions) saved from finished videos, kept for the next video.
 
 Where: `<OMNIFRAME_OUTPUT_DIR>/library/<entry>/`, per user, never in the repo. One entry holds
 
@@ -12,7 +12,7 @@ that is deleted or edited by hand is reflected the next time.
 
 Saving has no tool of its own: `export_package(save_to_library=[...])` calls `validate_save` before
 the export starts and `save_entry` for each item when the export succeeded (the poster comes from
-the final). The model saves the reusable elements of every final that passes QA, without asking.
+the final). The model offers to save the style of a final that passes QA, and passes `save_to_library` only when the user agreed.
 
 Versions: saving a name that exists makes the next version. `<entry>/` always holds the newest
 files; older files move to `<entry>/versions/v<n>/`, and `card.md` lists every version with one

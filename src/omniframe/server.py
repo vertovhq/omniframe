@@ -232,7 +232,8 @@ def export_package(
     """Write the publishing folder: videos, covers and post.md, under `<project>/final/`.
 
     `videos` maps "9:16" and/or "16:9" to final mp4 files. `texts` holds the copy per platform (tiktok,
-    shorts, youtube). Refused when QA has a hard failure. Returns `economy` (the project's totals).
+    shorts, youtube). Refused when QA has a hard failure. Pass `save_to_library` (one item per style) only after
+    the user agreed to save it (STUDIO_GUIDE section 8). Returns `economy` (the project's totals).
     """
     return export.export_package(
         project, videos, texts, cover_times=cover_times, name=name, save_to_library=save_to_library

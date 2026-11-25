@@ -400,3 +400,10 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Kiro: none.
 - Verified: full `pytest -q` 634 passed in 977.80 s (0:16:17), exit 0. Targeted run (recipes, studio_guide, tool surface, guide sections, economy) 117 passed in 2.81 s. Wheel `omniframe-3.0.0.dev0` holds the 12 `omniframe/recipes/*.md` files; no `pyproject.toml` change.
 - Credits: <author fills>
+
+## Task 20.17 — style library rules (Haiku 5.5 high)
+- Built: the library holds styles, not video pieces. Guide section 0: style rule (ask once for a saved style that fits, else design a new look without asking; never copy story, scenes, characters or texts); section 1 and the look sentence follow it. Section 8 step 4: offer the save after QA, save only on a yes, one StyleKit component, one item named `style-<short look name>`. Docstrings of `export.py`, `library.py` and `export_package` no longer say "without asking". Text only, no code change.
+- Bugs & fixes: a new docstring test failed because the phrase wraps across two lines in the docstring → the test checks a phrase that stays on one line.
+- Kiro: none.
+- Verified: `test_guide_sections`, `test_library`, `test_studio_guide`, `test_tool_surface`, `test_recipes`: 148 passed, exit 0 (no full suite; the author was rendering). Guide core 2767 characters, limit 4000.
+- Credits: <author fills>

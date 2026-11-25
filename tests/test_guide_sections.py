@@ -40,13 +40,12 @@ def test_core_is_under_the_limit_and_keeps_the_rules() -> None:
     assert "With \"no checks\", go straight to the preview." in core
 
 
-def test_core_holds_the_reuse_rule_and_the_kit_line() -> None:  # task 20.11
+def test_core_holds_the_style_rule_and_the_kit_line() -> None:  # task 20.11, rule replaced by task 20.17
     core = studio.core_text(studio.read_guide())
-    assert (
-        "If the library has an element that fits, import it and change only props, text and timing. "
-        "Write a new one only when the user asks for something different, the reference shows a different look, "
-        "or no entry fits."
-    ) in core
+    assert "The library holds styles. If the user named a look, use the matching style or make a new one." in core
+    assert "ask once in one line: \"No style given; the library has <name>, it fits. Use it?\"" in core
+    assert "If none fits, design a new look without asking." in core
+    assert "a style gives only the look, the content is always new." in core
     assert "Transitions, bursts, shake, flashes and HUD: set them by kit name in the plan instead of writing your own code." in core
 
 
@@ -56,6 +55,24 @@ def test_core_lists_every_other_section() -> None:
     for num in studio.guide_sections(text):
         if num != "0":
             assert f'studio_guide(section="{num}")' in core
+
+
+def test_section_8_offers_to_save_a_style_after_qa() -> None:  # task 20.17
+    body = studio.guide_sections(studio.read_guide())["8"][1]
+    assert "After a final passes QA, offer the user in one line to save its style." in body
+    assert "Save only when the user agrees or says \"save to library\"" in body
+    assert "`save_to_library` with one item named `style-<short look name>`" in body
+    assert "if the user says \"do not save\", leave `save_to_library` out" in body
+    assert "if the user says \"delete <name>\"" in body
+
+
+def test_docstrings_of_the_save_path_ask_before_saving() -> None:  # task 20.17
+    from omniframe import server
+    from omniframe.tools import export, library
+
+    for doc in (export.__doc__, library.__doc__, server.export_package.__doc__):
+        assert "without asking" not in (doc or "")
+    assert "the user agreed to save it" in (server.export_package.__doc__ or "")
 
 
 def test_every_section_is_reachable_by_number_and_by_title() -> None:

@@ -10,8 +10,8 @@ The job (kind `export`, `run_job`):
    is not black.
 4. `final/post.md`: the texts per platform. A text over its platform limit is marked under
    its field.
-4b. With `save_to_library` (task 20.11: a list, one item per reusable element, saved without asking after
-   a final passes QA): each item's components go to the style library with a card and a 512 px poster
+4b. With `save_to_library` (task 20.11: a list, one item per style, passed only after the user agreed to save; the final passes QA first):
+   each item's components go to the style library with a card and a 512 px poster
    taken from the final. A name that exists makes the next version (`tools/library.py`).
 5. `<project>/.work/` is removed. Covers come back as images from small copies in
    `<project>/cache/export/`, so `final/` holds only the deliverables.
