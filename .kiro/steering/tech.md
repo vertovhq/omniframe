@@ -54,7 +54,7 @@
 
 ## Rules for the implementing agent
 
-- Do exactly the current task from `.kiro/specs/argus-v2/tasks.md`. Do not start the next one.
+- Do exactly the current task from `.kiro/specs/omniframe/tasks.md`. Do not start the next one.
 - Read only the `design.md` sections the task points to; do not re-explore the whole repo.
 - Do not read or edit `skills/` unless the task says so.
 - Never edit the user's `KNOWLEDGE_BASE.md` content except where a task says so.
@@ -68,4 +68,4 @@
 
 - After a task's Verify steps pass, append one entry to `docs/BUILD_LOG.md` using its entry template (max 8 lines): what was built, bugs hit with symptom → cause → fix, which Kiro feature helped (be concrete; write "none" if none), what was verified and the result.
 - Leave "Credits" for the author. Facts only: no marketing words, no invented numbers.
-- Detailed reports only when the author asks; save them as `.kiro/specs/argus-v2/taskN.md` (existing convention).
+- Detailed reports only when the author asks; save them as `.kiro/specs/omniframe/taskN.md` (existing convention).

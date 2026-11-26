@@ -1,1 +1,0 @@
-The studio guide is `src/argus/STUDIO_GUIDE.md`. That is the only copy, and the one `studio_guide` reads. Edit it there.

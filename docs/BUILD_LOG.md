@@ -1,18 +1,18 @@
-# ARGUS v2 — build log (Kiroween 2026)
+# OmniFrame v2 — build log (Kiroween 2026)
 
-A factual record of how ARGUS v2 was built in Kiro. It is the source for the Medium
+A factual record of how OmniFrame v2 was built in Kiro. It is the source for the Medium
 article and for the submission's "how Kiro was used" answer. Facts only, no marketing.
 
 ## How the work is split
 
-- **Planning:** Claude Opus 5.5 in Kiro wrote the spec (`.kiro/specs/argus-v2`:
+- **Planning:** Claude Opus 5.5 in Kiro wrote the spec (`.kiro/specs/omniframe`:
   requirements, design, tasks), steering (`.kiro/steering`: product, tech, engine), the
   studio guide for the model, and two hooks (pytest after every spec task, engine
   typecheck on save) in one planning session.
 - **Why v2:** v1 grew feature by feature into creative "gates" (30% story-overlap and
   30% digit-density rules, slop-word lists, a 150-line rule book), a renderer limited to
   dark/light vertical frames, and tools that returned file paths the model could not see.
-  Output was generic "neuroslop". v2 makes the model the director and ARGUS its eyes,
+  Output was generic "neuroslop". v2 makes the model the director and OmniFrame its eyes,
   ears and hands.
 - **Coding:** Claude Sonnet 5.5 (high effort) for core tasks; Claude Haiku 5.5 (max
   effort) planned for well-specified, test-covered tasks (QA, export, scripts, CI, docs
@@ -39,28 +39,28 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 ## Entries
 
 ## Task 1 — Setup (date and model not recorded; commit 0f3129f)
-- Built: `src/argus/project.py` (`slugify`, `project_dir` with the folder layout), config fields `whisper_model`, `eleven_model`, `render_concurrency`, `scripts_dir` and the `.env` lookup order, `numpy` and `Pillow` dependencies with the `asr` extra, version `3.0.0.dev0`, `.kiro/settings/mcp.json`.
+- Built: `src/omniframe/project.py` (`slugify`, `project_dir` with the folder layout), config fields `whisper_model`, `eleven_model`, `render_concurrency`, `scripts_dir` and the `.env` lookup order, `numpy` and `Pillow` dependencies with the `asr` extra, version `3.0.0.dev0`, `.kiro/settings/mcp.json`.
 - Bugs & fixes: none recorded.
 - Kiro: none recorded beyond the spec task list and steering `tech.md` that set the layout.
 - Verified: no result recorded in `tasks.md` or this log. Tests in git: `tests/test_project.py`.
 - Credits: <author fills>
 
 ## Task 2 — Remove creative gates (date and model not recorded; commit 0f3129f)
-- Built: removed the `validate_beats` and `story_guide` tools, `detect_genre`, the slop-word list, the overlap helpers, `src/argus/STORY_GUIDE.md` and `tests/test_reference.py`; removed the borrowing-limit section from `STARTER.md` and the two montazh `SKILL.md` files; server instructions replaced with the text from design §2.
+- Built: removed the `validate_beats` and `story_guide` tools, `detect_genre`, the slop-word list, the overlap helpers, `src/omniframe/STORY_GUIDE.md` and `tests/test_reference.py`; removed the borrowing-limit section from `STARTER.md` and the two montazh `SKILL.md` files; server instructions replaced with the text from design §2.
 - Bugs & fixes: none recorded.
 - Kiro: none recorded.
 - Verified: no result recorded in `tasks.md` or this log.
 - Credits: <author fills>
 
 ## Task 3 — Studio guide and preferences (date and model not recorded; commit 0f3129f)
-- Built: `studio_guide()` returning the guide, capabilities (tools, providers from config and import checks) and the last 4,000 characters of the preferences file; `learn_and_record_memory` writing `# ARGUS — user preferences`; `src/argus/STUDIO_GUIDE.md`, copied from the spec and later edited by tasks 20.5b, 20.6 and 20.7a.
+- Built: `studio_guide()` returning the guide, capabilities (tools, providers from config and import checks) and the last 4,000 characters of the preferences file; `learn_and_record_memory` writing `# OmniFrame — user preferences`; `src/omniframe/STUDIO_GUIDE.md`, copied from the spec and later edited by tasks 20.5b, 20.6 and 20.7a.
 - Bugs & fixes: none recorded.
 - Kiro: none recorded.
 - Verified: `tests/test_studio_guide.py` exists in git; no run result recorded in `tasks.md` or this log.
 - Credits: <author fills>
 
 ## Task 4 — Images to the model + jobs (date and model not recorded; commit 0f3129f)
-- Built: `src/argus/media_out.py` (`prepare_image`, `tool_result` returning a summary plus image content), `src/argus/jobs.py` (`run_or_detach`, the worker `python -m argus.jobs <job_dir>`, status, cleanup of jobs older than 7 days), the `job_status` tool; tests `tests/test_jobs.py` and `tests/test_media_out.py`.
+- Built: `src/omniframe/media_out.py` (`prepare_image`, `tool_result` returning a summary plus image content), `src/omniframe/jobs.py` (`run_or_detach`, the worker `python -m omniframe.jobs <job_dir>`, status, cleanup of jobs older than 7 days), the `job_status` tool; tests `tests/test_jobs.py` and `tests/test_media_out.py`.
 - Bugs & fixes: none recorded.
 - Kiro: none recorded.
 - Verified: no run result recorded in `tasks.md` or this log.
@@ -68,11 +68,11 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 
 ## Task 5 — watch_video and get_frames (2026-11-16, Sonnet 5.5)
 - Built: `tools/watch.py` (content-hash cache by stage, shot detection, frame budget, 6-tile contact sheets, onset sound events, faster-whisper transcript when installed, 2 sheets per page) run as a `watch` job; `get_frames` with `crop` and an 8-time cap; both registered in `server.py`; `analyze_reference` and `tools/reference.py` removed. Small changes elsewhere: `ffmpeg.decode_audio` and `run_ffmpeg_stderr`, `beats._onset_envelope` on a running sum, `image_max_side` in `jobs`.
-- Bugs & fixes: pagination test found 13 shots instead of 14 → a magenta→red cut scores below the 0.30 `scene` threshold → test video uses neighbours far apart in luma. On the real 7:30 animation the detector found only 3 shots → soft transitions stay under 0.30 → not fixed, listed in `task5.md`. Terminal output came back empty or garbled → read the output from log files. I skipped this log entry when the task was done → found it when asked about tasks 11 and 12.
+- Bugs & fixes: pagination test found 13 shots instead of 14 → a magenta→red cut scores below the 0.30 `scene` threshold → test video uses neighbours far apart in luma. On the real 7:30 animation the detector found only 3 shots → soft transitions stay under 0.30 → not fixed, listed in notes (removed). Terminal output came back empty or garbled → read the output from log files. I skipped this log entry when the task was done → found it when asked about tasks 11 and 12.
 - Kiro: spec task text and design §6 gave the pipeline; steering `tech.md` (tool shape, `run_or_detach`, offline tests); the MCP reload let me call both tools from Kiro chat and check that the model sees the images; no hook result noted.
 - Verified: pytest `tests/test_watch.py` 24 passed, 1 skipped (real faster-whisper run); full suite then 120 passed, 1 skipped; real MCP stdio session returns `image/jpeg` content; from Kiro, `watch_video` on a 7:30 vertical file and `get_frames` at 5 times returned images the model read. Not verified: transcription on real faster-whisper (not installed), `detect_language` call against its docs.
 - Credits: <author fills>
-- Details: `.kiro/specs/argus-v2/task5.md`
+- Details: notes (removed)
 
 ## Task 6 — Voice v2 (2026-11-16, model not recorded)
 - Built: `tools/voiceover.py` with providers `elevenlabs`, `edge` and `gemini` behind a `VoiceProvider` protocol, `split_text` for long text, `words_from_alignment`, job kind `voiceover`; `voice_options` returning `provider_choice` and, with a key, the `delivery` vocabulary. Provider doc URLs are in code comments. Tests `tests/test_voiceover.py` (25) and `tests/test_voice_options.py` (15).
@@ -82,7 +82,7 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Credits: <author fills>
 
 ## Task 7 — Plan model v2 (2026-11-16, model not recorded)
-- Built: `src/argus/plan.py` (pydantic models, `dark` and `light` presets, format sizes, safe areas, `validate_plan` returning every error as `path: message`, `derive_duration`); `src/argus/captions.py` (word helpers moved from `tools/subtitles.py`, `remap_words_to_clips`); `engine/src/types.ts` (plan types); four sample plans in `examples/plans/`. Tests `tests/test_plan.py` and `tests/test_captions.py`.
+- Built: `src/omniframe/plan.py` (pydantic models, `dark` and `light` presets, format sizes, safe areas, `validate_plan` returning every error as `path: message`, `derive_duration`); `src/omniframe/captions.py` (word helpers moved from `tools/subtitles.py`, `remap_words_to_clips`); `engine/src/types.ts` (plan types); four sample plans in `examples/plans/`. Tests `tests/test_plan.py` and `tests/test_captions.py`.
 - Bugs & fixes: none recorded.
 - Kiro: none recorded.
 - Verified: full suite 189 passed, 1 skipped; engine `tsc --noEmit` exit 0 (task notes).
@@ -143,7 +143,7 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Built: `tools/scripts_runner.py` (listing reads docstrings with `ast`; a run goes through the `scripts_runner` job as `python -P <script> <args.json>`, parses the last stdout line as JSON, returns listed `images` as pictures), `scripts/frame_stats.py`, `scripts/README.md`, `run_script` in `server.py`. `-P` is not in design §13: without it a user `json.py` shadows the standard library.
 - Bugs & fixes: during the 5-minute full-suite run, Kiro shell commands returned empty output and their effects appeared only later → cause not established → wrote results to files in `%TEMP%` and polled them. Removing two scratch folders in `%TEMP%` from the same shell did not take effect → left in place, outside the repo.
 - Kiro: steering `tech.md` ("anything over ~20 s goes through `run_or_detach`") decided the job wrapper; the task text and design §13 gave the file names, the contract and the test list.
-- Verified: `pytest tests/test_scripts_runner.py` → 13 passed; full `pytest` → 273 passed (was 260); real config (repo `scripts/`, `OMNIFRAME_OUTPUT_DIR` in a temp folder) → listing shows both scripts with summary and args, `frame_stats` on a white image → brightness 1.0, user `json.py` still imports the standard library, bad name / unknown name / `timeout_s=5000` refused. Not verified: `run_script` from Kiro chat (needs the `argus` server reloaded).
+- Verified: `pytest tests/test_scripts_runner.py` → 13 passed; full `pytest` → 273 passed (was 260); real config (repo `scripts/`, `OMNIFRAME_OUTPUT_DIR` in a temp folder) → listing shows both scripts with summary and args, `frame_stats` on a white image → brightness 1.0, user `json.py` still imports the standard library, bad name / unknown name / `timeout_s=5000` refused. Not verified: `run_script` from Kiro chat (needs the `omniframe` server reloaded).
 - Credits: <author fills>
 
 ## Task 14 — Clips track and media prep (2026-11-17, Sonnet 5.5)
@@ -153,7 +153,7 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Kiro: the sub-agent `spec-task-execution` was not registered ("not found in registry"), so the orchestrator could not dispatch the task and I did it directly after the author said so; steering `engine.md` (layer order, no hardcoded sizes) fixed where clips go.
 - Verified: engine `tsc --noEmit` exit 0; `tests/test_clips.py` 16 passed (12 offline, 4 engine: in/out part and duration, open-ended clip, zoom at 3 times, focus point); zoom math checked in node; full suite 288 passed + 1 fixed test. Not verified: a real phone VFR file, long files, audio mix of clip + voice + music.
 - Credits: <author fills>
-- Details: `.kiro/specs/argus-v2/task14.md` (section 8: 15 questions for the auditor)
+- Details: notes (removed) (section 8: 15 questions for the auditor)
 
 ## Task 15 — Footage editing scenario (2026-11-17, Sonnet 5.5)
 
@@ -181,17 +181,17 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Built: deleted the four v1 tool modules (kinetic, assemble, subtitles, timeline), the bundled ASS font folder and the four MCP wrappers; the helpers they shared were already in `render.py` and `captions.py`, so nothing was moved. `doctor.py`: the ASS-subtitle probe removed; numpy, Pillow and the engine packages (`remotion`, `@remotion/renderer`, `@remotion/bundler`) are critical; faster-whisper and edge-tts are warnings only. `server.startup_banner()` counts the registered tools. README, README.ru, STARTER, TUTORIAL and `pyproject.toml` no longer name the removed tools.
 - Bugs & fixes: one full-suite run failed `test_clip_without_out_plays_to_the_end_of_the_file` (render job state `error`) → I had two pytest runs going at once on the same engine folder; the test passed alone and in the next full run → no code change. Kiro shell returned only echoed input and ran commands minutes late again → started pytest and tsc with `Start-Process` into files and polled them.
 - Kiro: the user's instruction to commit before deleting (checkpoint commit `aada601`, so the removal can be rolled back); none otherwise.
-- Verified: engine `tsc --noEmit` exit 0; full `pytest` 290 passed, exit 0 (419 s); `grep` for the four removed tool names, their module paths, the ASS probe and the fonts path over `src`, `tests`, `docs`, `README*.md`, `STARTER.md`, `INSTALL.md` finds nothing (run before this entry was written; the entry itself avoids those strings). Not verified: `argus-doctor` on this machine (only mocked probes); the server in Kiro needs a reload to drop the old tools.
+- Verified: engine `tsc --noEmit` exit 0; full `pytest` 290 passed, exit 0 (419 s); `grep` for the four removed tool names, their module paths, the ASS probe and the fonts path over `src`, `tests`, `docs`, `README*.md`, `STARTER.md`, `INSTALL.md` finds nothing (run before this entry was written; the entry itself avoids those strings). Not verified: `omniframe-doctor` on this machine (only mocked probes); the server in Kiro needs a reload to drop the old tools.
 - Credits: <author fills>
 - Audit status (task 18):
   - [x] Verify: full pytest 290 passed; engine `tsc --noEmit` exit 0; grep over `src`, `tests`, `docs`, `README*.md`, `STARTER.md`, `INSTALL.md` clean.
-  - [ ] Not checked: `argus-doctor` run for real on this machine; the server reloaded in Kiro; the README plan example run through `validate_plan`.
+  - [ ] Not checked: `omniframe-doctor` run for real on this machine; the server reloaded in Kiro; the README plan example run through `validate_plan`.
   - Overall: code and tests OK; the questions below need an answer from the author or auditor.
 - Questions for the audit (task 18):
   1. edge-tts went from critical to a warning in `doctor.py`. Design §15 lists it as optional, but the task text did not ask for it. Consequence: `doctor` reports `ok` on a machine with no voice provider at all. Keep?
   2. The engine check only tests that three folders exist in `engine/node_modules`. It does not compare versions with the 4.0.540 pin and does not look for a browser (`_find_browser`, Remotion's own download). A machine with `node_modules` but no Chrome/Edge passes the doctor and fails at the first render. Add a browser check?
   3. Doctor texts are still in Russian, while `product.md` says tool messages are in English. This was already so before the task and I left it. I wrote the new checks in Russian to keep one report in one language. Translate all of them?
-  4. The server banner now says "ACTIVE | N tools | fps | output", in English, without the frame size. `ArgusConfig.width/height` still exist; design §15 says tools should stop using them. I did not search for the remaining uses.
+  4. The server banner now says "ACTIVE | N tools | fps | output", in English, without the frame size. `OmniFrameConfig.width/height` still exist; design §15 says tools should stop using them. I did not search for the remaining uses.
   5. The engine still reads the v1 props (`theme`, `accent`, `voice`, `music`, `sfx_list`, the `sfx` flag) in `Main.tsx` / `types.ts` / `sfx.ts`, and `engine/sample-props.json` still uses `theme`. No tool sends them now. Remove them (and the Studio sample) in a later task, or keep for the Studio?
   6. `render.py` still synthesizes `whoosh.mp3`, `pop.mp3`, `hit.wav` into `engine/public/sfx` when a plan names them. I kept it because the sample plans name them. Is a built-in sound set wanted at all, given "no automatic sound effects"?
   7. The bundled Montserrat ExtraBold font was deleted with the bundled ASS font folder. It was the font of the old `phrase` subtitle look (the reference series). The engine has only Inter Display. Does `examples/plans/reference_style_9x16.json` or a future reference-style video need Montserrat in `engine/public/fonts`?
@@ -216,19 +216,19 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Credits: <author fills>
 
 ## Task 20 — Dogfood video 1, «Яхта за рубль» (2026-11-18, Sonnet 5.5)
-- Built: retimed the nine drawn scenes to the real George voice (`Film.tsx` cues, local times in `Scenes1/2.tsx` with the voice words in comments), real captions from `voice.words.json`, CC0 music and 9 sound effects from Freesound, then stills (4 rounds), preview, final, QA and `export_package` → `final/yacht_9x16.mp4` (86.1 s), cover, `post.md`. The video and its components live outside the repo; the repo got the notes (`task20.md`) and Known issues 23–26.
+- Built: retimed the nine drawn scenes to the real George voice (`Film.tsx` cues, local times in `Scenes1/2.tsx` with the voice words in comments), real captions from `voice.words.json`, CC0 music and 9 sound effects from Freesound, then stills (4 rounds), preview, final, QA and `export_package` → `final/yacht_9x16.mp4` (86.1 s), cover, `post.md`. The video and its components live outside the repo; the repo got the notes (notes (removed)) and Known issues 23–26.
 - Bugs & fixes: compile error `TS2304 eIn` in `Scenes2.tsx` → an earlier edit of scene 8 used `eIn` without importing it → `render_video` typechecked the component and refused to render → added the import. Final QA hard failure, true peak -0.28 dBTP at -14.1 LUFS → `finalize_video` has no limiter before the AAC encode → re-encoded the audio of the finished file with `alimiter=limit=0.708` → -1.16 dBTP; the render pipeline itself is not fixed (Known issue 24). `alimiter=limit=-2dB` gave only -0.50 dBTP.
 - Defects seen and left: long words in phrase captions lose the gap to the next word (Known issue 25, cause not confirmed). Known issue 21 (safe area) did not reproduce with the default safe area (issue 23). The Kiro shell again returned no output for waits, so I followed the renders with `job_status`.
-- Kiro: the `argus` MCP tools did the work: `render_video` stills showed the model the frames and its component typecheck caught the missing import before a render; `qa_verify_video` caught the peak that the loudness figure alone hid; `studio_guide` gave the working order (stills, preview, final, QA, export). Steering `product.md` / `tech.md` set the order and the build log; no hook result noted.
+- Kiro: the `omniframe` MCP tools did the work: `render_video` stills showed the model the frames and its component typecheck caught the missing import before a render; `qa_verify_video` caught the peak that the loudness figure alone hid; `studio_guide` gave the working order (stills, preview, final, QA, export). Steering `product.md` / `tech.md` set the order and the build log; no hook result noted.
 - Verified: stills at about 30 times over four rounds, 8 preview frames, QA of the final after the limiter: 1080x1920, 30 fps, -14.1 LUFS, -1.16 dBTP, no black, freeze or silence → passed; `export_package` → 1 mp4, cover, `post.md`, no violations. Reviewed by the author, who listened to the voice and watched the final and accepted it (per the author); I did not hear the voice or the mix myself. No 16:9 version. Task 20 stays `[ ]` in `tasks.md` because it asks for three videos; this is video 1.
 - Credits: 91 credits and 1 h 20 min for this part (per the author)
-- Details: `.kiro/specs/argus-v2/task20.md`
+- Details: notes (removed)
 
 ## Task 20.1 — Fixes from video 1 (2026-11-18, Haiku 5.5)
 - Built: `LIMITER_FILTER` (`alimiter`, -2 dBFS, `level=disabled`, `latency=true`) after `loudnorm` in `finalize_video`; word-gap margins for the active word in phrase captions (`engine/src/captions.tsx`); `captions.style.case` (`upper`/`as_is`) in plan, types and engine; `job_status(wait_s)`, capped at 20 s, with `eta_s`; compact `watch_video` result (`words_path`, `segments_path`, `transcript_head`, no inline words); `voice_options` reads the plan (`GET /v1/user/subscription`) and on the free tier moves non-premade own voices and all Voice Library voices to the paid-plan list.
-- Bugs & fixes: no synthetic mix reproduced the true-peak failure without the limiter (13 signals, -1.1 to -1.5 dBTP without it), so the test checks the filter itself (a 0.99 burst must come out at or below 0.8 linear). The active word's 1.08 scale covered the gap to the next word, so each word now reserves half its growth as side margin. `test_scenarios` read inline words, so it reads `words_path` now. The running `argus` server predates the `case` field (`unknown field 'case'`), so it needs a reload.
+- Bugs & fixes: no synthetic mix reproduced the true-peak failure without the limiter (13 signals, -1.1 to -1.5 dBTP without it), so the test checks the filter itself (a 0.99 burst must come out at or below 0.8 linear). The active word's 1.08 scale covered the gap to the next word, so each word now reserves half its growth as side margin. `test_scenarios` read inline words, so it reads `words_path` now. The running `omniframe` server predates the `case` field (`unknown field 'case'`), so it needs a reload.
 - Real file: `project-1/renders/yacht-final-9x16.mp4` before `finalize_video` -0.28 dBTP at -14.06 LUFS, after it -1.82 dBTP at -14.06 LUFS (measured with `measure_loudness`, the function QA uses). The temporary `.tp-check.mp4` was deleted.
-- Kiro: `argus` MCP `render_video` stills for the gap check. The Kiro shell stopped returning output during long test runs, so runs wrote to files that were read back.
+- Kiro: `omniframe` MCP `render_video` stills for the gap check. The Kiro shell stopped returning output during long test runs, so runs wrote to files that were read back.
 - Verified: test_plan + test_captions 31 passed; test_jobs 18 passed; test_watch + test_studio_guide 42 passed; test_voice_options 29 passed; full `pytest tests` 298 passed and 1 failed (`test_footage_edit_with_remapped_captions`, fixed, rerun 1 passed); engine `tsc --noEmit` exit 0; caption stills show the gap in four frames.
 - Not verified: a final of an `examples/plans` sample passing QA with no manual limiter (not run); `case` in a still (server predates it); a live ElevenLabs call on the free tier (none made); caption gap in pixels (not measured).
 - Author direction: ElevenLabs is the priority voice provider; edge-tts is a fallback, not the default for finals. Verify items and the checkbox for 20.1 are left to the author. Credits: 40
@@ -239,7 +239,7 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Bugs & fixes: the first write of `kit/timing.tsx` was cut off by a tool error and the file was not created → rewrote it. `Set-Content -Encoding UTF8` put a BOM into `types.ts` → removed the three bytes, diff back to 7 lines. The Kiro shell returned only echoed input, then ran nothing; the author cancelled the session. Later calls worked, and the stills rendered earlier were still on disk.
 - Kiro: spec task 20.2 gave the block list; the engine steering rule on determinism is why `Particles` use `random(seed)`; `render_video` stills with its component typecheck are the test of the kit. No hook result noted.
 - Verified: engine `tsc --noEmit` exit 0; `test_captions` + `test_plan` + `test_studio_guide` 48 passed; `test_components` offline subset 25 passed; three new engine tests passed in 24.41 s (`SceneTrack` switching on a word cue from a words file in a scene that starts at 1 s; the `KIT.md` example in 9:16 and in 16:9). Looked at four of the eight stills of the example (9:16 and 16:9 at 1.5 s and 3.6 s): text, plate and pop-up are centred and not clipped in both formats.
-- Not verified: full `pytest -q` after the change (started once at the end, output still empty after about 16 minutes, so no result; `Plan.to_dict()` now always has `cues: {}`, so a test that compares a whole plan dict could fail); no still or test for `LightCone`, dust `Particles`, `PollCard`, `Checklist`, `ProgressBar`, `Bubble`, `Label`, `Slide`, `Pop`; an unknown cue name in `useCue` (should stop the render with a message) was not tried; the running `argus` server must be reloaded; the target (under 20 minutes and 20 credits on the Kiroween video) is not measured and belongs after 20.3.
+- Not verified: full `pytest -q` after the change (started once at the end, output still empty after about 16 minutes, so no result; `Plan.to_dict()` now always has `cues: {}`, so a test that compares a whole plan dict could fail); no still or test for `LightCone`, dust `Particles`, `PollCard`, `Checklist`, `ProgressBar`, `Bubble`, `Label`, `Slide`, `Pop`; an unknown cue name in `useCue` (should stop the render with a message) was not tried; the running `omniframe` server must be reloaded; the target (under 20 minutes and 20 credits on the Kiroween video) is not measured and belongs after 20.3.
 - Later run: full `pytest -q` → 340 passed (exit 0) at the start of 20.6, recorded in the Task 20.5 entry. The run above has no result.
 - Credits: <author fills>
 - Questions for the auditor:
@@ -256,7 +256,7 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Built: `tools/library.py`; `export_package(save_to_library=...)` writes `<output>/library/<entry>/` (component files, `card.md`, `poster.jpg` 512 px from the final) and rebuilds `index.md`; `studio_guide` returns `library` (index, up to 8 posters as images); a component imports `./library/<entry>/<File>`, `components.py` copies the used files into `custom/job/library/<entry>/` with `style.ts`/`kit.ts` re-exports. Guide text, `custom/README.md` and docstrings updated.
 - Bugs & fixes: two pytest runs at once → the shared `engine/src/custom/registry.ts` was left generated and `_engine_untouched` failed → one run at a time, no code change. A chained PowerShell `.Replace` edit overwrote an import line in `render.py` → restored with a direct edit. Kiro shell commands ran late and in one shared queue → results read from output files.
 - Kiro: none beyond the spec task text and steering rules.
-- Verified: `pytest -q` → 338 passed (8 min 6 s); new `tests/test_library.py` plus two engine tests in `test_components.py` (render with an imported entry; compile error names the entry). The author's Verify (yacht entry, two references) is not run yet; the `argus` MCP server must be reloaded.
+- Verified: `pytest -q` → 338 passed (8 min 6 s); new `tests/test_library.py` plus two engine tests in `test_components.py` (render with an imported entry; compile error names the entry). The author's Verify (yacht entry, two references) is not run yet; the `omniframe` MCP server must be reloaded.
 - Credits: <author fills>
 
 ## Task 20.5 — Kit backgrounds, transitions, energy kit: visual part only (2026-11-20, Sonnet 5.5)
@@ -289,27 +289,27 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Not done: the second look and the 16:9 stills were not viewed (the test suite renders both and checks size and brightness only); the other seven strips were not viewed; in the sample the slam text and the headline caption share the middle of the frame and overlap; `Aberration` and `glitch` show a coloured band at the left edge in stills, not judged; STUDIO_GUIDE text (§5, §6) not re-read in this pass.
 - Credits: <author fills>
 ## Task 20.7a — Cheaper and faster videos (2026-11-21, Haiku 5.5)
-- Baseline before any speed change (10 s slice of `argus-trailer-en`, copied to project `argus-timing-slice` with `duration` 10, final 9:16, `ARGUS_RENDER_CONCURRENCY` unset = 2 workers, wall 113.0 s, job 109.3 s): prepare 5.7 s, bundle 15.7 s, browser 1.2 s, frames + encode 79.1 s (300 frames), mux 0.1 s, loudness 3.4 s.
+- Baseline before any speed change (10 s slice of `omniframe-trailer-en`, copied to project `omniframe-timing-slice` with `duration` 10, final 9:16, `OMNIFRAME_RENDER_CONCURRENCY` unset = 2 workers, wall 113.0 s, job 109.3 s): prepare 5.7 s, bundle 15.7 s, browser 1.2 s, frames + encode 79.1 s (300 frames), mux 0.1 s, loudness 3.4 s.
 - Measured with a timing field added to render results (node side: bundle, browser, frames + encode, mux; Python side: prepare, finalize, total). No behaviour change in this step.
 - Built: `timing` in every render result. Bundle reuse from `<project>/cache/bundle/<key>` (key = engine/src, package.json, the job's public files). A stills round of 2+ frames returns one contact sheet (up to 12 cells, each labelled with time and `scenes[i]`), full frames stay listed. Warnings for one-colour frames and accent words never spoken. `export_package` adds `render_timing`. Guide §5 and §8 and the `render_video` docstring updated.
 - Measured, 10 s slice, final 9:16: baseline 109.3 s total (bundle 15.7 s). After, bundle reused: 48.1 s (bundle 0 s). Second stills call: bundle 3.2 s to 0 s. Frames + encode with identical settings ranged 41 to 74 s (2 workers: 51, 41, 74; 3: 48, 55; 4: 50). The frame stage is not shown to be faster. Preset: `fast` 45.3 s and 10.2 MB against `medium` 41.0 s and 9.5 MB; `veryfast` 41.4 s. Default stays `medium`, 2 workers.
 - Bugs: Windows refused `status.json` replace while a reader or scanner held it, so a finished render was marked error (retry window 1.3 s, now about 18 s). Test fake node left the engine lock, so the next test waited 300 s (fake now releases it). Lock leaked if the bundle key failed (now released).
-- Not done: stills scene subset (a still draws only the scenes on its frame; the bundle was the cost). Guide edited in `src/argus/STUDIO_GUIDE.md` only.
+- Not done: stills scene subset (a still draws only the scenes on its frame; the bundle was the cost). Guide edited in `src/omniframe/STUDIO_GUIDE.md` only.
 - Kiro: `control_pwsh_process` for the long runs; multi-step chains often ended early, so single commands were used.
 - Verified: full `pytest` 368 passed (first full run 362 passed, 6 failed on the old per-frame shape and one run killed by me; all fixed and rerun 6 passed); `tsc --noEmit -p engine` exit 0; trailer stills sheet of 6 cells viewed, labels and frames legible.
-- Left behind: `argus-trailer-en/renders/sheet-check-*` and a 38 MB `cache/bundle`; scratch project `argus-timing-slice` and timing files in `OMNIFRAME_OUTPUT/timing/`.
+- Left behind: `omniframe-trailer-en/renders/sheet-check-*` and a 38 MB `cache/bundle`; scratch project `omniframe-timing-slice` and timing files in `<OMNIFRAME_OUTPUT_DIR>/timing/`.
 - Credits: <author fills>
 
 ## Task 22 — Pre-existing work and skills/ (2026-11-21, Haiku 5.5)
-- Built: `skills/` (72 tracked files) copied to `../argus-skills` and removed from this repo in `540ba82`; its lines removed from `.gitignore`; README.md, README.ru.md and STARTER.md no longer name the skills folder (per the commit message).
+- Built: `skills/` (72 tracked files) copied to `../omniframe-skills` and removed from this repo in `540ba82`; its lines removed from `.gitignore`; README.md, README.ru.md and STARTER.md no longer name the skills folder (per the commit message).
 - Bugs & fixes: none.
 - Kiro: none.
-- Verified: `git ls-files skills` → 0 files; `Test-Path ..\argus-skills` → True; full `pytest` → 368 passed in 685.77 s, exit 0.
-- Left for the author: `launch_argus_mcp.bat` kept (INSTALL.md lines 89 and 96 use it); README.md line 11 still names `~/.zcode/skills`; the disclosure text is in task 21.
+- Verified: `git ls-files skills` → 0 files; `Test-Path ..\omniframe-skills` → True; full `pytest` → 368 passed in 685.77 s, exit 0.
+- Left for the author: `the launcher .bat` kept (INSTALL.md lines 89 and 96 use it); README.md line 11 still names `~/.zcode/skills`; the disclosure text is in task 21.
 - Credits: <author fills>
 
 ## Task 20.5b - Sound design: synthesized sounds, variations, SFX library (2026-11-21, Haiku 5.5)
-- Built: sound events placed on the timeline (`src/argus/tools/sounds.py`), synthesized sounds (`src/argus/tools/synth.py`), tests (`tests/test_sounds.py`); plan, server, studio and `STUDIO_GUIDE.md` updated to match.
+- Built: sound events placed on the timeline (`src/omniframe/tools/sounds.py`), synthesized sounds (`src/omniframe/tools/synth.py`), tests (`tests/test_sounds.py`); plan, server, studio and `STUDIO_GUIDE.md` updated to match.
 - Bugs & fixes: (1) built-in sounds were not found in `run_job` and `_run_audio` -> both now resolve files through `render._resolve_file`. (2) 404 on `InterDisplay-Black.otf` in a full run, not reproduced on a rerun -> cause: the cached bundle `<project>/cache/bundle/<key>/public/` had no `fonts/` folder while `m/` had its files, and the source of the loss is not known -> before a cached bundle is served, `render._restore_public` links back every file of the job public dir that the bundle lacks and reports the list. Test: `test_reused_bundle_gets_back_the_public_files_it_lost`.
 - Kiro: none.
 - Verified: `test_render_speed.py`, `test_scenarios.py`, `test_render.py` -> 42 passed in 240.04 s, exit 0; full `pytest -q` -> 414 passed in 750.28 s, exit 0.
@@ -317,17 +317,17 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Credits: <author fills>
 
 ## Task 20.8 — Current models and all voices (2026-11-21, Haiku 5.5)
-- Built: `tools/model_catalog.py` (Gemini TTS and Veo from google-genai `models.list`, newest by the version number in the id); ElevenLabs TTS models from `GET /v1/models` in `voiceover.py`, default is the newest one (now `eleven_v4`), `ARGUS_ELEVEN_MODEL` pins one; `voice_options` returns `models` with `default`; voices from all pages of `GET /v2/voices`; `generate_veo_clip` route `api` refused with the 2026-10-22 shutdown message (Flow route unchanged); `.env.example` model ids empty; `chatSessionId` removed from `tasks.meta.json`.
-- Bugs & fixes: the first full run failed `test_veo_provider_validation` (ImportError) because `veo.py` and `model_catalog.py` were edited while that run was still collecting tests → rerun on the final code, no code change. `test_studio_guide` expected `veo_api` available with a key → test now expects the shutdown note. `test_config` read a pinned `ARGUS_TTS_MODEL` from the user's `.env` → the test clears the model variables first.
+- Built: `tools/model_catalog.py` (Gemini TTS and Veo from google-genai `models.list`, newest by the version number in the id); ElevenLabs TTS models from `GET /v1/models` in `voiceover.py`, default is the newest one (now `eleven_v4`), `OMNIFRAME_ELEVEN_MODEL` pins one; `voice_options` returns `models` with `default`; voices from all pages of `GET /v2/voices`; `generate_veo_clip` route `api` refused with the 2026-10-22 shutdown message (Flow route unchanged); `.env.example` model ids empty; `chatSessionId` removed from `tasks.meta.json`.
+- Bugs & fixes: the first full run failed `test_veo_provider_validation` (ImportError) because `veo.py` and `model_catalog.py` were edited while that run was still collecting tests → rerun on the final code, no code change. `test_studio_guide` expected `veo_api` available with a key → test now expects the shutdown note. `test_config` read a pinned `OMNIFRAME_TTS_MODEL` from the user's `.env` → the test clears the model variables first.
 - Kiro: none beyond the spec task text and the steering rules. The shell returned echoed input, so runs wrote to files that were read back.
 - Verified: full `pytest -q` 441 passed, exit 0 (10 min 31 s, on the final code). Live, read-only, with the author's key: `/v2/voices` returns 24 voices over all pages (21 premade, 3 Voice Library copies, 0 personal); models as listed above. Not verified: the count in the author's ElevenLabs app; no real Veo call (the route is refused by design).
 - Credits: <author fills>
 
 ## Task 20.9 — Leftovers before the freeze (2026-11-21, Haiku 5.5)
-- Built: `argus-doctor` in English, with a render-browser line (Chrome or Edge path, or "Remotion downloads its own"); one `NO_WINDOW` flag for every subprocess call in `src/argus`; `style_note` on stills and preview answers for the `dark` and `light` presets; `qa_verify_video` reports size, loudness and true peak of a `-preview-` file as warnings; `calculate_beat_grid` replies with 12 beats and `beats_path` (full list in JSON, `project` optional); STUDIO_GUIDE §5 on the look and on low beat confidence; the spec copy of the guide is a pointer; 20.4 set to dropped; gaps in this log filled.
+- Built: `omniframe-doctor` in English, with a render-browser line (Chrome or Edge path, or "Remotion downloads its own"); one `NO_WINDOW` flag for every subprocess call in `src/omniframe`; `style_note` on stills and preview answers for the `dark` and `light` presets; `qa_verify_video` reports size, loudness and true peak of a `-preview-` file as warnings; `calculate_beat_grid` replies with 12 beats and `beats_path` (full list in JSON, `project` optional); STUDIO_GUIDE §5 on the look and on low beat confidence; the spec copy of the guide is a pointer; 20.4 set to dropped; gaps in this log filled.
 - Bugs & fixes: `test_beats` read `beats` after the reply stopped carrying it → KeyError in 3 tests → the test reads `beats_path`, and the tests write to a temp output folder. Beat times came back as `np.float64` → cast to float. `style_note` covered `dark` only → added `light` with its own line and tests for both. A pytest run started on a stale test file → stopped and restarted. Commit `4473b5d` had a BOM in its message → amended without BOM.
 - Kiro: none beyond the 20.9 checks in `tasks.md` and the steering rule for detached runs (output to files, then read back).
-- Verified: full `pytest -q` 465 passed, exit 0 (607 s); targeted run of items 1–6 and 8: 63 passed; engine `tsc --noEmit` exit 0. Direct runs: `argus-doctor` exit 0; QA on a generated 540x960 preview → passed, warnings `resolution` and `loudness`; beat grid on a 120 s click track at 170 BPM → reply 556 characters, 342 beats in the file.
+- Verified: full `pytest -q` 465 passed, exit 0 (607 s); targeted run of items 1–6 and 8: 63 passed; engine `tsc --noEmit` exit 0. Direct runs: `omniframe-doctor` exit 0; QA on a generated 540x960 preview → passed, warnings `resolution` and `loudness`; beat grid on a 120 s click track at 170 BPM → reply 556 characters, 342 beats in the file.
 - Credits: <author fills>
 
 ## Task 20.10 — Credit economy and demo-run bugs (date not recorded, Haiku 5.5 high)
@@ -355,7 +355,7 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Built: `export_package(save_to_library=[...])` saves up to 12 elements after QA passes; a name that exists makes the next version (`<entry>/versions/v<n>/` keeps the old files, `card.md` lists the versions); `times used` counts renders that import an entry; the `studio_guide` index shows version and times used; the reuse rule is in the guide core.
 - Bugs & fixes: (1) a list with the same name twice, where the other item lacked `changed`, did not say "appears twice" → the duplicate check ran only on items that passed the other checks → every item's name is checked first. (2) `studio_guide` poster order differed from the test → the code orders by poster mtime, the test aged only `card.md` → the test ages the poster as well. (3) an index line test expected a shortened `what` → test updated.
 - Kiro: none beyond the steering rule for detached runs (output to files, read back).
-- Verified: `test_library.py` 31 passed; `test_library`, `test_guide_sections`, `test_tool_surface`, `test_export`, `test_components`, `test_studio_guide` 104 passed, exit 0 (217 s). Seeded `OMNIFRAME_OUTPUT/library` with `neon-octopus` (Octopus.tsx) and `neon-bg` (Bg.tsx) from octopus-neon, posters from the final at 1.9 s. The author's Verify is not run; the task stays `[ ]`.
+- Verified: `test_library.py` 31 passed; `test_library`, `test_guide_sections`, `test_tool_surface`, `test_export`, `test_components`, `test_studio_guide` 104 passed, exit 0 (217 s). Seeded `<OMNIFRAME_OUTPUT_DIR>/library` with `neon-octopus` (Octopus.tsx) and `neon-bg` (Bg.tsx) from octopus-neon, posters from the final at 1.9 s. The author's Verify is not run; the task stays `[ ]`.
 - Credits: <author fills>
 
 ## Task 20.11 follow-ups — library entries that use other entries, shorter tail, neon-bg v2 (2026-11-24, Haiku 5.5 high; commit by Opus)
@@ -366,15 +366,15 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Credits: <author fills>
 
 ## Veo removed from main until after the contest (2026-11-24, Haiku 5.5 high; commit by Opus)
-- Built: branch `veo-wip` keeps Veo whole (at `abc9911`). On main: `generate_veo_clip`, `tools/veo.py`, `tools/flow_browser.py`, `tests/test_veo.py`, the `flow` extra, `ARGUS_VEO_*` / `ARGUS_FLOW_PROFILE` and the doctor playwright check are gone; docs and README say "Coming soon: Google Flow (Veo)". google-genai and Gemini TTS stay.
+- Built: branch `veo-wip` keeps Veo whole (at `abc9911`). On main: `generate_veo_clip`, `tools/veo.py`, `tools/flow_browser.py`, `tests/test_veo.py`, the `flow` extra, `OMNIFRAME_VEO_*` / `OMNIFRAME_FLOW_PROFILE` and the doctor playwright check are gone; docs and README say "Coming soon: Google Flow (Veo)". google-genai and Gemini TTS stay.
 - Bugs & fixes: the Haiku chat was cancelled while the full pytest ran, so nothing was committed → Opus read the result file and committed.
 - Kiro: steering rule for detached runs (output to files, read back) let the cancelled run be read afterwards.
 - Verified: `git grep -i "veo|flow_login|playwright" -- src tests kiro-power` empty; full pytest 531 passed in 866 s, exit 0.
 - Credits: <author fills>
 
-## Task 20.12 — argus-install: one command for Kiro, Cursor, Claude Code, VS Code, Antigravity (2026-11-24, Haiku 5.5 high; finished by Opus)
-- Built: `argus-install` (`src/argus/install.py`) writes only the `argus` entry into each installed IDE's MCP file, keeps an existing entry unless `--update`, backs up once, `--dry-run`, `--client`, `--remove`, `--trust` (Kiro autoApprove). The entry points at the venv's `argus-studio`. `install.ps1` / `install.sh` create `.venv` and call it last.
-- Bugs & fixes: `pip install -e .` hung for minutes → `force-include "engine"` copies a folder recursively and ignores .gitignore, so it pulled `engine/node_modules` (15,181 files) and `test-baseline` (156 MB) → only `src`, `scripts`, `public/fonts` and the package/tsconfig files are listed; install 13 s, wheel 1.5 MB with 71 engine files. The first entry used `uvx --from git+https://github.com/vertovhq/argus`, which cannot start while the repo is not public → local script first.
+## Task 20.12 — omniframe-install: one command for Kiro, Cursor, Claude Code, VS Code, Antigravity (2026-11-24, Haiku 5.5 high; finished by Opus)
+- Built: `omniframe-install` (`src/omniframe/install.py`) writes only the `omniframe` entry into each installed IDE's MCP file, keeps an existing entry unless `--update`, backs up once, `--dry-run`, `--client`, `--remove`, `--trust` (Kiro autoApprove). The entry points at the venv's `omniframe-studio`. `install.ps1` / `install.sh` create `.venv` and call it last.
+- Bugs & fixes: `pip install -e .` hung for minutes → `force-include "engine"` copies a folder recursively and ignores .gitignore, so it pulled `engine/node_modules` (15,181 files) and `test-baseline` (156 MB) → only `src`, `scripts`, `public/fonts` and the package/tsconfig files are listed; install 13 s, wheel 1.5 MB with 71 engine files. The first entry used `uvx --from git+https://github.com/vertovhq/omniframe`, which cannot start while the repo is not public → local script first.
 - Kiro: none.
 - Verified: `test_install.py` + `test_tool_surface.py` 27 passed; `--dry-run` on this machine; real `--client antigravity` run kept the file unchanged; wheel contents listed. Full pytest not run.
 - Credits: <author fills>
@@ -388,10 +388,10 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 
 ## Task 20.15 — renamed ARGUS to OmniFrame (2026-11-24, Haiku 5.5 high; commit by Opus)
 - Built: package `src/omniframe`, commands `omniframe`, `omniframe-doctor`, `omniframe-install`, MCP entry name `omniframe`, repo links `github.com/vertovhq/omniframe`. `_compat.py` copies old `ARGUS_*` variables to `OMNIFRAME_*` and keeps using `~/.argus` when only it exists. Old build log entries and tasks text keep the old name.
-- Why: many projects are called Argus; the author wants a name of his own.
-- Bugs & fixes: the Haiku chat was cancelled during the full pytest → Opus read the result and committed. The author's Kiro config pointed at `-m argus` and stopped loading → the author changed it to `-m omniframe`.
+- Why: many projects are called OmniFrame; the author wants a name of his own.
+- Bugs & fixes: the Haiku chat was cancelled during the full pytest → Opus read the result and committed. The author's Kiro config pointed at `-m omniframe` and stopped loading → the author changed it to `-m omniframe`.
 - Kiro: none.
-- Verified: full pytest 557 passed in 680 s, exit 0 (includes `test_legacy_names.py`); `git grep -i argus` in src, tests, kiro-power, README, INSTALL, pyproject, install scripts: 4 lines (2 compatibility comments, 2 links to `.kiro/specs/argus-v2/`).
+- Verified: full pytest 557 passed in 680 s, exit 0 (includes `test_legacy_names.py`); `git grep -i argus` in src, tests, kiro-power, README, INSTALL, pyproject, install scripts: 4 lines (2 compatibility comments, 2 links to `.kiro/specs/omniframe/`).
 - Credits: <author fills>
 
 ## Task 20.16 — starter recipes (Haiku 5.5 high)

@@ -4,7 +4,7 @@
     {
       "name": "Run tests after spec task",
       "trigger": "PostTaskExec",
-      "description": "Runs the Python test suite every time a task from .kiro/specs/argus-v2/tasks.md is marked completed, so regressions are caught right after each task.",
+      "description": "Runs the Python test suite every time a task from .kiro/specs/omniframe/tasks.md is marked completed, so regressions are caught right after each task.",
       "action": {
         "type": "command",
         "command": ".venv/Scripts/python.exe -m pytest -q",

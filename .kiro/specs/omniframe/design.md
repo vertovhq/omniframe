@@ -1,4 +1,4 @@
-# Design — ARGUS v2
+# Design — OmniFrame v2
 
 ## 1. Roles
 
@@ -46,16 +46,16 @@ Removed: `analyze_reference`, `story_guide`, `validate_beats`, `build_kinetic_vi
 
 ### Server instructions (replace the current `instructions=` text in `server.py`)
 
-> ARGUS turns you into a video editor and producer for TikTok, Shorts and YouTube.
+> OmniFrame turns you into a video editor and producer for TikTok, Shorts and YouTube.
 > Call `studio_guide` at the start of every session: it holds the working method and
-> the user's saved preferences. You make every creative decision. ARGUS tools watch
+> the user's saved preferences. You make every creative decision. OmniFrame tools watch
 > (`watch_video`, `get_frames`), speak (`synthesize_voiceover`), generate
 > (`generate_veo_clip`), render (`render_video`), check (`qa_verify_video`) and package
 > (`export_package`). Operations that take long return a `job_id`; poll `job_status`.
 
 ## 3. Project folder
 
-`argus.project.project_dir(name) -> Path` resolves `OMNIFRAME_OUTPUT_DIR/projects/<slug>`
+`omniframe.project.project_dir(name) -> Path` resolves `OMNIFRAME_OUTPUT_DIR/projects/<slug>`
 (slug: `[a-z0-9-]{1,48}`, derived from the name) and creates:
 
 ```
@@ -72,7 +72,7 @@ Removed: `analyze_reference`, `story_guide`, `validate_beats`, `build_kinetic_vi
 
 ## 4. Images to the model
 
-`src/argus/media_out.py`:
+`src/omniframe/media_out.py`:
 
 - `prepare_image(path, max_side=1024, quality=85) -> Path` — Pillow downscale to JPEG
   next to the source (`*.view.jpg`), reused when newer than the source.
@@ -87,14 +87,14 @@ Removed: `analyze_reference`, `story_guide`, `validate_beats`, `build_kinetic_vi
 
 ## 5. Jobs
 
-`src/argus/jobs.py`, generalised from the detached worker in `tools/assemble.py`:
+`src/omniframe/jobs.py`, generalised from the detached worker in `tools/assemble.py`:
 
 - Job dir: `OMNIFRAME_OUTPUT_DIR/.jobs/<job_id>/` with `job.json` (kind, payload, key),
   `status.json` (`state`, `progress` 0..1 or null, `started`, `finished`, `pid`,
   `result`, `error`), `log.txt` (stderr tail).
 - `start(kind, payload, key) -> job_id`: single-flight by `key` (hash of kind + payload);
   stale detection by pid liveness (`os.kill(pid, 0)`) and age, as in `assemble.py`.
-- Worker: `python -I -m argus.jobs <job_dir>` (Windows `CREATE_NO_WINDOW`); dispatches
+- Worker: `python -I -m omniframe.jobs <job_dir>` (Windows `CREATE_NO_WINDOW`); dispatches
   `kind` to a registered function (`watch`, `render`, `transcribe`), writes progress
   through `report(progress, note)`.
 - `run_or_detach(kind, payload, key, wait_s=20)`: starts the job, polls status until
@@ -105,7 +105,7 @@ Removed: `analyze_reference`, `story_guide`, `validate_beats`, `build_kinetic_vi
 
 ## 6. Watching: `watch_video` and `get_frames`
 
-`src/argus/tools/watch.py` (replaces `tools/reference.py`).
+`src/omniframe/tools/watch.py` (replaces `tools/reference.py`).
 
 Pipeline for one file:
 1. Content hash: sha256 of the first and last 8 MB + size → cache key. Cache dir
@@ -125,7 +125,7 @@ Pipeline for one file:
    approach from `skills/montazh-epizod/scripts/speech.py` (decode to 16 kHz mono numpy
    to avoid the PyAV issue, `word_timestamps=True`, `vad_filter=True`,
    `condition_on_previous_text=False`, `temperature=0`; verbatim `initial_prompt` only
-   for Russian). Model size from `ARGUS_WHISPER_MODEL` (default `small`, `int8`, CPU).
+   for Russian). Model size from `OMNIFRAME_WHISPER_MODEL` (default `small`, `int8`, CPU).
    Save `words.json` (`[{w,s,e}]`) and `segments.json`.
 8. Sound events: reuse `_decode_mono` and `_onset_envelope` from `tools/beats.py`;
    peak-pick onsets above a fixed relative strength; return `[{t, strength}]` (cap 200).
@@ -143,7 +143,7 @@ frames saved to `<project or output>/.work/frames/`; returns images.
 
 ## 7. Voice
 
-`src/argus/tools/voiceover.py` keeps the public names; internals become providers:
+`src/omniframe/tools/voiceover.py` keeps the public names; internals become providers:
 
 ```python
 class VoiceProvider(Protocol):
@@ -161,7 +161,7 @@ ElevenLabs (verify ids and fields in the official docs during the task):
 - Endpoint: `POST /v1/text-to-speech/{voice_id}/with-timestamps` → base64 audio +
   character `alignment`; convert characters to words (split on whitespace, take first
   char start / last char end). Strip audio tags like `[whispers]` from the words list.
-- Default model `ARGUS_ELEVEN_MODEL` = `eleven_v3` (check `GET /v1/models` for the current
+- Default model `OMNIFRAME_ELEVEN_MODEL` = `eleven_v3` (check `GET /v1/models` for the current
   id and whether timestamps are supported; fallback: ElevenLabs forced alignment
   endpoint, then faster-whisper).
 - Pauses and emotion: v3 uses audio tags (`[pause]`, `[whispers]`, `[excited]`…); SSML
@@ -183,7 +183,7 @@ compressor, loudnorm) and `<project>/audio/<name>.words.json`. Return
 
 ## 8. Plan v2
 
-Python source of truth: `src/argus/plan.py` (pydantic v2 models, `extra="forbid"` so typos
+Python source of truth: `src/omniframe/plan.py` (pydantic v2 models, `extra="forbid"` so typos
 are reported). TypeScript mirror: `engine/src/types.ts`.
 
 ```ts
@@ -248,14 +248,14 @@ returned by `render_video` without rendering.
 
 ## 9. Render pipeline
 
-`src/argus/tools/render.py` (replaces `tools/kinetic.py`), node side
+`src/omniframe/tools/render.py` (replaces `tools/kinetic.py`), node side
 `engine/scripts/render.mjs` using `@remotion/bundler` + `@remotion/renderer` (add to
 `engine/package.json`, pinned to the same version as `remotion`).
 
 Steps (inside a `render` job; stills also run as a job with `wait_s` large enough to
 usually return inline):
 1. Validate plan (§8). Apply `format` override if given.
-2. Captions preprocessing in Python (`src/argus/captions.py`, moved from
+2. Captions preprocessing in Python (`src/omniframe/captions.py`, moved from
    `tools/subtitles.py`): load words, `clean_word_timings`, remap to output time when
    `remap: 'clips'` (for each clip from the transcript's source, keep words inside
    `[in, out]`, shift by `at - in`), `group_phrases` for phrase mode. Result is written
@@ -277,8 +277,8 @@ usually return inline):
      side-by-side images (reference left, render right, labels) with Pillow;
    - preview: `renderMedia` `scale: 0.5`, `crf: 28`;
    - final: `renderMedia` full size, `crf: 18`, then ffmpeg post: `loudnorm`
-     (I=-14, TP=-1.5, LRA=11), `+faststart`, `comment=Made with ARGUS Studio vX`.
-   Progress from `onProgress` → job status. Concurrency from `ARGUS_RENDER_CONCURRENCY`
+     (I=-14, TP=-1.5, LRA=11), `+faststart`, `comment=Made with OmniFrame Studio vX`.
+   Progress from `onProgress` → job status. Concurrency from `OMNIFRAME_RENDER_CONCURRENCY`
    (default: half the CPU cores, min 1). Browser: keep `_find_browser()` logic.
 7. Outputs: `<project>/renders/<name>-<mode>-<format>.mp4` / stills JPEGs; final mode also
    saves the plan to `<project>/plan.json`. Delete `.work/render-<id>` on success.
@@ -313,7 +313,7 @@ The guide (§14) describes this flow.
 
 ## 11. Technical QA
 
-`src/argus/tools/qa.py`, format-aware:
+`src/omniframe/tools/qa.py`, format-aware:
 
 | Check | Method | Severity |
 |---|---|---|
@@ -334,7 +334,7 @@ spread plus one frame per black/freeze issue (cap 8).
 
 ## 12. Export
 
-`src/argus/tools/export.py`:
+`src/omniframe/tools/export.py`:
 - `videos`: `{"9:16": path, "16:9": path}` (one or both).
 - `texts`: `{"tiktok": {"caption", "hashtags"}, "shorts": {"title", "description",
   "hashtags"}, "youtube": {"title", "description", "tags"}}` — written by the model.
@@ -348,8 +348,8 @@ spread plus one frame per black/freeze issue (cap 8).
 
 ## 13. User scripts
 
-`src/argus/tools/scripts_runner.py`:
-- Folders: `<repo>/scripts/` and `ARGUS_SCRIPTS_DIR` (default `~/.argus/scripts`).
+`src/omniframe/tools/scripts_runner.py`:
+- Folders: `<repo>/scripts/` and `OMNIFRAME_SCRIPTS_DIR` (default `~/.omniframe/scripts`).
 - Contract: a `.py` file whose module docstring starts with a one-line summary and has a
   line `Args: {json example}`; it reads one argument (path to a JSON file with args) and
   prints its result as JSON on the last stdout line. Result may include
@@ -362,20 +362,20 @@ spread plus one frame per black/freeze issue (cap 8).
 
 ## 14. Studio guide and memory
 
-- `src/argus/STUDIO_GUIDE.md` is the guide (first written by the planner). The spec folder
+- `src/omniframe/STUDIO_GUIDE.md` is the guide (first written by the planner). The spec folder
   holds only a pointer to it (20.9 item 3); edit the `src/` copy.
 - `studio_guide()` returns `{guide, capabilities: {tools: [...], providers: {...}},
   preferences}`; preferences = knowledge-base file content, last ~4000 characters.
 - `learn_and_record_memory`: same file format; docstring tells the model to record only
   lasting user preferences and corrections, never per-iteration tweaks.
 - The old local `KNOWLEDGE_BASE.md` (v1 lessons for weaker models) is renamed to
-  `KNOWLEDGE_BASE.old.md` once; a new file starts with `# ARGUS — user preferences`.
+  `KNOWLEDGE_BASE.old.md` once; a new file starts with `# OmniFrame — user preferences`.
 
 ## 15. Config, doctor, keyless path
 
-- `config._load_dotenv()`: `ARGUS_ENV_FILE` if set, else `./.env`, else
+- `config._load_dotenv()`: `OMNIFRAME_ENV_FILE` if set, else `./.env`, else
   `<repo>/.env` (`Path(__file__).resolve().parents[2]`).
-- `ArgusConfig`: drop fixed `width/height` use in tools (format decides); keep `fps`,
+- `OmniFrameConfig`: drop fixed `width/height` use in tools (format decides); keep `fps`,
   `loudness_target`; add `whisper_model`, `eleven_model`, `render_concurrency`,
   `scripts_dir`.
 - `doctor`: critical — python, ffmpeg, ffprobe, node, npx, engine (`node_modules`,
@@ -383,7 +383,7 @@ spread plus one frame per black/freeze issue (cap 8).
   edge-tts, playwright, Gemini key, ElevenLabs key. Remove the libass check after ASS
   subtitles are gone.
 - Kiro MCP config `.kiro/settings/mcp.json` (verify field names in Kiro docs):
-  `{"mcpServers": {"argus": {"command": ".venv/Scripts/python.exe", "args": ["-m", "argus"]}}}`
+  `{"mcpServers": {"omniframe": {"command": ".venv/Scripts/python.exe", "args": ["-m", "omniframe"]}}}`
   plus macOS/Linux variant in `examples/mcp-config.example.json`.
 - Sample media: `examples/media/talk_sample.mp4` (author records ~20 s of himself, owns
   rights) and `examples/plans/*.json`; `.gitignore` gets `!examples/media/*.mp4`.
@@ -398,7 +398,7 @@ spread plus one frame per black/freeze issue (cap 8).
 | `assemble_master_video` (`tools/assemble.py`) | clips track in `render_video` | task 18 |
 | `build_pop_subtitles` (`tools/subtitles.py`, ASS) | `captions` in plan; helpers moved to `captions.py` | task 18 |
 | `calculate_acoustic_timeline` (`tools/timeline.py`) | word timings from voice/transcript | task 18 |
-| `src/argus/fonts/` (ASS fonts) | engine fonts / plan fonts | task 18 |
+| `src/omniframe/fonts/` (ASS fonts) | engine fonts / plan fonts | task 18 |
 | auto SFX in `engine/src/sfx.ts` | explicit `audio.sfx` | task 9 |
 | 30% sections in `STARTER.md`, `skills/montazh-mani/SKILL.md`, `skills/montazh-esse/SKILL.md` | — | task 2 |
 
@@ -425,14 +425,14 @@ spread plus one frame per black/freeze issue (cap 8).
 
 What judges see in the repo: this spec (requirements → design → tasks), steering
 (`product.md`, `tech.md`, `engine.md`), hooks (tests after every spec task, engine
-typecheck on save), MCP settings for ARGUS. What the demo shows: ARGUS used inside Kiro
-end to end, and the demo itself edited by ARGUS from screen recordings.
+typecheck on save), MCP settings for OmniFrame. What the demo shows: OmniFrame used inside Kiro
+end to end, and the demo itself edited by OmniFrame from screen recordings.
 
 Frankenstein pitch: Kiro's model as the director, stitched to Remotion (React video),
 ffmpeg, faster-whisper, ElevenLabs, Gemini Veo, Playwright (Flow), Freesound and Pillow
 through one MCP server.
 
-Disclosure (README + submission form): ARGUS grew out of the author's personal script
+Disclosure (README + submission form): OmniFrame grew out of the author's personal script
 `atlas.py`, written before October 30, 2026; the `skills/` editing styles and `tts.py`
 descend from it. Third-party: Remotion (its license: free for individuals and small
 companies, company license otherwise), beat-grid method adapted from video-shotcraft
@@ -445,7 +445,7 @@ November 4, 2026, including v2 per this spec, was built during the submission pe
 |---|---|
 | Kiro does not pass MCP images to the model | verified in task 4; paths fallback (§4) |
 | ElevenLabs model ids / v3 timestamps differ from this design | check docs in task 6; fallbacks: forced alignment, faster-whisper |
-| Weak laptop: slow renders and transcripts | stills first, half-res preview, async jobs, `ARGUS_RENDER_CONCURRENCY`, whisper `small int8` |
+| Weak laptop: slow renders and transcripts | stills first, half-res preview, async jobs, `OMNIFRAME_RENDER_CONCURRENCY`, whisper `small int8` |
 | Phone footage VFR/HEVC drifts | proxies (§9 step 4) |
 | Model-written components break the engine | typecheck before render, registry restore in `finally`, lock |
 | Time (18 days) | milestones M1 Nov 25 (scenarios 1 and 3), freeze Nov 30, docs/demo Dec 1–3, submit Dec 4 morning PT |

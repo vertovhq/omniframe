@@ -193,7 +193,7 @@ AI video clips through Google Flow (Veo) are coming in the next update.
 
 ## How it was built with Kiro
 
-- **Spec.** `.kiro/specs/argus-v2/` holds the requirements, the design and the task list. Each task
+- **Spec.** `.kiro/specs/omniframe/` holds the requirements, the design and the task list. Each task
   names the design sections to read, the files to touch and its verify steps.
 - **Steering.** `.kiro/steering/product.md`, `tech.md` and `engine.md` set the product rules (no
   creative gates), the code conventions (tools return pictures through `tool_result`, long work runs

@@ -1,13 +1,13 @@
-# Requirements — ARGUS v2
+# Requirements — OmniFrame v2
 
 ## Introduction
 
-ARGUS v1 grew feature by feature and ended up with creative "gates" (30% story
+OmniFrame v1 grew feature by feature and ended up with creative "gates" (30% story
 overlap, 30% digit density, slop-word lists), a 150-line rule book for the model,
 a renderer that only knows `dark`/`light` themes and vertical frames, and tools
 that hand the model file paths it cannot see. The output was generic.
 
-ARGUS v2 makes the model the director and ARGUS its hands. The model watches
+OmniFrame v2 makes the model the director and OmniFrame its hands. The model watches
 references and footage as real images with timecodes and transcripts, writes the
 story and the voice performance, expresses the look as style tokens and custom
 components, checks its own stills against the reference, and delivers a
@@ -41,7 +41,7 @@ that rigid formulas stop pushing every video toward the same template.
 
 ### Requirement 2 — Studio guide and user preferences
 
-**User Story:** As a model working in ARGUS, I want one short guide with the working
+**User Story:** As a model working in OmniFrame, I want one short guide with the working
 method, the available capabilities and the user's saved preferences, so that I can
 start without reading a rule book.
 
@@ -180,7 +180,7 @@ so that I can fix the look without spending a full render each time.
 
 ### Requirement 10 — Editing the user's footage
 
-**User Story:** As a doctor with a talking-head recording, I want ARGUS to cut and
+**User Story:** As a doctor with a talking-head recording, I want OmniFrame to cut and
 decorate my video, so that I get a watchable result without editing skills.
 
 #### Acceptance Criteria
@@ -196,7 +196,7 @@ decorate my video, so that I get a watchable result without editing skills.
 ### Requirement 11 — Custom visuals written by the model
 
 **User Story:** As a model, I want to write my own React component when no built-in
-scene fits the reference, so that any style is reachable without changing ARGUS.
+scene fits the reference, so that any style is reachable without changing OmniFrame.
 
 #### Acceptance Criteria
 
@@ -236,12 +236,12 @@ takes a minute.
 ### Requirement 14 — The user's own scripts
 
 **User Story:** As the author, I want to drop my own Python script into a folder and
-have the model use it, so that I can extend ARGUS without editing the server.
+have the model use it, so that I can extend OmniFrame without editing the server.
 
 #### Acceptance Criteria
 
 1. WHEN `run_script()` is called without a name THEN THE tool SHALL list scripts from
-   `scripts/` in the repo and from `ARGUS_SCRIPTS_DIR`, with each script's summary and
+   `scripts/` in the repo and from `OMNIFRAME_SCRIPTS_DIR`, with each script's summary and
    argument example from its docstring.
 2. WHEN `run_script(name, args)` is called THEN THE tool SHALL run the script in a
    subprocess with a timeout and return its JSON result (and images it lists).
@@ -249,7 +249,7 @@ have the model use it, so that I can extend ARGUS without editing the server.
 
 ### Requirement 15 — Install, keyless path, doctor
 
-**User Story:** As a judge or a new user, I want ARGUS to install and work without paid
+**User Story:** As a judge or a new user, I want OmniFrame to install and work without paid
 keys, so that I can try it immediately.
 
 #### Acceptance Criteria
@@ -276,11 +276,11 @@ and show deep Kiro use, so that the project can win the Frankenstein category.
    the About section, and an English README with install and testing instructions.
 3. THE README SHALL disclose pre-existing work and third-party code used.
 4. THE demo video SHALL be under 3 minutes, in English, on YouTube, without copyrighted
-   music, and SHALL be edited by ARGUS itself from screen recordings of ARGUS working in Kiro.
+   music, and SHALL be edited by OmniFrame itself from screen recordings of OmniFrame working in Kiro.
 
 ### Requirement 17 — Reliability and cleanup
 
-**User Story:** As the author, I want ARGUS to work every time at the deadline, so that
+**User Story:** As the author, I want OmniFrame to work every time at the deadline, so that
 judges and viewers never see errors or slop caused by the tooling.
 
 #### Acceptance Criteria
@@ -291,5 +291,5 @@ judges and viewers never see errors or slop caused by the tooling.
    `build_kinetic_video`, `assemble_master_video`, `build_pop_subtitles`,
    `calculate_acoustic_timeline`) once their replacements pass the end-to-end tests.
 3. BEFORE feature freeze THE author SHALL produce at least two real TikTok videos from
-   references and one footage edit with ARGUS in Kiro, and every defect found SHALL be
+   references and one footage edit with OmniFrame in Kiro, and every defect found SHALL be
    fixed or listed as known.

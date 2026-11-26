@@ -2,8 +2,14 @@
   "mcpServers": {
     "omniframe": {
       "command": ".venv/Scripts/python.exe",
-      "args": ["-m", "omniframe"],
-      "disabled": false
+      "args": [
+        "-m",
+        "omniframe"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "*"
+      ]
     }
   }
 }
