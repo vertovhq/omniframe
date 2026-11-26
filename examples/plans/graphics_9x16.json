@@ -8,7 +8,7 @@
     { "kind": "title", "at": 2.6, "kicker": "chapter 01", "text": "describe the video" },
     { "kind": "counter", "at": 5.0, "value": 45, "suffix": "s", "sub": "from idea to upload" },
     { "kind": "big", "at": 7.4, "text": "OmniFrame" },
-    { "kind": "cta", "at": 9.2, "text": "follow for more", "handle": "@omniframe.studio" }
+    { "kind": "cta", "at": 9.2, "text": "follow for more", "handle": "@your.handle" }
   ],
   "captions": {
     "words": "audio/voice.words.json",

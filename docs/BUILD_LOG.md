@@ -386,12 +386,12 @@ article and for the submission's "how Kiro was used" answer. Facts only, no mark
 - Verified: full pytest 554 passed in 638 s, exit 0, including the guide core length test (after 20.12, so it covers the installer too). The author's series video on Haiku is not run yet.
 - Credits: <author fills>
 
-## Task 20.15 — renamed ARGUS to OmniFrame (2026-11-24, Haiku 5.5 high; commit by Opus)
+## Task 20.15 — renamed to OmniFrame (2026-11-24, Haiku 5.5 high; commit by Opus)
 - Built: package `src/omniframe`, commands `omniframe`, `omniframe-doctor`, `omniframe-install`, MCP entry name `omniframe`, repo links `github.com/vertovhq/omniframe`. `_compat.py` copies old `ARGUS_*` variables to `OMNIFRAME_*` and keeps using `~/.argus` when only it exists. Old build log entries and tasks text keep the old name.
 - Why: many projects are called OmniFrame; the author wants a name of his own.
 - Bugs & fixes: the Haiku chat was cancelled during the full pytest → Opus read the result and committed. The author's Kiro config pointed at `-m omniframe` and stopped loading → the author changed it to `-m omniframe`.
 - Kiro: none.
-- Verified: full pytest 557 passed in 680 s, exit 0 (includes `test_legacy_names.py`); `git grep -i argus` in src, tests, kiro-power, README, INSTALL, pyproject, install scripts: 4 lines (2 compatibility comments, 2 links to `.kiro/specs/omniframe/`).
+- Verified: full pytest 557 passed in 680 s, exit 0 (includes `test_legacy_names.py`); `git grep` for the old name in src, tests, kiro-power, README, INSTALL, pyproject, install scripts: 4 lines (2 compatibility comments, 2 links to `.kiro/specs/omniframe/`).
 - Credits: <author fills>
 
 ## Task 20.16 — starter recipes (Haiku 5.5 high)

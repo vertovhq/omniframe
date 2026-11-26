@@ -42,7 +42,7 @@
       "component": "ScoreBoard",
       "props": { "label": "views", "from": 0, "to": 120000 }
     },
-    { "kind": "cta", "at": 9.0, "text": "part two tomorrow", "handle": "@omniframe.studio" }
+    { "kind": "cta", "at": 9.0, "text": "part two tomorrow", "handle": "@your.handle" }
   ],
   "hud": {
     "at": 0.4,
