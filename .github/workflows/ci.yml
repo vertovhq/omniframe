@@ -21,7 +21,7 @@ jobs:
         with:
           ffmpeg-version: release
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,voice]"
       - name: Tests
         run: pytest tests/ -q
 

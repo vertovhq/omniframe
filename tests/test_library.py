@@ -108,7 +108,7 @@ def test_saving_writes_the_entry_the_poster_and_the_index(out_dir: Path, root: P
 
     card = (entry / "card.md").read_text(encoding="utf-8")
     for expected in ("**What:** Night harbour", "**Fits when:** Money or luxury", "**Props:** accent, label",
-                     "**Source project:** project-1", "**Files:** Art.tsx, Dot.tsx", "./library/yacht-scenes/Art",
+                     "**Source project:** yacht-rework", "**Files:** Art.tsx, Dot.tsx", "./library/yacht-scenes/Art",
                      "**Version:** 1", "**Times used:** 0", "- v1 (", "first save"):
         assert expected in card
     index = (lib / "index.md").read_text(encoding="utf-8")
@@ -124,7 +124,7 @@ def test_saving_writes_the_entry_the_poster_and_the_index(out_dir: Path, root: P
     # the cover (1) and the library poster (2) come back as pictures; the poster copy is outside the entry
     assert len(result) == 3 and all(isinstance(item, Image) for item in result[1:])
     assert not list(entry.glob("*.view.jpg"))
-    assert (root / "final" / "project-1_9x16.mp4").is_file()
+    assert (root / "final" / "yacht-rework_9x16.mp4").is_file()
 
 
 def test_a_list_saves_every_element_in_one_export(out_dir: Path, root: Path, master: Path) -> None:
@@ -226,7 +226,7 @@ def test_saving_refuses_components_that_break_the_contract(out_dir: Path, root: 
     _, errors = library.validate_save({**SPEC, "components": ["Net"]}, root, lib)
     assert any("left-pad" in e for e in errors)
     clean, errors = library.validate_save(SPEC, root, lib)
-    assert errors == [] and clean[0]["files"] == ["Art.tsx", "Dot.tsx"] and clean[0]["source"] == "project-1"
+    assert errors == [] and clean[0]["files"] == ["Art.tsx", "Dot.tsx"] and clean[0]["source"] == "yacht-rework"
     assert clean[0]["uses"] == []
 
 

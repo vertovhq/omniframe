@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from omniframe import jobs, project  # noqa: E402
 from omniframe.config import CONFIG  # noqa: E402
 from omniframe.ffmpeg import stream_info  # noqa: E402
-from omniframe.tools import voiceover, watch  # noqa: E402
+from omniframe.tools import model_catalog, voiceover, watch  # noqa: E402
 
 TAGGED = "[whispers] Hello, brave world. [excited] We start now!"
 
@@ -338,8 +338,8 @@ def test_elevenlabs_key_makes_elevenlabs_the_default_and_the_env_can_override(vo
 
 @pytest.fixture
 def gemini(voice_env):
-    cfg = dataclasses.replace(voice_env["cfg"], gemini_api_key="g-test")
-    for module in (jobs, project, voiceover, watch):
+    cfg = dataclasses.replace(voice_env["cfg"], gemini_api_key="g-test", tts_model="gemini-test-tts")
+    for module in (jobs, project, voiceover, watch, model_catalog):
         voice_env["monkeypatch"].setattr(module, "CONFIG", cfg)
     calls: list[tuple] = []
 
